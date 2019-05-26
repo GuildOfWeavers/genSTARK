@@ -1,0 +1,11 @@
+#TypeScript Map Files
+*.map
+
+# Installed modules
+node_modules/
+
+# Compiled Tests
+/bin/tests/
+
+# .npmignore in bin folder
+/bin/.npmignore

@@ -1,0 +1,16 @@
+{
+  "files.exclude": {
+    "**/.git": true,
+    ".gitignore": true,
+    ".gitattributes": true,
+    ".npmignore": true,
+    "package-lock.json": true,
+    "**/*.js.map": true
+  },
+  "search.exclude": {
+      "**/node_modules": true,
+      "**/*.js": true,
+      "**/bin": true,
+      "package-lock.json": true
+  }
+}

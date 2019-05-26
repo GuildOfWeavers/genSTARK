@@ -1,0 +1,3 @@
+tests/
+*.js.map
+.npmignore

@@ -1,0 +1,49 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+// CLASS DEFINITION
+// ================================================================================================
+class VerificationFrame {
+    // CONSTRUCTOR
+    // --------------------------------------------------------------------------------------------
+    constructor(domainSize, pEvaluations, constants, skip) {
+        this.domainSize = domainSize;
+        this.values = pEvaluations;
+        this.constants = constants;
+        this.skip = skip;
+        // determine register count
+        for (let evaluations of pEvaluations.values()) {
+            this.registerCount = evaluations.length;
+            break;
+        }
+        this.currentStep = 0;
+        this.currentX = 0n;
+    }
+    // PUBLIC METHODS
+    // --------------------------------------------------------------------------------------------
+    getValue(index) {
+        const maxIndex = this.registerCount - 1;
+        if (index < 0 || index > maxIndex) {
+            throw new TypeError(`Register index must be an integer between 0 and ${maxIndex}`);
+        }
+        return this.values.get(this.currentStep)[index];
+    }
+    getConst(index) {
+        const maxIndex = this.constants.length - 1;
+        if (index < 0 || index > maxIndex) {
+            throw new Error(`Constant index must be an integer between 0 and ${maxIndex}`);
+        }
+        const k = this.constants[index];
+        return k.getValueAt(this.currentX);
+    }
+    getNextValue(index) {
+        const maxIndex = this.registerCount - 1;
+        if (index < 0 || index > maxIndex) {
+            throw new TypeError(`Register index must be an integer between 0 and ${maxIndex}`);
+        }
+        const step = (this.currentStep + this.skip) % this.domainSize;
+        const p = this.values.get(step)[index];
+        return p;
+    }
+}
+exports.VerificationFrame = VerificationFrame;
+//# sourceMappingURL=VerificationFrame.js.map

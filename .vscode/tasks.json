@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "setup",
+            "type": "shell",
+            "command": "npm install",
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "build",
+            "type": "gulp",
+            "task": "build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": [
+                "$tsc"
+            ]
+        },
+        {
+            "label": "publish",
+            "type": "gulp",
+            "task": "publish",
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": [
+                "$tsc"
+            ]
+        }
+    ]
+}
