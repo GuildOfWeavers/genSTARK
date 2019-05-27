@@ -51,6 +51,15 @@ declare module '@guildofweavers/genstark' {
         }
     }
 
+    export interface Constant {
+        values  : bigint[];
+        pattern : ConstantPattern;
+    }
+
+    export const enum ConstantPattern {
+        repeat = 1, stretch = 2
+    }
+
     // CONSTRAINTS
     // --------------------------------------------------------------------------------------------
     export interface Assertion {
@@ -60,36 +69,35 @@ declare module '@guildofweavers/genstark' {
     }
 
     export interface TransitionFunction {
-        (frame: ExecutionFrame, field: FiniteField): void;
+        (frame: ExecutionFrame): void;
     }
 
     export interface TransitionConstraint {
-        (frame: EvaluationFrame, field: FiniteField): bigint;
+        (frame: EvaluationFrame): bigint;
     }
 
     // FRAMES
     // --------------------------------------------------------------------------------------------
-    export interface ExecutionFrame {
+    export interface ExecutionFrame extends FrameOps {
         getValue(index: number): bigint;
         getConst(index: number): bigint;
 
         setNextValue(index: number, value: bigint): void;
     }
 
-    export interface EvaluationFrame {
+    export interface EvaluationFrame extends FrameOps {
         getValue(index: number): bigint;
         getConst(index: number): bigint;
 
         getNextValue(index: number): bigint;
     }
 
-    export interface Constant {
-        values  : bigint[];
-        pattern : ConstantPattern;
-    }
-
-    export const enum ConstantPattern {
-        repeat = 1, stretch = 2
+    interface FrameOps {
+        add(a: bigint, b: bigint): bigint;
+        sub(a: bigint, b: bigint): bigint;
+        mul(a: bigint, b: bigint): bigint;
+        div(a: bigint, b: bigint): bigint;
+        exp(b: bigint, p: bigint): bigint;
     }
 
     // LOW DEGREE PROOF

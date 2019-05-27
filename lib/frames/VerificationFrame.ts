@@ -1,15 +1,15 @@
 // IMPORTS
 // ================================================================================================
-import { EvaluationFrame, ReadonlyRegister } from '@guildofweavers/genstark';
+import { EvaluationFrame, ReadonlyRegister, FiniteField } from '@guildofweavers/genstark';
 
 // CLASS DEFINITION
 // ================================================================================================
 export class VerificationFrame implements EvaluationFrame {
 
-    readonly registerCount! : number;
-    
+    readonly field          : FiniteField;
     readonly skip           : number;
     readonly values         : Map<number, bigint[]>;
+    readonly registerCount! : number;
     readonly constants      : ReadonlyRegister[];
     readonly domainSize     : number
 
@@ -18,8 +18,9 @@ export class VerificationFrame implements EvaluationFrame {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(domainSize: number, pEvaluations: Map<number, bigint[]>, constants: ReadonlyRegister[], skip: number) {
+    constructor(field: FiniteField, domainSize: number, pEvaluations: Map<number, bigint[]>, constants: ReadonlyRegister[], skip: number) {
         
+        this.field = field;
         this.domainSize = domainSize;
         this.values = pEvaluations;
         this.constants = constants;
@@ -64,5 +65,27 @@ export class VerificationFrame implements EvaluationFrame {
         const step = (this.currentStep + this.skip) % this.domainSize;
         const p = this.values.get(step)![index];
         return p;
+    }
+
+    // MATH OPERATIONS
+    // --------------------------------------------------------------------------------------------
+    add(a: bigint, b: bigint): bigint {
+        return this.field.add(a, b);
+    }
+
+    sub(a: bigint, b: bigint): bigint {
+        return this.field.sub(a, b);
+    }
+
+    mul(a: bigint, b: bigint): bigint {
+        return this.field.mul(a, b);
+    }
+
+    div(a: bigint, b: bigint): bigint {
+        return this.field.div(a, b);
+    }
+
+    exp(a: bigint, b: bigint): bigint {
+        return this.field.exp(a, b);
     }
 }

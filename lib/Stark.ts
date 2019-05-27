@@ -118,10 +118,10 @@ export class Stark {
         }
 
         // then, apply transition function for each subsequent step
-        const executionFrame = new ProofFrame(executionTrace, cRegisters);
+        const executionFrame = new ProofFrame(this.field, executionTrace, cRegisters);
         for (let step = 0; step < executionDomain.length - 1; step++) {
             executionFrame.currentStep = step;
-            this.tFunction(executionFrame, this.field);
+            this.tFunction(executionFrame);
         }
 
         // finally, make sure assertions don't contradict execution trace
@@ -141,14 +141,14 @@ export class Stark {
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
 
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
-        const frame = new ProofFrame(pEvaluations, cRegisters, this.extensionFactor);
+        const frame = new ProofFrame(this.field, pEvaluations, cRegisters, this.extensionFactor);
         const qEvaluations = new Array<bigint[]>(constraintCount);
         for (let i = 0; i < constraintCount; i++) {
             let constraint = this.tConstraints[i];
             qEvaluations[i] = new Array(evaluationDomainSize);
             for (let step = 0; step < evaluationDomainSize; step++) {
                 frame.currentStep = step;
-                let q = constraint(frame, this.field);
+                let q = constraint(frame);
                 if (step < (evaluationDomainSize - this.extensionFactor) && step % this.extensionFactor === 0 && q !== 0n) {
                     throw new Error(`Constraint didn't evaluate to 0`);  // TODO: stark error
                 }
@@ -346,7 +346,7 @@ export class Stark {
         this.logger.log(label, `Verified low-degree proof`);
 
         // 7 ----- verify transition and boundary constraints
-        const pFrame = new VerificationFrame(evaluationDomainSize, pEvaluations, cRegisters, this.extensionFactor);
+        const pFrame = new VerificationFrame(this.field, evaluationDomainSize, pEvaluations, cRegisters, this.extensionFactor);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
             let x = this.field.exp(G2, BigInt(step));
@@ -360,7 +360,7 @@ export class Stark {
 
             // check transition constraints
             for (let j = 0; j < constraintCount; j++) {
-                let qValue = this.tConstraints[j](pFrame, this.field);
+                let qValue = this.tConstraints[j](pFrame);
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValue !== qCheck) {
                     console.error(`STARK verification failed: transition constraint was not satisfied`); // TODO: StarkError

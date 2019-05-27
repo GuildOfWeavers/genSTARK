@@ -5,7 +5,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 class ProofFrame {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(trace, constants, skip = 1) {
+    constructor(field, trace, constants, skip = 1) {
+        this.field = field;
         this.domainSize = trace[0].length;
         this.trace = trace;
         this.constants = constants;
@@ -50,6 +51,23 @@ class ProofFrame {
         }
         const step = (this.currentStep + this.skip) % this.domainSize;
         this.trace[index][step] = value;
+    }
+    // MATH OPERATIONS
+    // --------------------------------------------------------------------------------------------
+    add(a, b) {
+        return this.field.add(a, b);
+    }
+    sub(a, b) {
+        return this.field.sub(a, b);
+    }
+    mul(a, b) {
+        return this.field.mul(a, b);
+    }
+    div(a, b) {
+        return this.field.div(a, b);
+    }
+    exp(a, b) {
+        return this.field.exp(a, b);
     }
 }
 exports.ProofFrame = ProofFrame;

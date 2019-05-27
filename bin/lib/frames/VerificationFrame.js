@@ -5,7 +5,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 class VerificationFrame {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(domainSize, pEvaluations, constants, skip) {
+    constructor(field, domainSize, pEvaluations, constants, skip) {
+        this.field = field;
         this.domainSize = domainSize;
         this.values = pEvaluations;
         this.constants = constants;
@@ -43,6 +44,23 @@ class VerificationFrame {
         const step = (this.currentStep + this.skip) % this.domainSize;
         const p = this.values.get(step)[index];
         return p;
+    }
+    // MATH OPERATIONS
+    // --------------------------------------------------------------------------------------------
+    add(a, b) {
+        return this.field.add(a, b);
+    }
+    sub(a, b) {
+        return this.field.sub(a, b);
+    }
+    mul(a, b) {
+        return this.field.mul(a, b);
+    }
+    div(a, b) {
+        return this.field.div(a, b);
+    }
+    exp(a, b) {
+        return this.field.exp(a, b);
     }
 }
 exports.VerificationFrame = VerificationFrame;

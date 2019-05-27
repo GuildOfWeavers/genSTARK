@@ -1,11 +1,12 @@
 // IMPORTS
 // ================================================================================================
-import { ExecutionFrame, EvaluationFrame, ReadonlyRegister } from '@guildofweavers/genstark';
+import { ExecutionFrame, EvaluationFrame, ReadonlyRegister, FiniteField } from '@guildofweavers/genstark';
 
 // CLASS DEFINITION
 // ================================================================================================
 export class ProofFrame implements ExecutionFrame, EvaluationFrame {
 
+    readonly field          : FiniteField;
     readonly domainSize     : number;
     readonly trace          : bigint[][];
     readonly constants      : ReadonlyRegister[];
@@ -15,8 +16,8 @@ export class ProofFrame implements ExecutionFrame, EvaluationFrame {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(trace: bigint[][], constants: ReadonlyRegister[], skip = 1) {
-        
+    constructor(field: FiniteField, trace: bigint[][], constants: ReadonlyRegister[], skip = 1) {
+        this.field = field;
         this.domainSize = trace[0].length;
         this.trace = trace;
         this.constants = constants;
@@ -71,5 +72,27 @@ export class ProofFrame implements ExecutionFrame, EvaluationFrame {
 
         const step = (this.currentStep + this.skip) % this.domainSize;
         this.trace[index][step] = value;
+    }
+
+    // MATH OPERATIONS
+    // --------------------------------------------------------------------------------------------
+    add(a: bigint, b: bigint): bigint {
+        return this.field.add(a, b);
+    }
+
+    sub(a: bigint, b: bigint): bigint {
+        return this.field.sub(a, b);
+    }
+
+    mul(a: bigint, b: bigint): bigint {
+        return this.field.mul(a, b);
+    }
+
+    div(a: bigint, b: bigint): bigint {
+        return this.field.div(a, b);
+    }
+
+    exp(a: bigint, b: bigint): bigint {
+        return this.field.exp(a, b);
     }
 }
