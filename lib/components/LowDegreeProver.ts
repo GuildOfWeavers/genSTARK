@@ -3,6 +3,7 @@
 import { FiniteField, HashAlgorithm, LowDegreeProof, FriComponent, EvaluationContext } from "@guildofweavers/genstark";
 import { MerkleTree, getHashDigestSize } from '@guildofweavers/merkle';
 import { getPseudorandomIndexes, bigIntsToBuffers, buffersToBigInts } from "../utils";
+import { StarkError } from '../StarkError';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -55,7 +56,7 @@ export class LowDegreeProver {
 
             // verify Merkle proof for the column
             if (!MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
-                throw new Error('Low degree proof failed: merkle 1'); // TODO: StarkError
+                throw new StarkError(`Verification of column Merkle proof failed at depth ${depth}`);
             }
 
             // compute the positions for the values in the polynomial
@@ -69,7 +70,7 @@ export class LowDegreeProver {
 
             // verify Merkle proof for polynomials
             if (!MerkleTree.verifyBatch(lRoot, polyPositions, polyProof, this.hashAlgorithm)) {
-                throw new Error('Low degree proof failed: merkle 2'); // TODO: StarkError
+                throw new StarkError(`Verification of polynomial Merkle proof failed at depth ${depth}`);
             }
 
             // For each y coordinate, get the x coordinates on the row, the values on
@@ -96,14 +97,13 @@ export class LowDegreeProver {
             // calculate the pseudo-random x coordinate
             const specialX = this.field.prng(lRoot);
 
-            // verify for each selected y coordinate that the four points from the
-            // polynomial and the one point from the column that are on that y 
-            // coordinate are on the same deg < 4 polynomial
-            const columnValues = buffersToBigInts(columnProof.values);
+            // verify for each selected y coordinate that the four points from the polynomial and the 
+            // one point from the column that are on that y coordinate are on the same deg < 4 polynomial
             const polys = this.field.interpolateQuarticBatch(xs, ys);
+            const columnValues = buffersToBigInts(columnProof.values);
             for (let i = 0; i < polys.length; i++) {
                 if (this.field.evalPolyAt(polys[i], specialX) !== columnValues[i]) {
-                    throw new Error('Low degree proof failed: component'); // TODO: StarkError
+                    throw new StarkError(`Degree 4 polynomial didn't evaluate to column value at depth ${depth}`);
                 }
             }
 
@@ -116,42 +116,17 @@ export class LowDegreeProver {
 
         // 2 ----- verify the remainder of the proof
         if (maxDegreePlus1 > proof.remainder.length) {
-            throw new Error('Low degree proof failed: degree');    // TODO: StarkError
+            throw new StarkError(`Remainder degree cannot be greater than number of remainder values`);
         }
 
         // check that Merkle root matches up
         const cTree = MerkleTree.create(proof.remainder, this.hashAlgorithm);
         if (!cTree.root.equals(lRoot)) {
-            throw new Error('Low degree proof failed: remainder 1');    // TODO: StarkError
+            throw new StarkError(`Remainder values do not match Merkle root of the last column`);
         }
 
-        // exclude points which should be skipped during evaluation
-        const positions: number[] = [];
-        for (let i = 0; i < proof.remainder.length; i++) {
-            if (!this.skipMultiplesOf || i % this.skipMultiplesOf) {
-                positions.push(i);
-            }
-        }
-
-        // pick a subset of points from the remainder and interpolate them into a polynomial
         const remainder = buffersToBigInts(proof.remainder);
-        const domain = this.field.getPowerCycle(rootOfUnity);
-        const xs = new Array<bigint>(maxDegreePlus1);
-        const ys = new Array<bigint>(maxDegreePlus1);
-        for (let i = 0; i < maxDegreePlus1; i++) {
-            let p = positions[i];
-            xs[i] = domain[p];
-            ys[i] = remainder[p];
-        }
-        const poly = this.field.interpolate(xs, ys);
-
-        // check that polynomial evaluates correctly for all other points in the remainder
-        for (let i = maxDegreePlus1; i < positions.length; i++) {
-            let p = positions[i];
-            if (this.field.evalPolyAt(poly, domain[p]) !== remainder[p]) {
-                throw new Error('Low degree proof failed: remainder 2');    // TODO: StarkError
-            }
-        }
+        this.verifyRemainder(remainder, maxDegreePlus1, rootOfUnity);
 
         return true;
     }
@@ -162,6 +137,8 @@ export class LowDegreeProver {
 
         // if there are not too many values left, use the polynomial directly as proof
         if (values.length <= 256) {
+            const rootOfUnity = this.field.exp(domain[1], BigInt(4**depth));
+            this.verifyRemainder(values, maxDegreePlus1, rootOfUnity);
             result.remainder = lTree.values;
             return;
         }
@@ -218,6 +195,35 @@ export class LowDegreeProver {
 
         // recursively build all other components
         this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
+    }
+
+    private verifyRemainder(remainder: bigint[], maxDegreePlus1: number, rootOfUnity: bigint) {
+        // exclude points which should be skipped during evaluation
+        const positions: number[] = [];
+        for (let i = 0; i < remainder.length; i++) {
+            if (!this.skipMultiplesOf || i % this.skipMultiplesOf) {
+                positions.push(i);
+            }
+        }
+
+        // pick a subset of points from the remainder and interpolate them into a polynomial
+        const domain = this.field.getPowerCycle(rootOfUnity);
+        const xs = new Array<bigint>(maxDegreePlus1);
+        const ys = new Array<bigint>(maxDegreePlus1);
+        for (let i = 0; i < maxDegreePlus1; i++) {
+            let p = positions[i];
+            xs[i] = domain[p];
+            ys[i] = remainder[p];
+        }
+        const poly = this.field.interpolate(xs, ys);
+
+        // check that polynomial evaluates correctly for all other points in the remainder
+        for (let i = maxDegreePlus1; i < positions.length; i++) {
+            let p = positions[i];
+            if (this.field.evalPolyAt(poly, domain[p]) !== remainder[p]) {
+                throw new StarkError(`Remainder is not a valid degree ${maxDegreePlus1 - 1} polynomial`);
+            }
+        }
     }
 }
 

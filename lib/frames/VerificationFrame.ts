@@ -41,7 +41,7 @@ export class VerificationFrame implements EvaluationFrame {
     getValue(index: number): bigint {
         const maxIndex = this.registerCount - 1;
         if (index < 0 || index > maxIndex) {
-            throw new TypeError(`Register index must be an integer between 0 and ${maxIndex}`);
+            throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
         }
         return this.values.get(this.currentStep)![index];
     }
@@ -59,7 +59,7 @@ export class VerificationFrame implements EvaluationFrame {
     getNextValue(index: number): bigint {
         const maxIndex = this.registerCount - 1;
         if (index < 0 || index > maxIndex) {
-            throw new TypeError(`Register index must be an integer between 0 and ${maxIndex}`);
+            throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
         }
 
         const step = (this.currentStep + this.skip) % this.domainSize;

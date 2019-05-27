@@ -24,7 +24,7 @@ class VerificationFrame {
     getValue(index) {
         const maxIndex = this.registerCount - 1;
         if (index < 0 || index > maxIndex) {
-            throw new TypeError(`Register index must be an integer between 0 and ${maxIndex}`);
+            throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
         }
         return this.values.get(this.currentStep)[index];
     }
@@ -39,7 +39,7 @@ class VerificationFrame {
     getNextValue(index) {
         const maxIndex = this.registerCount - 1;
         if (index < 0 || index > maxIndex) {
-            throw new TypeError(`Register index must be an integer between 0 and ${maxIndex}`);
+            throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
         }
         const step = (this.currentStep + this.skip) % this.domainSize;
         const p = this.values.get(step)[index];

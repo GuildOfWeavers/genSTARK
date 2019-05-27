@@ -6,6 +6,7 @@ const registers_1 = require("./registers");
 const frames_1 = require("./frames");
 const merkle_1 = require("@guildofweavers/merkle");
 const Serializer_1 = require("./Serializer");
+const StarkError_1 = require("./StarkError");
 // MODULE VARIABLES
 // ================================================================================================
 const MAX_DOMAIN_SIZE = 2 ** 32;
@@ -94,15 +95,21 @@ class Stark {
             executionTrace[register][0] = inputs[register];
         }
         // then, apply transition function for each subsequent step
+        let exeStep;
         const executionFrame = new frames_1.ProofFrame(this.field, executionTrace, cRegisters);
-        for (let step = 0; step < executionDomain.length - 1; step++) {
-            executionFrame.currentStep = step;
-            this.tFunction(executionFrame);
+        try {
+            for (exeStep = 0; exeStep < executionDomain.length - 1; exeStep++) {
+                executionFrame.currentStep = exeStep;
+                this.tFunction(executionFrame);
+            }
+        }
+        catch (error) {
+            throw new StarkError_1.StarkError(`Generation of execution trace failed at step ${exeStep}`, error);
         }
         // finally, make sure assertions don't contradict execution trace
         for (let c of assertions) {
             if (executionTrace[c.register][c.step] !== c.value) {
-                throw new TypeError(`Assertion at step ${c.step}, register ${c.register} conflicts with execution trace`);
+                throw new StarkError_1.StarkError(`Assertion at step ${c.step}, register ${c.register} conflicts with execution trace`);
             }
         }
         this.logger.log(label, 'Generated execution trace');
@@ -114,19 +121,27 @@ class Stark {
         }
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
+        let cIndex;
+        const nonfinalSteps = evaluationDomainSize - this.extensionFactor;
         const frame = new frames_1.ProofFrame(this.field, pEvaluations, cRegisters, this.extensionFactor);
         const qEvaluations = new Array(constraintCount);
-        for (let i = 0; i < constraintCount; i++) {
-            let constraint = this.tConstraints[i];
-            qEvaluations[i] = new Array(evaluationDomainSize);
-            for (let step = 0; step < evaluationDomainSize; step++) {
-                frame.currentStep = step;
-                let q = constraint(frame);
-                if (step < (evaluationDomainSize - this.extensionFactor) && step % this.extensionFactor === 0 && q !== 0n) {
-                    throw new Error(`Constraint didn't evaluate to 0`); // TODO: stark error
+        try {
+            for (cIndex = 0; cIndex < constraintCount; cIndex++) {
+                let constraint = this.tConstraints[cIndex];
+                qEvaluations[cIndex] = new Array(evaluationDomainSize);
+                for (let step = 0; step < evaluationDomainSize; step++) {
+                    frame.currentStep = step;
+                    let q = constraint(frame);
+                    if (step < nonfinalSteps && step % this.extensionFactor === 0 && q !== 0n) {
+                        let execStep = step / this.extensionFactor;
+                        throw new StarkError_1.StarkError(`The constraint didn't evaluate to 0 at step ${execStep}`);
+                    }
+                    qEvaluations[cIndex][step] = q;
                 }
-                qEvaluations[i][step] = q;
             }
+        }
+        catch (error) {
+            throw new StarkError_1.StarkError(`Error in constraint ${cIndex}`, error);
         }
         this.logger.log(label, 'Computed Q(x) polynomials');
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
@@ -182,8 +197,14 @@ class Stark {
         const lEvaluations2 = utils_1.bigIntsToBuffers(lEvaluations, this.field.elementSize);
         const lTree = merkle_1.MerkleTree.create(lEvaluations2, this.hashAlgorithm);
         const lcProof = lTree.proveBatch(positions);
-        const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
-        const ldProof = ldProver.prove(lTree, lEvaluations, evaluationDomain, lCombinationDegree);
+        let ldProof;
+        try {
+            const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
+            ldProof = ldProver.prove(lTree, lEvaluations, evaluationDomain, lCombinationDegree);
+        }
+        catch (error) {
+            throw new StarkError_1.StarkError('Low degree proof failed', error);
+        }
         this.logger.log(label, 'Computed low-degree proof');
         this.logger.done(label, 'STARK computed');
         // build and return the proof object
@@ -272,14 +293,12 @@ class Stark {
             depth: proof.evaluations.depth
         };
         if (!merkle_1.MerkleTree.verifyBatch(eRoot, augmentedPositions, eProof, this.hashAlgorithm)) {
-            console.error(`STARK verification failed: evaluation merkle proof could not be verified`); // TODO: StarkError
-            return false;
+            throw new StarkError_1.StarkError(`Verification of evaluation Merkle proof failed`);
         }
         this.logger.log(label, `Verified evaluation merkle proof`);
         // 5 ----- verify linear combination proof
         if (!merkle_1.MerkleTree.verifyBatch(proof.degree.root, positions, proof.degree.lcProof, this.hashAlgorithm)) {
-            console.error(`STARK verification failed: liner combination proof is invalid`); // TODO: StarkError
-            return false;
+            throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`);
         }
         const lEvaluations = new Map();
         const lEvaluationValues = utils_1.buffersToBigInts(proof.degree.lcProof.values);
@@ -290,8 +309,13 @@ class Stark {
         this.logger.log(label, `Verified liner combination proof`);
         // 6 ----- verify low-degree proof
         const lCombinationDegree = this.getLinearCombinationDegree(evaluationDomainSize);
-        const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
-        ldProver.verify(proof.degree.root, lCombinationDegree, G2, proof.degree.ldProof);
+        try {
+            const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
+            ldProver.verify(proof.degree.root, lCombinationDegree, G2, proof.degree.ldProof);
+        }
+        catch (error) {
+            throw new StarkError_1.StarkError('Verification of low degree failed', error);
+        }
         const lPolyCount = constraintCount + 2 * (this.registerCount + bPoly.count);
         const lCoefficients = this.field.prng(eRoot, lPolyCount);
         const lPowerFactor = BigInt(Math.max(lCombinationDegree - steps, 0));
@@ -312,16 +336,14 @@ class Stark {
                 let qValue = this.tConstraints[j](pFrame);
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValue !== qCheck) {
-                    console.error(`STARK verification failed: transition constraint was not satisfied`); // TODO: StarkError
-                    return false;
+                    throw new StarkError_1.StarkError(`Transition constraint at position ${step} was not satisfied`);
                 }
             }
             // check boundary constraints
             let bChecks = bPoly.evaluateAt(pEvaluations.get(step), x);
             for (let j = 0; j < bChecks.length; j++) {
                 if (bChecks[j] !== bValues[j]) {
-                    console.error(`STARK verification failed: boundary constraint was not satisfied`); // TODO: StarkError
-                    return false;
+                    throw new StarkError_1.StarkError(`Boundary constraint at position ${step} was not satisfied`);
                 }
             }
             // check correctness of liner combination
@@ -333,8 +355,7 @@ class Stark {
             }
             let lCheck = this.field.combine([...pbValues2, ...pbValues, ...dValues], lCoefficients);
             if (lEvaluations.get(step) !== lCheck) {
-                console.error(`STARK verification failed: linear combination is inconsistent`); // TODO: StarkError
-                return false;
+                throw new StarkError_1.StarkError(`Linear combination at position ${step} is inconsistent`);
             }
         }
         this.logger.log(label, `Transition and boundary constraints verified`);

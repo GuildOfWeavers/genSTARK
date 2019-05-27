@@ -7,7 +7,7 @@ import { FiniteField, Polynom, EvaluationContext, ReadonlyRegister } from "@guil
 export class RepeatedConstants implements ReadonlyRegister {
 
     readonly field          : FiniteField;
-    readonly period         : bigint;
+    readonly periods         : bigint;
     readonly poly           : Polynom;
     readonly extensionFactor: number;
 
@@ -16,21 +16,28 @@ export class RepeatedConstants implements ReadonlyRegister {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     constructor(values: bigint[], context: EvaluationContext, evaluatePoly: boolean) {
-        // assert base length is power of 2
-        // assert base lengths < steps
+        if (values.length > context.steps) {
+            throw new Error('Number of steps must be greater than the constant cycle');
+        }
+        
+        if (context.steps % values.length !== 0) {
+            throw new Error('Constant cycle must evenly divide the number of steps');
+        }
         
         this.field = context.field;
-        this.period = BigInt(context.steps / values.length);
+        this.periods = BigInt(context.steps / values.length);
         this.extensionFactor = context.extensionFactor;
 
-        const g = this.field.exp(context.rootOfUnity, BigInt(this.extensionFactor) * this.period);
+        const g = this.field.exp(context.rootOfUnity, BigInt(this.extensionFactor) * this.periods);
         const roots = this.field.getPowerCycle(g);
-        // assert roots.length == base.length
+        if (roots.length !== values.length) {
+            throw new Error('Number of roots of unity does not match constant cycle');
+        }
 
         this.poly = this.field.interpolateRoots(roots, values);
         if (evaluatePoly) {
-            const g = this.field.exp(context.rootOfUnity, this.period);
-            const domain = this.field.getPowerCycle(g);
+            const eg = this.field.exp(context.rootOfUnity, this.periods);
+            const domain = this.field.getPowerCycle(eg);
             this.extendedValues = this.field.evalPolyAtRoots(this.poly, domain);
         }
     }
@@ -44,7 +51,7 @@ export class RepeatedConstants implements ReadonlyRegister {
     }
 
     getValueAt(x: bigint): bigint {
-        const xp = this.field.exp(x, this.period);
+        const xp = this.field.exp(x, this.periods);
         return this.field.evalPolyAt(this.poly, xp);
     }
 }
