@@ -5,14 +5,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const crypto = require("crypto");
 // RE-EXPORTS
 // ================================================================================================
-var readers_1 = require("./readers");
-exports.readMerkleProof = readers_1.readMerkleProof;
-exports.readMatrix = readers_1.readMatrix;
-exports.readArray = readers_1.readArray;
-var writers_1 = require("./writers");
-exports.writeMerkleProof = writers_1.writeMerkleProof;
-exports.writeMatrix = writers_1.writeMatrix;
-exports.writeArray = writers_1.writeArray;
+var serializaton_1 = require("./serializaton");
+exports.writeMerkleProof = serializaton_1.writeMerkleProof;
+exports.readMerkleProof = serializaton_1.readMerkleProof;
+exports.writeMatrix = serializaton_1.writeMatrix;
+exports.readMatrix = serializaton_1.readMatrix;
+exports.writeArray = serializaton_1.writeArray;
+exports.readArray = serializaton_1.readArray;
 var sizeof_1 = require("./sizeof");
 exports.sizeOf = sizeof_1.sizeOf;
 var Logger_1 = require("./Logger");

@@ -4,8 +4,7 @@ import * as crypto from 'crypto';
 
 // RE-EXPORTS
 // ================================================================================================
-export { readMerkleProof, readMatrix, readArray } from './readers';
-export { writeMerkleProof, writeMatrix, writeArray } from './writers';
+export { writeMerkleProof, readMerkleProof, writeMatrix, readMatrix, writeArray, readArray } from './serializaton';
 export { sizeOf } from './sizeof';
 export { Logger } from './Logger';
 
