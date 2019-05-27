@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, HashAlgorithm, LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
+import { FiniteField, HashAlgorithm, LowDegreeProof, FriComponent, EvaluationContext } from "@guildofweavers/genstark";
 import { MerkleTree, getHashDigestSize } from '@guildofweavers/merkle';
 import { getPseudorandomIndexes, bigIntsToBuffers, buffersToBigInts } from "../utils";
 
@@ -15,10 +15,10 @@ export class LowDegreeProver {
 
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(field: FiniteField, skipMultiplesOf: number, spotCheckCount: number, hashAlgorithm: HashAlgorithm) {
-        this.field = field;
-        this.skipMultiplesOf = skipMultiplesOf;
-        this.hashAlgorithm = hashAlgorithm;
+    constructor(spotCheckCount: number, context: EvaluationContext) {
+        this.field = context.field;
+        this.skipMultiplesOf = context.extensionFactor;
+        this.hashAlgorithm = context.hashAlgorithm;
         this.spotCheckCount = spotCheckCount;
     }
 
@@ -50,26 +50,26 @@ export class LowDegreeProver {
             let { columnRoot, columnProof, polyProof } = proof.components[depth];
 
             // calculate the pseudo-randomly sampled y indices
-            let columnSize = Math.floor(rouDegree / 4);
-            let sampleCount = Math.min(this.spotCheckCount, columnSize / 2);
-            let positions = getPseudorandomIndexes(columnRoot, sampleCount, columnSize, this.skipMultiplesOf);
+            let columnLength = Math.floor(rouDegree / 4);
+            let positions = getPseudorandomIndexes(columnRoot, this.spotCheckCount, columnLength, this.skipMultiplesOf);
+
+            // verify Merkle proof for the column
+            if (!MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
+                throw new Error('Low degree proof failed: merkle 1'); // TODO: StarkError
+            }
 
             // compute the positions for the values in the polynomial
             const polyPositions = new Array<number>(positions.length * 4);
             for (let i = 0; i < positions.length; i++) {
                 polyPositions[i * 4 + 0] = positions[i];
-                polyPositions[i * 4 + 1] = positions[i] + columnSize;
-                polyPositions[i * 4 + 2] = positions[i] + columnSize * 2;
-                polyPositions[i * 4 + 3] = positions[i] + columnSize * 3;
+                polyPositions[i * 4 + 1] = positions[i] + columnLength;
+                polyPositions[i * 4 + 2] = positions[i] + columnLength * 2;
+                polyPositions[i * 4 + 3] = positions[i] + columnLength * 3;
             }
 
-            // verify Merkle proofs
-            if (!MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
-                throw new Error('Low degree proof failed: merkle'); // TODO: StarkError
-            }
-
+            // verify Merkle proof for polynomials
             if (!MerkleTree.verifyBatch(lRoot, polyPositions, polyProof, this.hashAlgorithm)) {
-                throw new Error('Low degree proof failed: merkle2'); // TODO: StarkError
+                throw new Error('Low degree proof failed: merkle 2'); // TODO: StarkError
             }
 
             // For each y coordinate, get the x coordinates on the row, the values on
@@ -79,13 +79,18 @@ export class LowDegreeProver {
 
             const polyValues = buffersToBigInts(polyProof.values);
             for (let i = 0; i < positions.length; i++) {
-                let x1 = this.field.exp(rootOfUnity, BigInt(positions[i]));
+                let xe = this.field.exp(rootOfUnity, BigInt(positions[i]));
                 xs[i] = new Array(4);
+                xs[i][0] = this.field.mul(quarticRootsOfUnity[0], xe);
+                xs[i][1] = this.field.mul(quarticRootsOfUnity[1], xe);
+                xs[i][2] = this.field.mul(quarticRootsOfUnity[2], xe);
+                xs[i][3] = this.field.mul(quarticRootsOfUnity[3], xe);
+
                 ys[i] = new Array(4);
-                for (let j = 0; j < 4; j++) {
-                    xs[i][j] = this.field.mul(quarticRootsOfUnity[j], x1);
-                    ys[i][j] = polyValues[i * 4 + j];
-                }
+                ys[i][0] = polyValues[i * 4];
+                ys[i][1] = polyValues[i * 4 + 1];
+                ys[i][2] = polyValues[i * 4 + 2];
+                ys[i][3] = polyValues[i * 4 + 3];
             }
 
             // calculate the pseudo-random x coordinate
@@ -110,7 +115,9 @@ export class LowDegreeProver {
         }
 
         // 2 ----- verify the remainder of the proof
-        // TODO: assert maxdeg_plus_1 <= 16
+        if (maxDegreePlus1 > proof.remainder.length) {
+            throw new Error('Low degree proof failed: degree');    // TODO: StarkError
+        }
 
         // check that Merkle root matches up
         const cTree = MerkleTree.create(proof.remainder, this.hashAlgorithm);
@@ -153,47 +160,47 @@ export class LowDegreeProver {
     // --------------------------------------------------------------------------------------------
     private fri(lTree: MerkleTree, values: bigint[], maxDegreePlus1: number, depth: number, domain: bigint[], result: LowDegreeProof) {
 
-        const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
-
-        // if the degree we are checking is less then or qual to 16, use the polynomial directly as proof
+        // if there are not too many values left, use the polynomial directly as proof
         if (values.length <= 256) {
-            result.remainder = bigIntsToBuffers(values, hashDigestSize);
+            result.remainder = lTree.values;
             return;
         }
 
         // break values into rows and columns and sample 4 values for each row
-        const domainStep = (4 ** depth);
+        const domainStep = (4**depth);
         const columnLength = Math.floor(values.length / 4);
         let xs = new Array<bigint[]>(columnLength);
         let ys = new Array<bigint[]>(columnLength);
         for (let i = 0; i < columnLength; i++) {
-            xs[i] = new Array<bigint>(4);
-            ys[i] = new Array<bigint>(4);
-            for (let j = 0; j < 4; j++) {
-                xs[i][j] = domain[(i + columnLength * j) * domainStep];
-                ys[i][j] = values[i + columnLength * j];
-            }
+            xs[i] = new Array(4);
+            xs[i][0] = domain[i * domainStep];
+            xs[i][1] = domain[(i + columnLength) * domainStep];
+            xs[i][2] = domain[(i + columnLength * 2) * domainStep];
+            xs[i][3] = domain[(i + columnLength * 3) * domainStep];
+
+            ys[i] = new Array(4);
+            ys[i][0] = values[i];
+            ys[i][1] = values[i + columnLength];
+            ys[i][2] = values[i + columnLength * 2];
+            ys[i][3] = values[i + columnLength * 3];
         }
 
-        // build polynomials for each row
+        // build polynomials from values in each row
         const xPolys = this.field.interpolateQuarticBatch(xs, ys);
 
-        // select a pseudo-random x coordinate
+        // select a pseudo-random x coordinate and evaluate each row polynomial at the coordinate
         const specialX = this.field.prng(lTree.root);
-
-        // build a column by evaluating each row polynomial at pseudo-random x coordinate
         const column = new Array<bigint>(xPolys.length);
         for (let i = 0; i < column.length; i++) {
             column[i] = this.field.evalPolyAt(xPolys[i], specialX);
         }
 
         // put the resulting column into a merkle tree
-        const column2 = bigIntsToBuffers(column, hashDigestSize);
-        const cTree = MerkleTree.create(column2, this.hashAlgorithm);
+        const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
+        const cTree = MerkleTree.create(bigIntsToBuffers(column, hashDigestSize), this.hashAlgorithm);
 
         // compute spot check positions in the column and corresponding positions in the original values
-        const sampleCount = Math.min(this.spotCheckCount, column.length / 2);
-        const positions = getPseudorandomIndexes(cTree.root, sampleCount, column.length, this.skipMultiplesOf);
+        const positions = getPseudorandomIndexes(cTree.root, this.spotCheckCount, column.length, this.skipMultiplesOf);
         const polyPositions = new Array<number>(positions.length * 4);
         for (let i = 0; i < positions.length; i++) {
             polyPositions[i * 4 + 0] = positions[i];

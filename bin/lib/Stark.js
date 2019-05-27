@@ -77,7 +77,8 @@ class Stark {
             extensionFactor: this.extensionFactor,
             rootOfUnity: G2,
             registerCount: this.registerCount,
-            constantCount: this.constantCount
+            constantCount: this.constantCount,
+            hashAlgorithm: this.hashAlgorithm
         };
         const executionDomain = this.field.getPowerCycle(G1);
         const evaluationDomain = this.field.getPowerCycle(G2);
@@ -181,7 +182,7 @@ class Stark {
         const lEvaluations2 = utils_1.bigIntsToBuffers(lEvaluations, this.field.elementSize);
         const lTree = merkle_1.MerkleTree.create(lEvaluations2, this.hashAlgorithm);
         const lcProof = lTree.proveBatch(positions);
-        const ldProver = new components_1.LowDegreeProver(this.field, this.extensionFactor, this.friSpotCheckCount, this.hashAlgorithm);
+        const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
         const ldProof = ldProver.prove(lTree, lEvaluations, evaluationDomain, lCombinationDegree);
         this.logger.log(label, 'Computed low-degree proof');
         this.logger.done(label, 'STARK computed');
@@ -236,7 +237,8 @@ class Stark {
             extensionFactor: this.extensionFactor,
             rootOfUnity: G2,
             registerCount: this.registerCount,
-            constantCount: this.constantCount
+            constantCount: this.constantCount,
+            hashAlgorithm: this.hashAlgorithm
         };
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const zPoly = new components_1.ZeroPolynomial(context);
@@ -288,7 +290,7 @@ class Stark {
         this.logger.log(label, `Verified liner combination proof`);
         // 6 ----- verify low-degree proof
         const lCombinationDegree = this.getLinearCombinationDegree(evaluationDomainSize);
-        const ldProver = new components_1.LowDegreeProver(this.field, this.extensionFactor, this.friSpotCheckCount, this.hashAlgorithm);
+        const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
         ldProver.verify(proof.degree.root, lCombinationDegree, G2, proof.degree.ldProof);
         const lPolyCount = constraintCount + 2 * (this.registerCount + bPoly.count);
         const lCoefficients = this.field.prng(eRoot, lPolyCount);

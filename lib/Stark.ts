@@ -97,7 +97,8 @@ export class Stark {
             extensionFactor : this.extensionFactor,
             rootOfUnity     : G2,
             registerCount   : this.registerCount,
-            constantCount   : this.constantCount
+            constantCount   : this.constantCount,
+            hashAlgorithm   : this.hashAlgorithm
         };
 
         const executionDomain = this.field.getPowerCycle(G1);
@@ -218,7 +219,7 @@ export class Stark {
         const lEvaluations2 = bigIntsToBuffers(lEvaluations, this.field.elementSize)
         const lTree = MerkleTree.create(lEvaluations2, this.hashAlgorithm);
         const lcProof = lTree.proveBatch(positions);
-        const ldProver = new LowDegreeProver(this.field, this.extensionFactor, this.friSpotCheckCount, this.hashAlgorithm);
+        const ldProver = new LowDegreeProver(this.friSpotCheckCount, context);
         const ldProof = ldProver.prove(lTree, lEvaluations, evaluationDomain, lCombinationDegree);
         this.logger.log(label, 'Computed low-degree proof');
 
@@ -273,7 +274,8 @@ export class Stark {
             extensionFactor : this.extensionFactor,
             rootOfUnity     : G2,
             registerCount   : this.registerCount,
-            constantCount   : this.constantCount
+            constantCount   : this.constantCount,
+            hashAlgorithm   : this.hashAlgorithm
         };
 
         const bPoly = new BoundaryConstraints(assertions, context);
@@ -335,7 +337,7 @@ export class Stark {
 
         // 6 ----- verify low-degree proof
         const lCombinationDegree = this.getLinearCombinationDegree(evaluationDomainSize);
-        const ldProver = new LowDegreeProver(this.field, this.extensionFactor, this.friSpotCheckCount, this.hashAlgorithm);
+        const ldProver = new LowDegreeProver(this.friSpotCheckCount, context);
         ldProver.verify(proof.degree.root, lCombinationDegree, G2, proof.degree.ldProof);
 
         const lPolyCount = constraintCount + 2 * (this.registerCount + bPoly.count);

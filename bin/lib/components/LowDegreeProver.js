@@ -7,10 +7,10 @@ const utils_1 = require("../utils");
 class LowDegreeProver {
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(field, skipMultiplesOf, spotCheckCount, hashAlgorithm) {
-        this.field = field;
-        this.skipMultiplesOf = skipMultiplesOf;
-        this.hashAlgorithm = hashAlgorithm;
+    constructor(spotCheckCount, context) {
+        this.field = context.field;
+        this.skipMultiplesOf = context.extensionFactor;
+        this.hashAlgorithm = context.hashAlgorithm;
         this.spotCheckCount = spotCheckCount;
     }
     // PUBLIC METHODS
@@ -34,23 +34,23 @@ class LowDegreeProver {
         for (let depth = 0; depth < proof.components.length; depth++) {
             let { columnRoot, columnProof, polyProof } = proof.components[depth];
             // calculate the pseudo-randomly sampled y indices
-            let columnSize = Math.floor(rouDegree / 4);
-            let sampleCount = Math.min(this.spotCheckCount, columnSize / 2);
-            let positions = utils_1.getPseudorandomIndexes(columnRoot, sampleCount, columnSize, this.skipMultiplesOf);
+            let columnLength = Math.floor(rouDegree / 4);
+            let positions = utils_1.getPseudorandomIndexes(columnRoot, this.spotCheckCount, columnLength, this.skipMultiplesOf);
+            // verify Merkle proof for the column
+            if (!merkle_1.MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
+                throw new Error('Low degree proof failed: merkle 1'); // TODO: StarkError
+            }
             // compute the positions for the values in the polynomial
             const polyPositions = new Array(positions.length * 4);
             for (let i = 0; i < positions.length; i++) {
                 polyPositions[i * 4 + 0] = positions[i];
-                polyPositions[i * 4 + 1] = positions[i] + columnSize;
-                polyPositions[i * 4 + 2] = positions[i] + columnSize * 2;
-                polyPositions[i * 4 + 3] = positions[i] + columnSize * 3;
+                polyPositions[i * 4 + 1] = positions[i] + columnLength;
+                polyPositions[i * 4 + 2] = positions[i] + columnLength * 2;
+                polyPositions[i * 4 + 3] = positions[i] + columnLength * 3;
             }
-            // verify Merkle proofs
-            if (!merkle_1.MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
-                throw new Error('Low degree proof failed: merkle'); // TODO: StarkError
-            }
+            // verify Merkle proof for polynomials
             if (!merkle_1.MerkleTree.verifyBatch(lRoot, polyPositions, polyProof, this.hashAlgorithm)) {
-                throw new Error('Low degree proof failed: merkle2'); // TODO: StarkError
+                throw new Error('Low degree proof failed: merkle 2'); // TODO: StarkError
             }
             // For each y coordinate, get the x coordinates on the row, the values on
             // the row, and the value at that y from the column
@@ -58,13 +58,17 @@ class LowDegreeProver {
             let ys = new Array(positions.length);
             const polyValues = utils_1.buffersToBigInts(polyProof.values);
             for (let i = 0; i < positions.length; i++) {
-                let x1 = this.field.exp(rootOfUnity, BigInt(positions[i]));
+                let xe = this.field.exp(rootOfUnity, BigInt(positions[i]));
                 xs[i] = new Array(4);
+                xs[i][0] = this.field.mul(quarticRootsOfUnity[0], xe);
+                xs[i][1] = this.field.mul(quarticRootsOfUnity[1], xe);
+                xs[i][2] = this.field.mul(quarticRootsOfUnity[2], xe);
+                xs[i][3] = this.field.mul(quarticRootsOfUnity[3], xe);
                 ys[i] = new Array(4);
-                for (let j = 0; j < 4; j++) {
-                    xs[i][j] = this.field.mul(quarticRootsOfUnity[j], x1);
-                    ys[i][j] = polyValues[i * 4 + j];
-                }
+                ys[i][0] = polyValues[i * 4];
+                ys[i][1] = polyValues[i * 4 + 1];
+                ys[i][2] = polyValues[i * 4 + 2];
+                ys[i][3] = polyValues[i * 4 + 3];
             }
             // calculate the pseudo-random x coordinate
             const specialX = this.field.prng(lRoot);
@@ -85,7 +89,9 @@ class LowDegreeProver {
             rouDegree = Math.floor(rouDegree / 4);
         }
         // 2 ----- verify the remainder of the proof
-        // TODO: assert maxdeg_plus_1 <= 16
+        if (maxDegreePlus1 > proof.remainder.length) {
+            throw new Error('Low degree proof failed: degree'); // TODO: StarkError
+        }
         // check that Merkle root matches up
         const cTree = merkle_1.MerkleTree.create(proof.remainder, this.hashAlgorithm);
         if (!cTree.root.equals(lRoot)) {
@@ -121,10 +127,9 @@ class LowDegreeProver {
     // HELPER METHODS
     // --------------------------------------------------------------------------------------------
     fri(lTree, values, maxDegreePlus1, depth, domain, result) {
-        const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
-        // if the degree we are checking is less then or qual to 16, use the polynomial directly as proof
+        // if there are not too many values left, use the polynomial directly as proof
         if (values.length <= 256) {
-            result.remainder = utils_1.bigIntsToBuffers(values, hashDigestSize);
+            result.remainder = lTree.values;
             return;
         }
         // break values into rows and columns and sample 4 values for each row
@@ -134,27 +139,29 @@ class LowDegreeProver {
         let ys = new Array(columnLength);
         for (let i = 0; i < columnLength; i++) {
             xs[i] = new Array(4);
+            xs[i][0] = domain[i * domainStep];
+            xs[i][1] = domain[(i + columnLength) * domainStep];
+            xs[i][2] = domain[(i + columnLength * 2) * domainStep];
+            xs[i][3] = domain[(i + columnLength * 3) * domainStep];
             ys[i] = new Array(4);
-            for (let j = 0; j < 4; j++) {
-                xs[i][j] = domain[(i + columnLength * j) * domainStep];
-                ys[i][j] = values[i + columnLength * j];
-            }
+            ys[i][0] = values[i];
+            ys[i][1] = values[i + columnLength];
+            ys[i][2] = values[i + columnLength * 2];
+            ys[i][3] = values[i + columnLength * 3];
         }
-        // build polynomials for each row
+        // build polynomials from values in each row
         const xPolys = this.field.interpolateQuarticBatch(xs, ys);
-        // select a pseudo-random x coordinate
+        // select a pseudo-random x coordinate and evaluate each row polynomial at the coordinate
         const specialX = this.field.prng(lTree.root);
-        // build a column by evaluating each row polynomial at pseudo-random x coordinate
         const column = new Array(xPolys.length);
         for (let i = 0; i < column.length; i++) {
             column[i] = this.field.evalPolyAt(xPolys[i], specialX);
         }
         // put the resulting column into a merkle tree
-        const column2 = utils_1.bigIntsToBuffers(column, hashDigestSize);
-        const cTree = merkle_1.MerkleTree.create(column2, this.hashAlgorithm);
+        const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
+        const cTree = merkle_1.MerkleTree.create(utils_1.bigIntsToBuffers(column, hashDigestSize), this.hashAlgorithm);
         // compute spot check positions in the column and corresponding positions in the original values
-        const sampleCount = Math.min(this.spotCheckCount, column.length / 2);
-        const positions = utils_1.getPseudorandomIndexes(cTree.root, sampleCount, column.length, this.skipMultiplesOf);
+        const positions = utils_1.getPseudorandomIndexes(cTree.root, this.spotCheckCount, column.length, this.skipMultiplesOf);
         const polyPositions = new Array(positions.length * 4);
         for (let i = 0; i < positions.length; i++) {
             polyPositions[i * 4 + 0] = positions[i];

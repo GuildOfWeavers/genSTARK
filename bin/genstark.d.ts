@@ -114,6 +114,7 @@ declare module '@guildofweavers/genstark' {
         rootOfUnity     : bigint;
         registerCount   : number;
         constantCount   : number;
+        hashAlgorithm   : HashAlgorithm;
     }
 
     export interface ReadonlyRegister {

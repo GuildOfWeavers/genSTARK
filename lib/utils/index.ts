@@ -45,10 +45,14 @@ export function getPseudorandomIndexes(seed: Buffer, count: number, max: number,
 
 export function bigIntsToBuffers(values: bigint[], size: number): Buffer[] {
     const result = new Array<Buffer>(values.length);
+    const maxValue = 2n**BigInt(size * 8);
     const hexSize = size * 2;
     for (let i = 0; i < values.length; i++) {
-        // TODO: check for overflow
-        result[i] = Buffer.from(values[i].toString(16).padStart(hexSize, '0'), 'hex');
+        let v = values[i];
+        if (v >= maxValue) {
+            throw Error('Cannot convert bigint to buffer: value is too large');
+        }
+        result[i] = Buffer.from(v.toString(16).padStart(hexSize, '0'), 'hex');
     }
     return result;
 }
