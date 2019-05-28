@@ -16,7 +16,7 @@ for (let i = 0; i < 64; i++) {
   roundConstants[i] = (BigInt(i)**7n) ^ 42n;
 }
 
-// define state transition function for MIMC computation
+// define state transition function for MiMC computation
 function mimcTransition(frame: ExecutionFrame) {
     const v = frame.getValue(0);        // get current state for register 0
     const k = frame.getConst(0);        // get current state for constant 0
@@ -28,8 +28,8 @@ function mimcTransition(frame: ExecutionFrame) {
     frame.setNextValue(0, nv);
 }
 
-// define constraint checking function for MIMC computation
-function mimcConstraint(frame: EvaluationFrame) {
+// define constraint checking function for MiMC computation
+function mimcConstraint(frame: EvaluationFrame): bigint {
     const v = frame.getValue(0);        // get current state from register 0
     const k = frame.getConst(0);        // get current state from constant 0
     const nv = frame.getNextValue(0);   // get next state from register 0
@@ -38,7 +38,7 @@ function mimcConstraint(frame: EvaluationFrame) {
     return frame.sub(nv, frame.add(frame.exp(v, 3n), k));
 }
 
-// create the STARK for MIMC computation
+// create the STARK for MiMC computation
 const mimcStark = new Stark({
     field               : field,
     registerCount       : 1,                        // we only need 1 register
@@ -50,8 +50,9 @@ const mimcStark = new Stark({
 
 // TESTING
 // ================================================================================================
-//let steps = 2**6, result = 115147868172009559599970888602262339785331471694954098733392001040646413813295n;
-let steps = 2**13, result = 95224774355499767951968048714566316597785297695903697235130434363122555476056n;
+//let steps = 2**6, result = 115147868172009559599970888602262339785331471694954098733392001040646413813295n;   // ~100 ms, ~48 KB
+let steps = 2**13, result = 95224774355499767951968048714566316597785297695903697235130434363122555476056n;     // ~4.5 sec, ~230 KB
+//let steps = 2**17, result = 47923185371606372287465305238563325603777484372847211522043297561219208703471n;   // ~72 sec, ~390 KB
 
 // set up inputs and assertions
 const inputs = [3n];                                    // we need to provide starting value for 1 register
@@ -64,12 +65,12 @@ const assertions = [
     { step: steps - 1, register: 0, value: result }     // value at last step is equal to result
 ];
 
-// prove that the assertions hold if we execute MIMC computation
+// prove that the assertions hold if we execute MiMC computation
 // for the given number of steps with given inputs and constants
 let proof = mimcStark.prove(assertions, steps, inputs, constants);
 console.log('-'.repeat(20));
 
-// serialize the proof, should be about 230KB
+// serialize the proof
 let start = Date.now();
 const buf = mimcStark.serialize(proof);
 console.log(`Proof serialized in ${Date.now() - start} ms`);

@@ -48,13 +48,35 @@ declare module '@guildofweavers/genstark' {
     }
 
     export class Stark {
+
+        /** Create a STARK based on the provided config parameters */
         constructor(config: StarkConfig);
 
+        /**
+         * Generate a proof of computation for this STARK
+         * @param assertions Boundary constraints for the computation
+         * @param steps Number of steps in the computation
+         * @param inputs Initial values for all mutable registers
+         * @param constants Definitions for all readonly registers
+         */
         prove(assertions: Assertion[], steps: number, inputs: bigint[], constants?: Constant[]): StarkProof;
+
+        /**
+         * Verifies a proof of computation for this STARK
+         * @param assertions Boundary constraints for the computation
+         * @param proof Proof of the computation
+         * @param steps Number of steps in the computation
+         * @param constants Definitions for readonly registers
+         */
         verify(assertions: Assertion[], proof: StarkProof, steps: number, constants?: Constant[]): boolean;
 
+        /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;
+
+        /** Writes the proof to a buffer */
         serialize(proof: StarkProof): Buffer;
+
+        /** Reads a proof from the provided buffer */
         parse(proof: Buffer): StarkProof;
     }
 

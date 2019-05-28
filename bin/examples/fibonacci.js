@@ -56,7 +56,7 @@ const assertions = [
 // prove that the assertions hold if we execute Fibonacci computation for the given number of steps
 let proof = fibStark.prove(assertions, steps, inputs);
 console.log('-'.repeat(20));
-// serialize the proof, should be about 215KB
+// serialize the proof
 let start = Date.now();
 const buf = fibStark.serialize(proof);
 console.log(`Proof serialized in ${Date.now() - start} ms`);
