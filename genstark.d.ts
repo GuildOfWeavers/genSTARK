@@ -114,11 +114,11 @@ declare module '@guildofweavers/genstark' {
     }
 
     export interface TransitionFunction {
-        (frame: ExecutionFrame): void;
+        (this: ExecutionFrame): void;
     }
 
     export interface TransitionConstraint {
-        (frame: EvaluationFrame): bigint;
+        (this: EvaluationFrame): bigint;
     }
 
     // FRAMES

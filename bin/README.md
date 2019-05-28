@@ -55,7 +55,7 @@ There are a few more sophisticated examples in this repository:
 * [Fibonacci STARK](/examples/fibonacci.ts) - proofs of computation for [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number).
 * [Demo STARK](/examples/demo.ts) - demonstration of how to use readonly registers.
 
-When you run the examples, you should get a nice log documenting each step. Here is an example output of running MiMC STARK for 2**13 steps:
+When you run the examples, you should get a nice log documenting each step. Here is an example output of running MiMC STARK for 2<sup>13</sup> steps:
 ```
 Starting STARK computation
 Set up evaluation context in 86 ms

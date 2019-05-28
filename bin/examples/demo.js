@@ -12,20 +12,20 @@ const index_1 = require("../index");
 const modulus = 96769n;
 const field = new index_1.PrimeField(modulus);
 // define state transition function
-function demoTransition(frame) {
-    const v0 = frame.getValue(0);
-    const k0 = frame.getConst(0);
-    const k1 = frame.getConst(1);
+function demoTransition() {
+    const v0 = this.getValue(0);
+    const k0 = this.getConst(0);
+    const k1 = this.getConst(1);
     // nv0 = v0 + 1 + k0 + 2 * k1
-    const nv0 = frame.add(frame.add(frame.add(v0, 1n), k0), frame.mul(2n, k1));
-    frame.setNextValue(0, nv0);
+    const nv0 = this.add(this.add(this.add(v0, 1n), k0), this.mul(2n, k1));
+    this.setNextValue(0, nv0);
 }
 // define state transition constraint
-function demoConstraint(frame) {
-    const v0 = frame.getValue(0);
-    const k0 = frame.getConst(0);
-    const k1 = frame.getConst(1);
-    const nv0 = frame.getNextValue(0);
+function demoConstraint() {
+    const v0 = this.getValue(0);
+    const k0 = this.getConst(0);
+    const k1 = this.getConst(1);
+    const nv0 = this.getNextValue(0);
     return field.sub(nv0, field.add(field.add(field.add(v0, 1n), k0), field.mul(2n, k1)));
 }
 // define the STARK for the computation
@@ -66,7 +66,7 @@ console.log('-'.repeat(20));
 // V0 is the mutable register. The transition function is vNext = v0 + 1 + K0 + 2 * K1
 //
 //  Step	K0	K1	V0
-//  0       1	1	1
+//  0		1	1	1
 //  1		2	0	5
 //  2		3	0	8
 //  3		4	0	12

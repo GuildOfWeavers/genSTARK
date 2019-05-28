@@ -11,28 +11,28 @@ const modulus = 2n ** 32n - 3n * 2n ** 25n + 1n;
 const field = new index_1.PrimeField(modulus);
 // define state transition function for Fibonacci sequence:
 // each step advances Fibonacci sequence by 2 values
-function fibTransition(frame) {
-    const v0 = frame.getValue(0);
-    const v1 = frame.getValue(1);
-    const v2 = frame.add(v0, v1);
-    const v3 = frame.add(v1, v2);
-    frame.setNextValue(0, v2);
-    frame.setNextValue(1, v3);
+function fibTransition() {
+    const v0 = this.getValue(0);
+    const v1 = this.getValue(1);
+    const v2 = this.add(v0, v1);
+    const v3 = this.add(v1, v2);
+    this.setNextValue(0, v2);
+    this.setNextValue(1, v3);
 }
 // make sure register 0 is updated correctly
-function fibConstraint1(frame) {
-    const v0 = frame.getValue(0);
-    const v1 = frame.getValue(1);
-    const v2 = frame.getNextValue(0);
-    return frame.sub(v2, frame.add(v0, v1));
+function fibConstraint1() {
+    const v0 = this.getValue(0);
+    const v1 = this.getValue(1);
+    const v2 = this.getNextValue(0);
+    return this.sub(v2, this.add(v0, v1));
 }
 // make sure register 1 is updated correctly
-function fibConstraint2(frame) {
-    const v0 = frame.getValue(0);
-    const v1 = frame.getValue(1);
-    const v2 = frame.add(v0, v1);
-    const v3 = frame.getNextValue(1);
-    return frame.sub(v3, frame.add(v1, v2));
+function fibConstraint2() {
+    const v0 = this.getValue(0);
+    const v1 = this.getValue(1);
+    const v2 = this.add(v0, v1);
+    const v3 = this.getNextValue(1);
+    return this.sub(v3, this.add(v1, v2));
 }
 // create the STARK for Fibonacci calculation
 const fibStark = new index_1.Stark({

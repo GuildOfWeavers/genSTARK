@@ -17,25 +17,25 @@ for (let i = 0; i < 64; i++) {
 }
 
 // define state transition function for MiMC computation
-function mimcTransition(frame: ExecutionFrame) {
-    const v = frame.getValue(0);        // get current state for register 0
-    const k = frame.getConst(0);        // get current state for constant 0
+function mimcTransition(this: ExecutionFrame) {
+    const v = this.getValue(0);        // get current state for register 0
+    const k = this.getConst(0);        // get current state for constant 0
 
     // nv = v**3 + k
-    const nv = frame.add(frame.exp(v, 3n), k);
+    const nv = this.add(this.exp(v, 3n), k);
    
     // set the next state for register 0
-    frame.setNextValue(0, nv);
+    this.setNextValue(0, nv);
 }
 
 // define constraint checking function for MiMC computation
-function mimcConstraint(frame: EvaluationFrame): bigint {
-    const v = frame.getValue(0);        // get current state from register 0
-    const k = frame.getConst(0);        // get current state from constant 0
-    const nv = frame.getNextValue(0);   // get next state from register 0
+function mimcConstraint(this: EvaluationFrame): bigint {
+    const v = this.getValue(0);        // get current state from register 0
+    const k = this.getConst(0);        // get current state from constant 0
+    const nv = this.getNextValue(0);   // get next state from register 0
 
     // compute: nv - (v**3 + k)
-    return frame.sub(nv, frame.add(frame.exp(v, 3n), k));
+    return this.sub(nv, this.add(this.exp(v, 3n), k));
 }
 
 // create the STARK for MiMC computation

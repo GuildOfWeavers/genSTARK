@@ -124,7 +124,7 @@ export class Stark {
         try {
             for (exeStep = 0; exeStep < executionDomain.length - 1; exeStep++) {
                 executionFrame.currentStep = exeStep;
-                this.tFunction(executionFrame);
+                this.tFunction.call(executionFrame);
             }
         }
         catch(error) {
@@ -158,7 +158,7 @@ export class Stark {
                 qEvaluations[cIndex] = new Array(evaluationDomainSize);
                 for (let step = 0; step < evaluationDomainSize; step++) {
                     frame.currentStep = step;
-                    let q = constraint(frame);
+                    let q = constraint.call(frame);
                     if (step < nonfinalSteps && step % this.extensionFactor === 0 && q !== 0n) {
                         let execStep = step / this.extensionFactor;
                         throw new StarkError(`The constraint didn't evaluate to 0 at step ${execStep}`);
@@ -395,7 +395,7 @@ export class Stark {
 
             // check transition constraints
             for (let j = 0; j < constraintCount; j++) {
-                let qValue = this.tConstraints[j](pFrame);
+                let qValue = this.tConstraints[j].call(pFrame);
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValue !== qCheck) {
                     throw new StarkError(`Transition constraint at position ${step} was not satisfied`);
