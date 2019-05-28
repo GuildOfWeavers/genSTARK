@@ -8,7 +8,7 @@ import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver } from './componen
 import { Logger, isPowerOf2, getPseudorandomIndexes, sizeOf, bigIntsToBuffers, buffersToBigInts } from './utils';
 import { RepeatedConstants, StretchedConstants } from './registers';
 import { ProofFrame, VerificationFrame } from './frames';
-import { MerkleTree, getHashFunction } from '@guildofweavers/merkle';
+import { MerkleTree, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -216,22 +216,34 @@ export class Stark {
         this.logger.log(label, `Computed ${this.exeSpotCheckCount} evaluation spot checks`);
 
         // 10 ---- compute random linear combination of evaluations
-        // first, increase the power of P(x) and B(x) polynomials to match the power of D(x) polynomial
+        // first, increase the power of polynomials to match the power of liner combination
         const lCombinationDegree = this.getLinearCombinationDegree(evaluationDomainSize);
-        const lPowerFactor = BigInt(Math.max(lCombinationDegree - steps, 0));
-        const lPowerSeed = this.field.exp(G2, lPowerFactor);
-        const powers = this.field.getPowerSeries(lPowerSeed, evaluationDomainSize);
-        const pbEvaluations = [...pEvaluations, ...bEvaluations];
-        const pbEvaluations2 = this.field.mulMany(pbEvaluations, powers);
+        let allEvaluations: bigint[][];
+        if (lCombinationDegree > steps) {
+            // increase degrees of P(x) and B(x) polynomials
+            const pbIncrementalDegree = BigInt(lCombinationDegree - steps);
+            const pbPowerSeed = this.field.exp(G2, pbIncrementalDegree);
+            const powers = this.field.getPowerSeries(pbPowerSeed, evaluationDomainSize);
+            const pbEvaluations = [...pEvaluations, ...bEvaluations];
+            const pbEvaluations2 = this.field.mulMany(pbEvaluations, powers);
+            allEvaluations = [...pbEvaluations2, ...pbEvaluations, ...dEvaluations];
+        }
+        else {
+            // increase degree of D(x) polynomial
+            const dPowerSeed = this.field.exp(G2, BigInt(steps - 1));
+            const powers = this.field.getPowerSeries(dPowerSeed, evaluationDomainSize);
+            const dEvaluations2 = this.field.mulMany(dEvaluations, powers);
+            allEvaluations = [...pEvaluations, ...bEvaluations, ...dEvaluations2];
+        }
 
         // then compute a linear combination of all polynomials
-        const allEvaluations = [...pbEvaluations2, ...pbEvaluations, ...dEvaluations];
         const lCoefficients = this.field.prng(eTree.root, allEvaluations.length);
         const lEvaluations = this.field.combineMany(allEvaluations, lCoefficients);
         this.logger.log(label, 'Computed random linear combination of evaluations');
 
         // 11 ----- Compute low-degree proof
-        const lEvaluations2 = bigIntsToBuffers(lEvaluations, this.field.elementSize)
+        const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
+        const lEvaluations2 = bigIntsToBuffers(lEvaluations, hashDigestSize)
         const lTree = MerkleTree.create(lEvaluations2, this.hashAlgorithm);
         const lcProof = lTree.proveBatch(positions);
         let ldProof;
@@ -366,7 +378,6 @@ export class Stark {
 
         const lPolyCount = constraintCount + 2 * (this.registerCount + bPoly.count);
         const lCoefficients = this.field.prng(eRoot, lPolyCount);
-        const lPowerFactor = BigInt(Math.max(lCombinationDegree - steps, 0));
         this.logger.log(label, `Verified low-degree proof`);
 
         // 7 ----- verify transition and boundary constraints
@@ -399,20 +410,32 @@ export class Stark {
                 }
             }
 
-            // check correctness of liner combination
-            let power = this.field.exp(x, lPowerFactor);
-            let pbValues = [...pValues, ...bValues];
-            let pbValues2 = new Array<bigint>(pbValues.length);
-            for (let j = 0; j < pbValues2.length; j++) {
-                pbValues2[j] = pbValues[j] * power;
+            // check correctness of liner 
+            let lcValues: bigint[];
+            if (lCombinationDegree > steps) {
+                let power = this.field.exp(x, BigInt(lCombinationDegree - steps));
+                let pbValues = [...pValues, ...bValues];
+                let pbValues2 = new Array<bigint>(pbValues.length);
+                for (let j = 0; j < pbValues2.length; j++) {
+                    pbValues2[j] = pbValues[j] * power;
+                }
+                lcValues = [...pbValues2, ...pbValues, ...dValues];
+            }
+            else {
+                let power = this.field.exp(x, BigInt(steps - 1));
+                let dValues2 = new Array<bigint>(dValues.length);
+                for (let j = 0; j < dValues2.length; j++) {
+                    dValues2[j] = dValues[j] * power;
+                }
+                lcValues = [...pValues, ...bValues, ...dValues2]
             }
 
-            let lCheck = this.field.combine([...pbValues2, ...pbValues, ...dValues], lCoefficients);
+            let lCheck = this.field.combine(lcValues, lCoefficients);
             if (lEvaluations.get(step) !== lCheck) {
                 throw new StarkError(`Linear combination at position ${step} is inconsistent`);
             }
         }
-        this.logger.log(label, `Transition and boundary constraints verified`);
+        this.logger.log(label, `Verified transition and boundary constraints`);
 
         this.logger.done(label, 'STARK verified');
         return true;
@@ -451,7 +474,11 @@ export class Stark {
 
     private getLinearCombinationDegree(evaluationDomainSize: number): number {
         const steps = evaluationDomainSize / this.extensionFactor;
-        const degree = (this.tConstraintDegree - 1) * steps
+        // the logic is as follows:
+        // deg(Q(x)) = steps * deg(constraints) = deg(D(x)) + deg(Z(x))
+        // thus, deg(D(x)) = deg(Q(x)) - steps;
+        // and, linear combination degree is max(deg(D(x)), steps)
+        const degree = steps * Math.max(this.tConstraintDegree - 1, 1);
         return degree;
     }
 }

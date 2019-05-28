@@ -1,28 +1,50 @@
 declare module '@guildofweavers/genstark' {
 
-    // IMPORTS AND RE-EXPORTS
+    // IMPORTS
     // --------------------------------------------------------------------------------------------
     import { FiniteField } from '@guildofweavers/galois';
-    export { FiniteField, PrimeField, Polynom } from '@guildofweavers/galois';
-
     import { BatchMerkleProof, HashAlgorithm } from '@guildofweavers/merkle';
+
+    // RE-EXPORTS
+    // --------------------------------------------------------------------------------------------
+    export { FiniteField, PrimeField, Polynom } from '@guildofweavers/galois';
     export { MerkleTree, BatchMerkleProof, HashAlgorithm, getHashDigestSize } from '@guildofweavers/merkle';
 
     // STARK
     // --------------------------------------------------------------------------------------------
     export interface StarkConfig {
-        field               : FiniteField;
-        registerCount       : number;
-        constantCount?      : number;
-        tFunction           : TransitionFunction;
-        tConstraints        : TransitionConstraint[];
-        tConstraintDegree   : number;
-        extensionFactor?    : number;
+        /** field for all math operations in the computation */
+        field: FiniteField;
+
+        /** Number of mutable registers in the computation */
+        registerCount: number;
+
+        /** Number of  readonly registers in the computation */
+        constantCount?: number;
+
+        /** State transition function for the computation */
+        tFunction: TransitionFunction;
+
+        /** A list of transition constraints for the computation */
+        tConstraints: TransitionConstraint[];
+
+        /** Maximum degree of transition constraints */
+        tConstraintDegree: number;
+
+        /** Execution trace extension factor; defaults to 8 */
+        extensionFactor?: number;
+
+        /** Number of spot checks for the execution trace; defaults to 80 */
         exeSpotCheckCount?  : number;
+
+        /** Number of spot checks for low degree proof; defaults to 40 */
         friSpotCheckCount?  : number;
 
-        hashAlgorithm?      : HashAlgorithm;
-        logger?             : Logger;
+        /** Hash algorithm for Merkle trees; defaults to sha256 */
+        hashAlgorithm?: HashAlgorithm;
+
+        /** Logger for tracking proof / verification processes */
+        logger?: Logger;
     }
 
     export class Stark {
@@ -57,7 +79,8 @@ declare module '@guildofweavers/genstark' {
     }
 
     export const enum ConstantPattern {
-        repeat = 1, stretch = 2
+        repeat = 1,
+        stretch = 2
     }
 
     // CONSTRAINTS
