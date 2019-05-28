@@ -44,8 +44,9 @@ const fibStark = new index_1.Stark({
 });
 // TESTING
 // ================================================================================================
-let steps = 2 ** 13, result = 203257732n; // ~3 seconds to prove, ~215 KB proof size
-//let steps = 2**17, result = 2391373091n;          // ~60 seconds to prove, ~388 KB proof size
+//let steps = 2**6, result = 1783540607n;           // TODO: fix?
+let steps = 2 ** 13, result = 203257732n; // ~1 second to prove, ~147 KB proof size
+//let steps = 2**17, result = 2391373091n;          // ~13 seconds to prove, ~287 KB proof size
 // set up inputs and assertions
 const inputs = [1n, 1n]; // step 0 and 1 in Fibonacci sequence are 1
 const assertions = [
@@ -59,8 +60,7 @@ console.log('-'.repeat(20));
 // serialize the proof
 let start = Date.now();
 const buf = fibStark.serialize(proof);
-console.log(`Proof serialized in ${Date.now() - start} ms`);
-console.log(`Proof size: ${Math.round(buf.byteLength / 1024 * 100) / 100} KB`);
+console.log(`Proof serialized in ${Date.now() - start} ms; size: ${Math.round(buf.byteLength / 1024 * 100) / 100} KB`);
 assert(buf.byteLength === fibStark.sizeOf(proof));
 console.log('-'.repeat(20));
 // deserialize the proof to make sure everything serialized correctly

@@ -83,6 +83,7 @@ export class BoundaryConstraints {
             let zEvaluationsInverse = this.field.invMany(zEvaluations);
 
             bEvaluations[slot] = new Array(domainSize);
+            // TODO: convert to batch operation
             for (let step = 0; step < domainSize; step++) {
                 let p = pEvaluations[register][step];
                 let i = iEvaluations[step];

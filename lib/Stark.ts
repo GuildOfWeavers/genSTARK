@@ -18,12 +18,11 @@ const MAX_DOMAIN_SIZE = 2**32;
 const MAX_REGISTER_COUNT = 64;
 const MAX_CONSTANT_COUNT = 64;
 const MAX_CONSTRAINT_COUNT = 1024;
-const MAX_CONSTRAINT_DEGREE = 12;
+const MAX_CONSTRAINT_DEGREE = 16;
 const MAX_EXTENSION_FACTOR = 32;
 const MAX_EXE_SPOT_CHECK_COUNT = 128;
 const MAX_FRI_SPOT_CHECK_COUNT = 64;
 
-const DEFAULT_EXTENSION_FACTOR = 8;
 const DEFAULT_EXE_SPOT_CHECK_COUNT = 80;
 const DEFAULT_FRI_SPOT_CHECK_COUNT = 40;
 
@@ -515,13 +514,22 @@ function validateConfig(config: StarkConfig) {
         throw new TypeError(`Transition constraint degree must be an integer between 1 and ${MAX_CONSTRAINT_DEGREE}`);
     }
 
-    const extensionFactor = config.extensionFactor || DEFAULT_EXTENSION_FACTOR;
-    if (extensionFactor < 2 || extensionFactor > MAX_EXTENSION_FACTOR || !Number.isInteger(extensionFactor)) {
-        throw new TypeError(`Extension factor must be an integer between 2 and ${MAX_EXTENSION_FACTOR}`);
+    let extensionFactor = config.extensionFactor;
+    if (extensionFactor === undefined) {
+        extensionFactor = 2**Math.ceil(Math.log2(tConstraintDegree * 2));
     }
+    else {
+        if (extensionFactor < 2 || extensionFactor > MAX_EXTENSION_FACTOR || !Number.isInteger(extensionFactor)) {
+            throw new TypeError(`Extension factor must be an integer between 2 and ${MAX_EXTENSION_FACTOR}`);
+        }
+    
+        if (!isPowerOf2(extensionFactor)) {
+            throw new TypeError(`Extension factor must be a power of 2`);
+        }
 
-    if (extensionFactor < 2 * tConstraintDegree) {
-        throw new TypeError(`Extension factor must be at least 2x greater than the maximum transition constraint degree.`);
+        if (extensionFactor < 2 * tConstraintDegree) {
+            throw new TypeError(`Extension factor must be at least 2x greater than the transition constraint degree`);
+        }
     }
 
     const exeSpotCheckCount = config.exeSpotCheckCount || DEFAULT_EXE_SPOT_CHECK_COUNT;

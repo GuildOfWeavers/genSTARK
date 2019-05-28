@@ -62,8 +62,7 @@ console.log('-'.repeat(20));
 // serialize the proof
 let start = Date.now();
 const buf = mimcStark.serialize(proof);
-console.log(`Proof serialized in ${Date.now() - start} ms`);
-console.log(`Proof size: ${Math.round(buf.byteLength / 1024 * 100) / 100} KB`);
+console.log(`Proof serialized in ${Date.now() - start} ms; size: ${Math.round(buf.byteLength / 1024 * 100) / 100} KB`);
 assert(buf.byteLength === mimcStark.sizeOf(proof));
 console.log('-'.repeat(20));
 // deserialize the proof to make sure everything serialized correctly

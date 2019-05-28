@@ -108,9 +108,14 @@ declare module '@guildofweavers/genstark' {
     // CONSTRAINTS
     // --------------------------------------------------------------------------------------------
     export interface Assertion {
-        step    : number;
+        /** register index */
         register: number;
-        value   : bigint;
+
+        /** step in the execution trace */
+        step: number;
+
+        /** value that the register should have at the specified step */
+        value: bigint;
     }
 
     export interface TransitionFunction {
@@ -124,16 +129,24 @@ declare module '@guildofweavers/genstark' {
     // FRAMES
     // --------------------------------------------------------------------------------------------
     export interface ExecutionFrame extends FrameOps {
+        /** Get the current value from a mutable register specified by the index */
         getValue(index: number): bigint;
+
+        /** Get the current value from a readonly register specified by the index  */
         getConst(index: number): bigint;
 
+        /** Set the next value for a mutable register specified by the index */
         setNextValue(index: number, value: bigint): void;
     }
 
     export interface EvaluationFrame extends FrameOps {
+        /** Get the current value from a mutable register specified by the index */
         getValue(index: number): bigint;
+
+        /** Get the current value from a readonly register specified by the index  */
         getConst(index: number): bigint;
 
+        /** Get the next value from a mutable register specified by the index */
         getNextValue(index: number): bigint;
     }
 
