@@ -18,14 +18,27 @@ class ProofFrame {
     getValue(index) {
         const maxIndex = this.trace.length - 1;
         if (index < 0 || index > maxIndex) {
-            throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            if (maxIndex === 0) {
+                throw new Error(`You have only 1 register defined; the index must be equal to 0`);
+            }
+            else {
+                throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            }
         }
         return this.trace[index][this.currentStep];
     }
     getConst(index) {
         const maxIndex = this.constants.length - 1;
         if (index < 0 || index > maxIndex) {
-            throw new Error(`Constant index must be an integer between 0 and ${maxIndex}`);
+            if (maxIndex === 0) {
+                throw new Error(`You have only 1 constant defined; the index must be equal to 0`);
+            }
+            else if (maxIndex === -1) {
+                throw new Error(`You don't have any constants defined`);
+            }
+            else {
+                throw new Error(`Constant index must be an integer between 0 and ${maxIndex}`);
+            }
         }
         const k = this.constants[index];
         return k.getValue(this.currentStep, this.skip === 1);
@@ -33,7 +46,12 @@ class ProofFrame {
     getNextValue(index) {
         const maxIndex = this.trace.length - 1;
         if (index < 0 || index > maxIndex) {
-            throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            if (maxIndex === 0) {
+                throw new Error(`You have only 1 register defined; the index must be equal to 0`);
+            }
+            else {
+                throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            }
         }
         if (this.skip === 1) {
             throw new Error('Cannot get next value in an execution frame');
@@ -44,7 +62,12 @@ class ProofFrame {
     setNextValue(index, value) {
         const maxIndex = this.trace.length - 1;
         if (index < 0 || index > maxIndex) {
-            throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            if (maxIndex === 0) {
+                throw new Error(`You have only 1 register defined; the index must be equal to 0`);
+            }
+            else {
+                throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            }
         }
         if (this.skip !== 1) {
             throw new Error('Cannot set next value in an evaluation frame');

@@ -431,11 +431,11 @@ function validateConfig(config) {
     if (!config.field)
         throw new TypeError('Finite field was not provided');
     const registerCount = config.registerCount;
-    if (registerCount < 1 || registerCount > MAX_REGISTER_COUNT) {
+    if (registerCount < 1 || registerCount > MAX_REGISTER_COUNT || !Number.isInteger(registerCount)) {
         throw new TypeError(`Number of state registers must be an integer between 1 and ${MAX_REGISTER_COUNT}`);
     }
     const constantCount = config.constantCount || 0;
-    if (constantCount < 0 || constantCount > MAX_CONSTANT_COUNT) {
+    if (constantCount < 0 || constantCount > MAX_CONSTANT_COUNT || !Number.isInteger(constantCount)) {
         throw new TypeError(`Number of state constants must be an integer between 0 and ${MAX_CONSTANT_COUNT}`);
     }
     if (!config.tFunction)
@@ -451,22 +451,22 @@ function validateConfig(config) {
         throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
     }
     const tConstraintDegree = config.tConstraintDegree;
-    if (tConstraintDegree < 1 || tConstraintDegree > MAX_CONSTRAINT_DEGREE) {
-        throw new TypeError(`Extension factor must be an integer between 1 and ${MAX_CONSTRAINT_DEGREE}`);
+    if (tConstraintDegree < 1 || tConstraintDegree > MAX_CONSTRAINT_DEGREE || !Number.isInteger(tConstraintDegree)) {
+        throw new TypeError(`Transition constraint degree must be an integer between 1 and ${MAX_CONSTRAINT_DEGREE}`);
     }
     const extensionFactor = config.extensionFactor || DEFAULT_EXTENSION_FACTOR;
-    if (extensionFactor < 2 || extensionFactor > MAX_EXTENSION_FACTOR) {
+    if (extensionFactor < 2 || extensionFactor > MAX_EXTENSION_FACTOR || !Number.isInteger(extensionFactor)) {
         throw new TypeError(`Extension factor must be an integer between 2 and ${MAX_EXTENSION_FACTOR}`);
     }
     if (extensionFactor < 2 * tConstraintDegree) {
         throw new TypeError(`Extension factor must be at least 2x greater than the maximum transition constraint degree.`);
     }
     const exeSpotCheckCount = config.exeSpotCheckCount || DEFAULT_EXE_SPOT_CHECK_COUNT;
-    if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT) {
+    if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT || !Number.isInteger(exeSpotCheckCount)) {
         throw new TypeError(`Execution sample size must be an integer between 1 and ${MAX_EXE_SPOT_CHECK_COUNT}`);
     }
     const friSpotCheckCount = config.friSpotCheckCount || DEFAULT_FRI_SPOT_CHECK_COUNT;
-    if (friSpotCheckCount < 1 || friSpotCheckCount > MAX_FRI_SPOT_CHECK_COUNT) {
+    if (friSpotCheckCount < 1 || friSpotCheckCount > MAX_FRI_SPOT_CHECK_COUNT || !Number.isInteger(friSpotCheckCount)) {
         throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_SPOT_CHECK_COUNT}`);
     }
     const hashAlgorithm = config.hashAlgorithm || 'sha256';

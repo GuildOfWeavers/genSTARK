@@ -41,7 +41,12 @@ export class VerificationFrame implements EvaluationFrame {
     getValue(index: number): bigint {
         const maxIndex = this.registerCount - 1;
         if (index < 0 || index > maxIndex) {
-            throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            if (maxIndex === 0) {
+                throw new Error(`You have only 1 register defined; the index must be equal to 0`);
+            }
+            else {
+                throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            }
         }
         return this.values.get(this.currentStep)![index];
     }
@@ -49,7 +54,15 @@ export class VerificationFrame implements EvaluationFrame {
     getConst(index: number): bigint {
         const maxIndex = this.constants.length - 1;
         if (index < 0 || index > maxIndex) {
-            throw new Error(`Constant index must be an integer between 0 and ${maxIndex}`);
+            if (maxIndex === 0) {
+                throw new Error(`You have only 1 constant defined; the index must be equal to 0`);
+            }
+            else if (maxIndex === -1) {
+                throw new Error(`You don't have any constants defined`);
+            }
+            else {
+                throw new Error(`Constant index must be an integer between 0 and ${maxIndex}`);
+            }
         }
 
         const k = this.constants[index];
@@ -59,7 +72,12 @@ export class VerificationFrame implements EvaluationFrame {
     getNextValue(index: number): bigint {
         const maxIndex = this.registerCount - 1;
         if (index < 0 || index > maxIndex) {
-            throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            if (maxIndex === 0) {
+                throw new Error(`You have only 1 register defined; the index must be equal to 0`);
+            }
+            else {
+                throw new Error(`Register index must be an integer between 0 and ${maxIndex}`);
+            }
         }
 
         const step = (this.currentStep + this.skip) % this.domainSize;
