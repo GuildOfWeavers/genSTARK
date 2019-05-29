@@ -244,7 +244,7 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz:
 | MiMC      | 3      | 1         | 2<sup>6</sup>  | 100 ms     | 48 KB      |
 | MiMC      | 3      | 1         | 2<sup>13</sup> | 4.5 sec    | 230 KB     |
 | MiMC      | 3      | 1         | 2<sup>17</sup> | 72 sec     | 390 KB     |
-| Fibonacci | 1      | 2         | 2<sup>16</sup> | 50 ms      | 12 KB      |
+| Fibonacci | 1      | 2         | 2<sup>6</sup>  | 50 ms      | 12 KB      |
 | Fibonacci | 1      | 2         | 2<sup>13</sup> | 1 sec      | 147 KB     |
 | Fibonacci | 1      | 2         | 2<sup>17</sup> | 13 sec     | 287 KB     |
 
