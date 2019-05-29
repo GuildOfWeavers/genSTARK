@@ -171,14 +171,15 @@ class Stark {
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hashAlgorithm);
         this.logger.log(label, 'Built evaluation merkle tree');
         // 9 ----- spot check evaluation tree at pseudo-random positions
-        const positions = utils_1.getPseudorandomIndexes(eTree.root, this.exeSpotCheckCount, evaluationDomainSize, this.extensionFactor);
+        const spotCheckCount = Math.min(this.exeSpotCheckCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
+        const positions = utils_1.getPseudorandomIndexes(eTree.root, spotCheckCount, evaluationDomainSize, this.extensionFactor);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = new Array(augmentedPositions.length);
         for (let i = 0; i < augmentedPositions.length; i++) {
             eValues[i] = mergedEvaluations[augmentedPositions[i]];
         }
         const eProof = eTree.proveBatch(augmentedPositions);
-        this.logger.log(label, `Computed ${this.exeSpotCheckCount} evaluation spot checks`);
+        this.logger.log(label, `Computed ${spotCheckCount} evaluation spot checks`);
         // 10 ---- compute random linear combination of evaluations
         // first, increase the power of polynomials to match the power of liner combination
         const lCombinationDegree = this.getLinearCombinationDegree(evaluationDomainSize);
@@ -277,7 +278,8 @@ class Stark {
         const cRegisters = buildReadonlyRegisters(constants, context);
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
-        const positions = utils_1.getPseudorandomIndexes(eRoot, this.exeSpotCheckCount, evaluationDomainSize, this.extensionFactor);
+        const spotCheckCount = Math.min(this.exeSpotCheckCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
+        const positions = utils_1.getPseudorandomIndexes(eRoot, spotCheckCount, evaluationDomainSize, this.extensionFactor);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         this.logger.log(label, `Computed positions for evaluation spot checks`);
         // 3 ----- decode evaluation spot-checks

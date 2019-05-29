@@ -2,7 +2,7 @@
 This library is intended to help you quickly and easily generate STARK-based proofs of computation using JavaScript. The goal is to take care of as much boilerplate code as possible, and let you focus on the specifics of the task at hand.
 
 ### Disclaimer
-**DO NOT USE THIS LIBRARY IN PRODUCTION.** At this point, this is a research-grade library. It has known and unknown bugs, and the performance is at least one order of magnitude below what could be considered acceptable.
+**DO NOT USE THIS LIBRARY IN PRODUCTION.** At this point, this is a research-grade library. It has known and unknown bugs and security flaws.
 
 # Install
 ```Bash
@@ -244,6 +244,7 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz:
 | MiMC      | 3      | 1         | 2<sup>6</sup>  | 100 ms     | 48 KB      |
 | MiMC      | 3      | 1         | 2<sup>13</sup> | 4.5 sec    | 230 KB     |
 | MiMC      | 3      | 1         | 2<sup>17</sup> | 72 sec     | 390 KB     |
+| Fibonacci | 1      | 2         | 2<sup>16</sup> | 50 ms      | 12 KB      |
 | Fibonacci | 1      | 2         | 2<sup>13</sup> | 1 sec      | 147 KB     |
 | Fibonacci | 1      | 2         | 2<sup>17</sup> | 13 sec     | 287 KB     |
 

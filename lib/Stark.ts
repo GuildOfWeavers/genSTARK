@@ -205,14 +205,15 @@ export class Stark {
         this.logger.log(label, 'Built evaluation merkle tree');
         
         // 9 ----- spot check evaluation tree at pseudo-random positions
-        const positions = getPseudorandomIndexes(eTree.root, this.exeSpotCheckCount, evaluationDomainSize, this.extensionFactor);
+        const spotCheckCount = Math.min(this.exeSpotCheckCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
+        const positions = getPseudorandomIndexes(eTree.root, spotCheckCount, evaluationDomainSize, this.extensionFactor);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = new Array<Buffer>(augmentedPositions.length);
         for (let i = 0; i < augmentedPositions.length; i++) {
             eValues[i] = mergedEvaluations[augmentedPositions[i]];
         }
         const eProof = eTree.proveBatch(augmentedPositions);
-        this.logger.log(label, `Computed ${this.exeSpotCheckCount} evaluation spot checks`);
+        this.logger.log(label, `Computed ${spotCheckCount} evaluation spot checks`);
 
         // 10 ---- compute random linear combination of evaluations
         // first, increase the power of polynomials to match the power of liner combination
@@ -316,7 +317,8 @@ export class Stark {
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- compute positions for evaluation spot-checks
-        const positions = getPseudorandomIndexes(eRoot, this.exeSpotCheckCount, evaluationDomainSize, this.extensionFactor);
+        const spotCheckCount = Math.min(this.exeSpotCheckCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
+        const positions = getPseudorandomIndexes(eRoot, spotCheckCount, evaluationDomainSize, this.extensionFactor);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         this.logger.log(label, `Computed positions for evaluation spot checks`);
 

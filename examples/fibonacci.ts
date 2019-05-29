@@ -50,7 +50,7 @@ const fibStark = new Stark({
 
 // TESTING
 // ================================================================================================
-//let steps = 2**6, result = 1783540607n;           // TODO: fix?
+//let steps = 2**6, result = 1783540607n;           // ~50 ms to prove, ~12 KB proof size
 let steps = 2**13, result = 203257732n;             // ~1 second to prove, ~147 KB proof size
 //let steps = 2**17, result = 2391373091n;          // ~13 seconds to prove, ~287 KB proof size
 
