@@ -18,11 +18,11 @@ export class Stark {
 
     readonly field              : FiniteField;
     readonly registerCount      : number;
-    readonly constantCount      : number;
     readonly constraintCount    : number;
     readonly maxConstraintDegree: number;
-    readonly extensionFactor    : number;
+    readonly constants          : Constant[];
 
+    readonly extensionFactor    : number;
     readonly exeSpotCheckCount  : number;
     readonly friSpotCheckCount  : number;
 
@@ -40,11 +40,11 @@ export class Stark {
 
         this.field = vConfig.field;
         this.registerCount = vConfig.registerCount;
-        this.constantCount = vConfig.constantCount;
         this.constraintCount = vConfig.constraintCount;
         this.maxConstraintDegree = vConfig.tConstraints.maxDegree;
+        this.constants = vConfig.constants;
+
         this.extensionFactor = vConfig.extensionFactor;
-        
         this.exeSpotCheckCount = vConfig.exeSpotCheckCount;
         this.friSpotCheckCount = vConfig.friSpotCheckCount;
 
@@ -58,10 +58,11 @@ export class Stark {
 
     // PROVER
     // --------------------------------------------------------------------------------------------
-    prove(assertions: Assertion[], steps: number, inputs: bigint[], constants?: Constant[]): StarkProof {
+    prove(assertions: Assertion[], steps: number, inputs: bigint[]): StarkProof {
 
         const label = this.logger.start('Starting STARK computation');
         const evaluationDomainSize = steps * this.extensionFactor;
+        const constantCount = this.constants.length;
 
         // 0 ----- validate parameters
         if (assertions.length < 1) throw new TypeError('At least one assertion must be provided');
@@ -72,14 +73,6 @@ export class Stark {
         if (inputs.length !== this.registerCount) throw new TypeError(`Inputs array must have exactly ${this.registerCount} elements`);
         for (let i = 0; i < inputs.length; i++) {
             if (typeof inputs[i] !== 'bigint') throw new TypeError(`Input for register r${i} is not a BigInt`);
-        }
-        if (this.constantCount > 0) {
-            if (!constants) throw new TypeError(`Constants array must be provided`);
-            if (!Array.isArray(constants)) throw new TypeError(`Constants parameter must be an array`);
-            if (constants.length > this.constantCount) throw new TypeError(`Constants array must have exactly ${this.constantCount} elements`);
-        }
-        else {
-            if (constants) throw new TypeError('Constants parameter was not expected');
         }
 
         // 1 ----- set up evaluation context
@@ -92,7 +85,7 @@ export class Stark {
             extensionFactor : this.extensionFactor,
             rootOfUnity     : G2,
             registerCount   : this.registerCount,
-            constantCount   : this.constantCount,
+            constantCount   : constantCount,
             hashAlgorithm   : this.hashAlgorithm
         };
 
@@ -101,7 +94,7 @@ export class Stark {
 
         const bPoly = new BoundaryConstraints(assertions, context);
         const zPoly = new ZeroPolynomial(context);
-        const cRegisters = buildReadonlyRegisters(constants, context, evaluationDomain);
+        const cRegisters = buildReadonlyRegisters(this.constants, context, evaluationDomain);
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- generate execution trace
@@ -255,10 +248,11 @@ export class Stark {
     
     // VERIFIER
     // --------------------------------------------------------------------------------------------
-    verify(assertions: Assertion[], proof: StarkProof, steps: number, constants?: Constant[]) {
+    verify(assertions: Assertion[], proof: StarkProof, steps: number) {
 
         const label = this.logger.start('Starting STARK verification');
         const evaluationDomainSize = steps * this.extensionFactor;
+        const constantCount = this.constants.length;
         const eRoot = proof.evaluations.root;
 
         // 0 ----- validate parameters
@@ -266,14 +260,6 @@ export class Stark {
         if (!isPowerOf2(steps)) throw new TypeError('Number of steps must be a power of 2');
         const maxSteps = MAX_DOMAIN_SIZE / this.extensionFactor;
         if (steps > maxSteps) throw new TypeError(`Number of steps cannot exceed ${maxSteps}`);
-        if (this.constantCount > 0) {
-            if (!constants) throw new TypeError(`Constants array must be provided`);
-            if (!Array.isArray(constants)) throw new TypeError(`Constants parameter must be an array`);
-            if (constants.length > this.constantCount) throw new TypeError(`Constants array must have exactly ${this.constantCount} elements`);
-        }
-        else {
-            if (constants) throw new TypeError('Constants parameter was not expected');
-        }
 
         // 1 ----- set up evaluation context
         const G2 = this.field.getRootOfUnity(evaluationDomainSize);
@@ -284,13 +270,13 @@ export class Stark {
             extensionFactor : this.extensionFactor,
             rootOfUnity     : G2,
             registerCount   : this.registerCount,
-            constantCount   : this.constantCount,
+            constantCount   : constantCount,
             hashAlgorithm   : this.hashAlgorithm
         };
 
         const bPoly = new BoundaryConstraints(assertions, context);
         const zPoly = new ZeroPolynomial(context);
-        const cRegisters = buildReadonlyRegisters(constants, context);
+        const cRegisters = buildReadonlyRegisters(this.constants, context);
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- compute positions for evaluation spot-checks
@@ -369,8 +355,8 @@ export class Stark {
             let zValue = zPoly.evaluateAt(x);
 
             // build an array of constant values for the current step
-            let cValues = new Array<bigint>(this.constantCount);
-            for (let j = 0; j < this.constantCount; j++) {
+            let cValues = new Array<bigint>(constantCount);
+            for (let j = 0; j < constantCount; j++) {
                 cValues[j] = cRegisters[j].getValueAt(x);
             }
 
@@ -476,6 +462,9 @@ function buildReadonlyRegisters(constants: Constant[] | undefined, context: Eval
         }
         else if (c.pattern === 'spread') {
             registers[i] = new SpreadConstants(c.values, context, domain);
+        }
+        else {
+            throw new TypeError(`Invalid constant pattern '${c.pattern}'`);
         }
     }
     return registers;

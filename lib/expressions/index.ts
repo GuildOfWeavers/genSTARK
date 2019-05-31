@@ -31,11 +31,11 @@ export function parseExpression(expression: string, maxRegisters: number, maxCon
 // HELPER FUNCTIONS
 // ================================================================================================
 function validateRegisterIndex(r: RegisterNode, maxRegisters: number, maxConstants: number) {
-    if (r.isReadonly && r.index >= maxConstants) {
+    if (r.isReadonly) {
         if (maxConstants === 0) {
             throw new Error(`Invalid constant reference '${r.name}${r.index}': no constants have been defined`);
         }
-        else {
+        else if (r.index >= maxConstants) {
             throw new Error(`Invalid constant reference '${r.name}${r.index}': constant index must be smaller than ${maxConstants}`);
         }
     }

@@ -1,7 +1,6 @@
 // IMPORTS
 // ================================================================================================
 import { Stark, PrimeField } from '../index';
-import { Constant } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -9,48 +8,42 @@ import { Constant } from '@guildofweavers/genstark';
 // function is very simple: it operates with 1 mutable register and 2 readonly registers. The full
 // execution trace is shown at the end of this file. 
 
-// define a filed in which we'll be working
-const modulus = 96769n;
-const field = new PrimeField(modulus);
-
 // define the STARK for the computation
 const demoStark = new Stark({
-    field               : field,
-    constantCount       : 2,
+    field: new PrimeField(96769n),
     tExpressions: {
         'n0': 'r0 + 1 + k0 + 2 * k1'
     },
     tConstraints: [
         'n0 - (r0 + 1 + k0 + 2 * k1)'
     ],
-    tConstraintDegree   : 1
+    tConstraintDegree: 1,
+    constants: [{
+        values  : [1n, 2n, 3n, 4n],
+        pattern : 'repeat'
+    }, {
+        values  : [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n],
+        pattern : 'spread'
+    }]
 });
 
 // TESTING
 // ================================================================================================
-let steps = 2**6, result = 292n;
+const steps = 2**6, result = 292n;
 
 // set up inputs and assertions
 const inputs = [1n];
-const constants: Constant[] = [{
-    values: [1n, 2n, 3n, 4n],
-    pattern: 'repeat'
-},
-{
-    values: [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n],
-    pattern: 'spread'
-}];
 const assertions = [
     { step: 0, register: 0, value: 1n },
     { step: steps-1, register: 0, value: result }
 ];
 
 // generate a proof
-const proof = demoStark.prove(assertions, steps, inputs, constants);
+const proof = demoStark.prove(assertions, steps, inputs);
 console.log('-'.repeat(20));
 
 // verify the proof
-demoStark.verify(assertions, proof, steps, constants);
+demoStark.verify(assertions, proof, steps);
 console.log('-'.repeat(20));
 
 // EXECUTION TRACE

@@ -16,9 +16,6 @@ declare module '@guildofweavers/genstark' {
         /** field for all math operations in the computation */
         field: FiniteField;
 
-        /** Number of  readonly registers in the computation */
-        constantCount?: number;
-
         /** State transition expressions for each register */
         tExpressions: { [register: string]: string };
 
@@ -27,6 +24,9 @@ declare module '@guildofweavers/genstark' {
 
         /** Maximum degree of transition constraints */
         tConstraintDegree: number;
+
+        /** Constants available via readonly registers during the computation */
+        constants?: Constant[];
 
         /** Execution trace extension factor */
         extensionFactor?: number;
@@ -51,18 +51,16 @@ declare module '@guildofweavers/genstark' {
          * @param assertions Boundary constraints for the computation
          * @param steps Number of steps in the computation
          * @param inputs Initial values for all mutable registers
-         * @param constants Definitions for all readonly registers
          */
-        prove(assertions: Assertion[], steps: number, inputs: bigint[], constants?: Constant[]): StarkProof;
+        prove(assertions: Assertion[], steps: number, inputs: bigint[]): StarkProof;
 
         /**
          * Verifies a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
          * @param proof Proof of the computation
          * @param steps Number of steps in the computation
-         * @param constants Definitions for readonly registers
          */
-        verify(assertions: Assertion[], proof: StarkProof, steps: number, constants?: Constant[]): boolean;
+        verify(assertions: Assertion[], proof: StarkProof, steps: number): boolean;
 
         /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;

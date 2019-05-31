@@ -1,7 +1,8 @@
 // IMPORTS
 // ================================================================================================
 import {
-    StarkConfig, TransitionFunction, ConstraintEvaluator, BatchConstraintEvaluator, HashAlgorithm
+    StarkConfig, TransitionFunction, ConstraintEvaluator, BatchConstraintEvaluator, HashAlgorithm, 
+    Constant, ConstantPattern
 } from '@guildofweavers/genstark';
 import { parseExpression, AstNode } from './expressions';
 import { isPowerOf2 } from './utils';
@@ -22,6 +23,7 @@ const DEFAULT_EXE_SPOT_CHECK_COUNT = 80;
 const DEFAULT_FRI_SPOT_CHECK_COUNT = 40;
 
 const HASH_ALGORITHMS: HashAlgorithm[] = ['sha256', 'blake2s256'];
+const CONSTANT_PATTERNS: ConstantPattern[] = ['repeat', 'spread'];
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
@@ -32,10 +34,35 @@ export function parseStarkConfig(config: StarkConfig) {
     if (!config.field) throw new TypeError('Finite field was not provided');
 
     // constants
-    const constantCount = config.constantCount || 0;
-    if (constantCount < 0 || constantCount > MAX_CONSTANT_COUNT || !Number.isInteger(constantCount)) {
-        throw new TypeError(`Number of state constants must be an integer between 0 and ${MAX_CONSTANT_COUNT}`);
+    const constants: Constant[] = [];
+    if (config.constants) {
+        if (!Array.isArray(constants)) throw new TypeError(`Constant definitions must be in an array`);
+        if (config.constants.length > MAX_CONSTANT_COUNT) {
+            throw new TypeError(`Number of constant definitions cannot exceed ${MAX_CONSTANT_COUNT}`);
+        }
+
+        for (let i = 0; i < config.constants.length; i++) {
+            let constant = config.constants[i];
+            if (!constant) throw new TypeError(`Constant definition at position ${i} is undefined`);
+            if (!CONSTANT_PATTERNS.includes(constant.pattern)) {
+                throw new TypeError(`Constant pattern ${constant.pattern} is invalid`)
+            }
+
+            if (!Array.isArray(constant.values)) throw new TypeError(`Values for constant definition ${i} are invalid`);
+            if (!isPowerOf2(constant.values.length)) {
+                throw new TypeError(`Number of values for constant definition ${i} is not a power of 2`);
+            }
+
+            for (let j = 0; j < constant.values.length; j++) {
+                if (typeof constant.values[j] !== 'bigint') {
+                    throw new TypeError(`Value at position ${j} for constant definition ${i} is not a BigInt`);
+                }
+            }
+            
+            constants.push(constant);
+        }
     }
+    const constantCount = constants.length;
 
     // transition constraints degree
     const tConstraintDegree = config.tConstraintDegree;
@@ -110,7 +137,6 @@ export function parseStarkConfig(config: StarkConfig) {
     return {
         field               : config.field,
         registerCount       : registerCount,
-        constantCount       : constantCount,
         constraintCount     : constraintCount,
         tFunction           : tFunction,
         tConstraints: {
@@ -118,6 +144,7 @@ export function parseStarkConfig(config: StarkConfig) {
             batchEvaluator  : tBatchConstraintEvaluator,
             maxDegree       : tConstraintDegree
         },
+        constants           : constants,
         extensionFactor     : extensionFactor,
         exeSpotCheckCount   : exeSpotCheckCount,
         friSpotCheckCount   : friSpotCheckCount,
