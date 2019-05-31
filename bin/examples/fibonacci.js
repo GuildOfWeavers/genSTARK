@@ -11,35 +11,17 @@ const modulus = 2n ** 32n - 3n * 2n ** 25n + 1n;
 const field = new index_1.PrimeField(modulus);
 // define state transition function for Fibonacci sequence:
 // each step advances Fibonacci sequence by 2 values
-function fibTransition() {
-    const v0 = this.getValue(0);
-    const v1 = this.getValue(1);
-    const v2 = this.add(v0, v1);
-    const v3 = this.add(v1, v2);
-    this.setNextValue(0, v2);
-    this.setNextValue(1, v3);
-}
-// make sure register 0 is updated correctly
-function fibConstraint1() {
-    const v0 = this.getValue(0);
-    const v1 = this.getValue(1);
-    const v2 = this.getNextValue(0);
-    return this.sub(v2, this.add(v0, v1));
-}
-// make sure register 1 is updated correctly
-function fibConstraint2() {
-    const v0 = this.getValue(0);
-    const v1 = this.getValue(1);
-    const v2 = this.add(v0, v1);
-    const v3 = this.getNextValue(1);
-    return this.sub(v3, this.add(v1, v2));
-}
 // create the STARK for Fibonacci calculation
 const fibStark = new index_1.Stark({
     field: field,
-    registerCount: 2,
-    tFunction: fibTransition,
-    tConstraints: [fibConstraint1, fibConstraint2],
+    tFunction: {
+        'n0': 'r0 + r1',
+        'n1': 'r1 + (r0 + r1)'
+    },
+    tConstraints: [
+        'n0 - (r0 + r1)',
+        'n1 - (r1 + r0 + r1)'
+    ],
     tConstraintDegree: 1 // max degree of our constraints is 1
 });
 // TESTING

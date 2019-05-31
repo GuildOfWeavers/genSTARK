@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { Stark, PrimeField } from '../index';
-import { ExecutionFrame, EvaluationFrame, ConstantPattern } from '@guildofweavers/genstark';
+import { ConstantPattern } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -13,34 +13,16 @@ import { ExecutionFrame, EvaluationFrame, ConstantPattern } from '@guildofweaver
 const modulus = 96769n;
 const field = new PrimeField(modulus);
 
-// define state transition function
-function demoTransition(this: ExecutionFrame) {
-    const v0 = this.getValue(0);
-    const k0 = this.getConst(0);
-    const k1 = this.getConst(1);
-
-    // nv0 = v0 + 1 + k0 + 2 * k1
-    const nv0 = this.add(this.add(this.add(v0, 1n), k0), this.mul(2n, k1));
-    this.setNextValue(0, nv0);
-}
-
-// define state transition constraint
-function demoConstraint(this: EvaluationFrame) {
-    const v0 = this.getValue(0);
-    const k0 = this.getConst(0);
-    const k1 = this.getConst(1);
-    const nv0 = this.getNextValue(0);
-
-    return field.sub(nv0, field.add(field.add(field.add(v0, 1n), k0), field.mul(2n, k1)));
-}
-
 // define the STARK for the computation
 const demoStark = new Stark({
     field               : field,
-    registerCount       : 1,
     constantCount       : 2,
-    tFunction           : demoTransition,
-    tConstraints        : [demoConstraint],
+    tFunction: {
+        'n0': 'r0 + 1 + k0 + 2 * k1'
+    },
+    tConstraints: [
+        'n0 - (r0 + 1 + k0 + 2 * k1)'
+    ],
     tConstraintDegree   : 1
 });
 

@@ -12,7 +12,24 @@ const matchers = [
     { type: 'operator', match: /^[\+\-\*\/\^]/ }
 ];
 
-// CLASS DEFINITION
+// PUBLIC FUNCTIONS
+// ================================================================================================
+export function tokenize(expression: string, skipWhitespace: boolean): Token[] {
+    const tokens: Token[] = [];
+
+    let remainder = expression;
+    while (remainder) {
+        let next = Token.read(remainder);
+        if (!skipWhitespace || next.token.type !== 'space') {
+            tokens.push(next.token);
+        }
+        remainder = next.remainder;
+    }
+
+    return tokens;
+}
+
+// TOKEN CLASS
 // ================================================================================================
 export class Token {
 

@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const expressions_1 = require("./expressions");
 const utils_1 = require("./utils");
-const parser_1 = require("./expressions/parser");
 // MODULE VARIABLES
 // ================================================================================================
 const MAX_REGISTER_COUNT = 64;
@@ -73,7 +73,9 @@ function parseStarkConfig(config) {
     if (constraintCount > MAX_CONSTRAINT_COUNT) {
         throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
     }
-    const tConstraints = buildTransitionConstraints(cExpressions, registerCount, constantCount, extensionFactor);
+    const tConstraints2 = parseTransitionConstraints(cExpressions, registerCount, constantCount);
+    const tConstraints = buildTransitionConstraints(tConstraints2); // TODO: rename
+    const tConstraintEvaluator = buildConstraintEvaluator(tConstraints2);
     // execution trace spot checks
     const exeSpotCheckCount = config.exeSpotCheckCount || DEFAULT_EXE_SPOT_CHECK_COUNT;
     if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT || !Number.isInteger(exeSpotCheckCount)) {
@@ -84,6 +86,7 @@ function parseStarkConfig(config) {
     if (friSpotCheckCount < 1 || friSpotCheckCount > MAX_FRI_SPOT_CHECK_COUNT || !Number.isInteger(friSpotCheckCount)) {
         throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_SPOT_CHECK_COUNT}`);
     }
+    // hash function
     const hashAlgorithm = config.hashAlgorithm || 'sha256';
     if (!HASH_ALGORITHMS.includes(hashAlgorithm)) {
         throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
@@ -95,6 +98,7 @@ function parseStarkConfig(config) {
         constraintCount: constraintCount,
         tFunction: tFunction,
         tConstraints: tConstraints,
+        tConstraintEvaluator: tConstraintEvaluator,
         tConstraintDegree: tConstraintDegree,
         extensionFactor: extensionFactor,
         exeSpotCheckCount: exeSpotCheckCount,
@@ -109,58 +113,88 @@ function buildTransitionFunction(expressions, constantCount) {
     const registerCount = expressions.size;
     const assignments = new Array(registerCount);
     const regRefBuilder = function (name, index) {
-        if (name === 'n')
-            throw new Error('Transition expression cannot use next register state');
-        if (index < 0)
-            throw new Error(`Invalid register or constant reference '${name}${index}'`);
-        if (name === 'r' && index >= registerCount) {
-            throw new Error(``); // TODO
+        if (name === 'n') {
+            throw new Error('Transition expression cannot read next register state');
         }
-        if (name === 'k' && index >= constantCount) {
-            throw new Error(``); // TODO
+        else if (name === 'r') {
+            return `r[${index}][i]`;
         }
-        return `${name}[${index}][i]`;
+        else if (name === 'k') {
+            return `k[${index}].getValue(i, true)`;
+        }
+        throw new Error(`Register reference '${name}${index}' is invalid`);
     };
-    for (let i = 0; i < registerCount; i++) {
-        let expression = expressions.get(`n${i}`);
-        if (!expression)
-            throw new Error('Missing register'); // TODO: better error
-        let ast = parser_1.parse(expression);
-        assignments[i] = `r[${i}][i+1] = ${ast.toCode(regRefBuilder)}`;
+    let i = 0;
+    try {
+        for (; i < registerCount; i++) {
+            let expression = expressions.get(`n${i}`);
+            if (!expression)
+                throw new Error('transition expression is undefined');
+            let ast = expressions_1.parseExpression(expression, registerCount, constantCount);
+            assignments[i] = `r[${i}][i+1] = ${ast.toCode(regRefBuilder)}`;
+        }
     }
-    const body = `
-        for (let i = 0; i < steps; i++) {
-            ${assignments.join(';\n')};
-        }`;
+    catch (error) {
+        throw new Error(`Failed to build transition expression for register n${i}: ${error.message}`);
+    }
+    let body = `for (let i = 0; i < steps - 1; i++) {\n  ${assignments.join(';\n')};\n}`;
     return new Function('r', 'k', 'steps', 'field', body);
 }
-function buildTransitionConstraints(expressions, registerCount, constantCount, extensionFactor) {
+function parseTransitionConstraints(expressions, registerCount, constantCount) {
     const constraintCount = expressions.length;
-    const constraints = new Array(constraintCount);
-    const regRefBuilder = function (name, index) {
-        if (index < 0)
-            throw new Error(`Invalid register or constant reference '${name}${index}'`);
-        if ((name === 'r' || name === 'n') && index >= registerCount) {
-            throw new Error(``); // TODO
+    const output = new Array(constraintCount);
+    let i = 0;
+    try {
+        for (; i < constraintCount; i++) {
+            let expression = expressions[i];
+            if (!expression)
+                throw new Error('transition constraint is undefined');
+            output[i] = expressions_1.parseExpression(expression, registerCount, constantCount);
         }
-        if (name === 'k' && index >= constantCount) {
-            throw new Error(``); // TODO
-        }
-        return (name === 'n')
-            ? `r[${index}][(i+${extensionFactor}) % steps]`
-            : `${name}[${index}][i]`;
-    };
-    for (let i = 0; i < constraintCount; i++) {
-        let expression = expressions[i];
-        if (!expression)
-            throw new Error('Invalid constraint'); // TODO: better error
-        let ast = parser_1.parse(expression);
-        constraints[i] = `q[${i}][i] = ${ast.toCode(regRefBuilder)}`;
     }
-    const body = `
-        for (let i = 0; i < steps; i++) {
-            ${constraints.join(';\n')};
-        }`;
-    return new Function('q', 'r', 'k', 'steps', 'field', body);
+    catch (error) {
+        throw new Error(`Failed to parse transition constraint ${i}: ${error.message}`);
+    }
+    return output;
+}
+function buildTransitionConstraints(expressions) {
+    const constraintCount = expressions.length;
+    const assignments = new Array(constraintCount);
+    const regRefBuilder = function (name, index) {
+        if (name === 'n') {
+            return `r[${index}][(i + skip) % steps]`;
+        }
+        else if (name === 'r') {
+            return `r[${index}][i]`;
+        }
+        else if (name === 'k') {
+            return `k[${index}].getValue(i, false)`;
+        }
+        throw new Error(`Register reference '${name}${index}' is invalid`);
+    };
+    let i = 0;
+    try {
+        for (; i < constraintCount; i++) {
+            // TODO: add error handling
+            assignments[i] = `q[${i}][i] = ${expressions[i].toCode(regRefBuilder)}`;
+        }
+    }
+    catch (error) {
+        throw new Error(`Failed to build transition constraint ${i}: ${error.message}`);
+    }
+    const body = `for (let i = 0; i < steps; i++) {\n  ${assignments.join(';\n')};\n}`;
+    return new Function('q', 'r', 'k', 'steps', 'skip', 'field', body);
+}
+function buildConstraintEvaluator(expressions) {
+    const constraintCount = expressions.length;
+    const regRefBuilder = function (name, index) {
+        return `${name}[${index}]`;
+    };
+    const assignments = new Array(constraintCount);
+    for (let i = 0; i < constraintCount; i++) {
+        assignments[i] = `q[${i}] = ${expressions[i].toCode(regRefBuilder)};`;
+    }
+    const body = `const q = new Array(${constraintCount});\n${assignments.join('\n')}\nreturn q;`;
+    return new Function('r', 'n', 'k', 'field', body);
 }
 //# sourceMappingURL=config.js.map

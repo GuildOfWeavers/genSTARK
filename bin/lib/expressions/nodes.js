@@ -18,14 +18,17 @@ exports.LiteralNode = LiteralNode;
 // ================================================================================================
 class RegisterNode {
     constructor(register) {
-        this.array = register[0].toLowerCase();
+        this.name = register[0].toLowerCase();
         this.index = Number.parseInt(register.slice(1));
     }
+    get isReadonly() {
+        return this.name === 'k';
+    }
     toCode(regRefBuilder) {
-        return regRefBuilder(this.array, this.index);
+        return regRefBuilder(this.name, this.index);
     }
     toString() {
-        return `${this.array}${this.index}`;
+        return `${this.name}${this.index}`;
     }
 }
 exports.RegisterNode = RegisterNode;

@@ -1,30 +1,20 @@
 // IMPORTS
 // ================================================================================================
 import {
-    FiniteField, Assertion, StarkConfig, TransitionFunction, TransitionConstraint, HashAlgorithm, StarkProof,
-    BatchMerkleProof, EvaluationContext, ReadonlyRegister, Constant, ConstantPattern, Logger as ILogger
+    FiniteField, Assertion, StarkConfig, TransitionFunction, TransitionConstraints, HashAlgorithm, StarkProof,
+    BatchMerkleProof, EvaluationContext, ReadonlyRegister, Constant, ConstantPattern, Logger as ILogger, ConstraintEvaluator
 } from '@guildofweavers/genstark';
 import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver } from './components';
 import { Logger, isPowerOf2, getPseudorandomIndexes, sizeOf, bigIntsToBuffers, buffersToBigInts } from './utils';
 import { RepeatedConstants, StretchedConstants } from './registers';
-import { ProofFrame, VerificationFrame } from './frames';
 import { MerkleTree, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
+import { parseStarkConfig } from './config';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
 // MODULE VARIABLES
 // ================================================================================================
 const MAX_DOMAIN_SIZE = 2**32;
-const MAX_REGISTER_COUNT = 64;
-const MAX_CONSTANT_COUNT = 64;
-const MAX_CONSTRAINT_COUNT = 1024;
-const MAX_CONSTRAINT_DEGREE = 16;
-const MAX_EXTENSION_FACTOR = 32;
-const MAX_EXE_SPOT_CHECK_COUNT = 128;
-const MAX_FRI_SPOT_CHECK_COUNT = 64;
-
-const DEFAULT_EXE_SPOT_CHECK_COUNT = 80;
-const DEFAULT_FRI_SPOT_CHECK_COUNT = 40;
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -33,34 +23,41 @@ export class Stark {
     readonly field              : FiniteField;
     readonly registerCount      : number;
     readonly constantCount      : number;
-    readonly tFunction          : TransitionFunction;
-    readonly tConstraints       : TransitionConstraint[];
-    readonly tConstraintDegree  : number;
+    readonly constraintCount    : number;
+    readonly constraintDegree   : number;
+    readonly extensionFactor    : number;
+
     readonly exeSpotCheckCount  : number;
     readonly friSpotCheckCount  : number;
-    readonly extensionFactor    : number;
+
+    readonly applyTransitions   : TransitionFunction;
+    readonly applyConstraints   : TransitionConstraints;
+    readonly evaluateConstraints: ConstraintEvaluator;
 
     readonly hashAlgorithm      : HashAlgorithm;
     readonly logger             : ILogger;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(config: StarkConfig) {
-        const vConfig = validateConfig(config);
+    constructor(config: StarkConfig, logger?: ILogger) {
+        const vConfig = parseStarkConfig(config);
 
         this.field = vConfig.field;
         this.registerCount = vConfig.registerCount;
         this.constantCount = vConfig.constantCount;
-        this.tFunction = vConfig.tFunction;
-        this.tConstraints = vConfig.tConstraints;
-        this.tConstraintDegree = vConfig.tConstraintDegree;
-
+        this.constraintCount = vConfig.constraintCount;
+        this.constraintDegree = vConfig.tConstraintDegree;
+        this.extensionFactor = vConfig.extensionFactor;
+        
         this.exeSpotCheckCount = vConfig.exeSpotCheckCount;
         this.friSpotCheckCount = vConfig.friSpotCheckCount;
-        this.extensionFactor = vConfig.extensionFactor;
+
+        this.applyTransitions = vConfig.tFunction;
+        this.applyConstraints = vConfig.tConstraints;
+        this.evaluateConstraints = vConfig.tConstraintEvaluator;
 
         this.hashAlgorithm = vConfig.hashAlgorithm;
-        this.logger = vConfig.logger;
+        this.logger = logger || new Logger();
     }
 
     // PROVER
@@ -69,7 +66,6 @@ export class Stark {
 
         const label = this.logger.start('Starting STARK computation');
         const evaluationDomainSize = steps * this.extensionFactor;
-        const constraintCount = this.tConstraints.length;
 
         // 0 ----- validate parameters
         if (assertions.length < 1) throw new TypeError('At least one assertion must be provided');
@@ -117,18 +113,8 @@ export class Stark {
             executionTrace[register][0] = inputs[register];
         }
 
-        // then, apply transition function for each subsequent step
-        let exeStep;
-        const executionFrame = new ProofFrame(this.field, executionTrace, cRegisters);
-        try {
-            for (exeStep = 0; exeStep < executionDomain.length - 1; exeStep++) {
-                executionFrame.currentStep = exeStep;
-                this.tFunction.call(executionFrame);
-            }
-        }
-        catch(error) {
-            throw new StarkError(`Generation of execution trace failed at step ${exeStep}`, error);
-        }    
+        // then, apply transition function for all steps
+        this.applyTransitions(executionTrace, cRegisters, steps, this.field);
 
         // finally, make sure assertions don't contradict execution trace
         for (let c of assertions) {
@@ -147,28 +133,11 @@ export class Stark {
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
 
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
-        let cIndex;
-        const nonfinalSteps = evaluationDomainSize - this.extensionFactor;
-        const frame = new ProofFrame(this.field, pEvaluations, cRegisters, this.extensionFactor);
-        const qEvaluations = new Array<bigint[]>(constraintCount);
-        try {
-            for (cIndex = 0; cIndex < constraintCount; cIndex++) {
-                let constraint = this.tConstraints[cIndex];
-                qEvaluations[cIndex] = new Array(evaluationDomainSize);
-                for (let step = 0; step < evaluationDomainSize; step++) {
-                    frame.currentStep = step;
-                    let q = constraint.call(frame);
-                    if (step < nonfinalSteps && step % this.extensionFactor === 0 && q !== 0n) {
-                        let execStep = step / this.extensionFactor;
-                        throw new StarkError(`The constraint didn't evaluate to 0 at step ${execStep}`);
-                    }
-                    qEvaluations[cIndex][step] = q;
-                }
-            }
+        const qEvaluations = new Array<bigint[]>(this.constraintCount);
+        for (let i = 0; i < this.constraintCount; i++) {
+            qEvaluations[i] = new Array<bigint>(evaluationDomainSize);
         }
-        catch (error) {
-            throw new StarkError(`Error in constraint ${cIndex}`, error);
-        }
+        this.applyConstraints(qEvaluations, pEvaluations, cRegisters, evaluationDomainSize, this.extensionFactor, this.field);
         this.logger.log(label, 'Computed Q(x) polynomials');
 
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
@@ -191,7 +160,7 @@ export class Stark {
 
         // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
         const hash = getHashFunction(this.hashAlgorithm);
-        const serializer = new Serializer(this.field, this.registerCount, constraintCount);
+        const serializer = new Serializer(this.field, this.registerCount, this.constraintCount);
         const mergedEvaluations = new Array<Buffer>(evaluationDomainSize);
         const hashedEvaluations = new Array<Buffer>(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
@@ -281,7 +250,6 @@ export class Stark {
 
         const label = this.logger.start('Starting STARK verification');
         const evaluationDomainSize = steps * this.extensionFactor;
-        const constraintCount = this.tConstraints.length;
         const eRoot = proof.evaluations.root;
 
         // 0 ----- validate parameters
@@ -328,7 +296,7 @@ export class Stark {
         const dEvaluations = new Map<number, bigint[]>();
         const hashedEvaluations = new Array<Buffer>(augmentedPositions.length);
         const hash = getHashFunction(this.hashAlgorithm);
-        const serializer = new Serializer(this.field, this.registerCount, constraintCount);
+        const serializer = new Serializer(this.field, this.registerCount, this.constraintCount);
 
         for (let i = 0; i < proof.evaluations.values.length; i++) {
             let mergedEvaluations = proof.evaluations.values[i];
@@ -377,28 +345,32 @@ export class Stark {
             throw new StarkError('Verification of low degree failed', error);
         }
 
-        const lPolyCount = constraintCount + 2 * (this.registerCount + bPoly.count);
+        const lPolyCount = this.constraintCount + 2 * (this.registerCount + bPoly.count);
         const lCoefficients = this.field.prng(eRoot, lPolyCount);
         this.logger.log(label, `Verified low-degree proof`);
 
         // 7 ----- verify transition and boundary constraints
-        const pFrame = new VerificationFrame(this.field, evaluationDomainSize, pEvaluations, cRegisters, this.extensionFactor);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
             let x = this.field.exp(G2, BigInt(step));
-            pFrame.currentStep = step;
-            pFrame.currentX = x;
 
             let pValues = pEvaluations.get(step)!;
             let bValues = bEvaluations.get(step)!;
             let dValues = dEvaluations.get(step)!;
             let zValue = zPoly.evaluateAt(x);
 
-            // check transition constraints
-            for (let j = 0; j < constraintCount; j++) {
-                let qValue = this.tConstraints[j].call(pFrame);
+            // build an array of constant values for the current step
+            let cValues = new Array<bigint>(this.constantCount);
+            for (let j = 0; j < this.constantCount; j++) {
+                cValues[j] = cRegisters[j].getValueAt(x);
+            }
+
+            // check transition 
+            let npValues = pEvaluations.get((step + this.extensionFactor) % evaluationDomainSize)!;
+            let qValues = this.evaluateConstraints(pValues, npValues, cValues, this.field);
+            for (let j = 0; j < this.constraintCount; j++) {
                 let qCheck = this.field.mul(zValue, dValues[j]);
-                if (qValue !== qCheck) {
+                if (qValues[j] !== qCheck) {
                     throw new StarkError(`Transition constraint at position ${step} was not satisfied`);
                 }
             }
@@ -445,19 +417,19 @@ export class Stark {
     // UTILITIES
     // --------------------------------------------------------------------------------------------
     sizeOf(proof: StarkProof): number {
-        const valueCount = this.registerCount + this.tConstraints.length + proof.evaluations.bpc; 
+        const valueCount = this.registerCount + this.constraintCount + proof.evaluations.bpc; 
         const valueSize = valueCount * this.field.elementSize;
         const size = sizeOf(proof, valueSize, this.hashAlgorithm);
         return size.total;
     }
 
     serialize(proof: StarkProof) {
-        const serializer = new Serializer(this.field, this.registerCount, this.tConstraints.length);
+        const serializer = new Serializer(this.field, this.registerCount, this.constraintCount);
         return serializer.serializeProof(proof, this.hashAlgorithm);
     }
 
     parse(buffer: Buffer): StarkProof {
-        const serializer = new Serializer(this.field, this.registerCount, this.tConstraints.length);
+        const serializer = new Serializer(this.field, this.registerCount, this.constraintCount);
         return serializer.parseProof(buffer, this.hashAlgorithm);
     }
 
@@ -479,90 +451,13 @@ export class Stark {
         // deg(Q(x)) = steps * deg(constraints) = deg(D(x)) + deg(Z(x))
         // thus, deg(D(x)) = deg(Q(x)) - steps;
         // and, linear combination degree is max(deg(D(x)), steps)
-        const degree = steps * Math.max(this.tConstraintDegree - 1, 1);
+        const degree = steps * Math.max(this.constraintDegree - 1, 1);
         return degree;
     }
 }
 
 // HELPER FUNCTIONS
 // ================================================================================================
-function validateConfig(config: StarkConfig) {
-    if (!config) throw new TypeError('STARK config was not provided');
-
-    if (!config.field) throw new TypeError('Finite field was not provided');
-
-    const registerCount = config.registerCount;
-    if (registerCount < 1 || registerCount > MAX_REGISTER_COUNT || !Number.isInteger(registerCount)) {
-        throw new TypeError(`Number of state registers must be an integer between 1 and ${MAX_REGISTER_COUNT}`);
-    }
-    
-    const constantCount = config.constantCount || 0;
-    if (constantCount < 0 || constantCount > MAX_CONSTANT_COUNT || !Number.isInteger(constantCount)) {
-        throw new TypeError(`Number of state constants must be an integer between 0 and ${MAX_CONSTANT_COUNT}`);
-    }
-
-    if (!config.tFunction) throw new TypeError('Transition function was not provided');
-    if (!config.tConstraints) throw new TypeError('Transition constraints array was not provided');
-    if (Array.isArray(!config.tConstraints)) {
-        throw new TypeError('Transition constraints must be provided as an array');
-    }
-    if (config.tConstraints.length === 0) throw new TypeError('Transition constraints array was empty');
-    if (config.tConstraints.length > MAX_CONSTRAINT_COUNT) {
-        throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
-    }
-
-    const tConstraintDegree = config.tConstraintDegree;
-    if (tConstraintDegree < 1 || tConstraintDegree > MAX_CONSTRAINT_DEGREE || !Number.isInteger(tConstraintDegree)) {
-        throw new TypeError(`Transition constraint degree must be an integer between 1 and ${MAX_CONSTRAINT_DEGREE}`);
-    }
-
-    let extensionFactor = config.extensionFactor;
-    if (extensionFactor === undefined) {
-        extensionFactor = 2**Math.ceil(Math.log2(tConstraintDegree * 2));
-    }
-    else {
-        if (extensionFactor < 2 || extensionFactor > MAX_EXTENSION_FACTOR || !Number.isInteger(extensionFactor)) {
-            throw new TypeError(`Extension factor must be an integer between 2 and ${MAX_EXTENSION_FACTOR}`);
-        }
-    
-        if (!isPowerOf2(extensionFactor)) {
-            throw new TypeError(`Extension factor must be a power of 2`);
-        }
-
-        if (extensionFactor < 2 * tConstraintDegree) {
-            throw new TypeError(`Extension factor must be at least 2x greater than the transition constraint degree`);
-        }
-    }
-
-    const exeSpotCheckCount = config.exeSpotCheckCount || DEFAULT_EXE_SPOT_CHECK_COUNT;
-    if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT || !Number.isInteger(exeSpotCheckCount)) {
-        throw new TypeError(`Execution sample size must be an integer between 1 and ${MAX_EXE_SPOT_CHECK_COUNT}`);
-    }
-
-    const friSpotCheckCount = config.friSpotCheckCount || DEFAULT_FRI_SPOT_CHECK_COUNT;
-    if (friSpotCheckCount < 1 || friSpotCheckCount > MAX_FRI_SPOT_CHECK_COUNT || !Number.isInteger(friSpotCheckCount)) {
-        throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_SPOT_CHECK_COUNT}`);
-    }
-
-    const hashAlgorithm = config.hashAlgorithm || 'sha256';
-    const logger = config.logger || new Logger();
-
-    return {
-        field               : config.field,
-        registerCount       : registerCount,
-        constantCount       : constantCount,
-        tFunction           : config.tFunction,
-        tConstraints        : config.tConstraints,
-        tConstraintDegree   : tConstraintDegree,
-        extensionFactor     : extensionFactor,
-        exeSpotCheckCount   : exeSpotCheckCount,
-        friSpotCheckCount   : friSpotCheckCount,
-
-        hashAlgorithm       : hashAlgorithm,
-        logger              : logger
-    };
-}
-
 function buildReadonlyRegisters(constants: Constant[] | undefined, context: EvaluationContext, domain?: bigint[]) {
     const registers = new Array<ReadonlyRegister>(constants ? constants.length : 0);
     for (let i = 0; i < registers.length; i++) {

@@ -2,31 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 // IMPORTS
 // ================================================================================================
-const Token_1 = require("./Token");
 const nodes_1 = require("./nodes");
 // PUBLIC FUNCTIONS
 // ================================================================================================
-function parse(expression) {
-    const tokens = tokenize(expression, true);
-    const ast = processTokens(tokens);
-    return ast;
-}
-exports.parse = parse;
-// HELPER FUNCTIONS
-// ================================================================================================
-function tokenize(expression, skipWhitespace) {
-    const tokens = [];
-    let remainder = expression;
-    while (remainder) {
-        let next = Token_1.Token.read(remainder);
-        if (!skipWhitespace || next.token.type !== 'space') {
-            tokens.push(next.token);
-        }
-        remainder = next.remainder;
-    }
-    return tokens;
-}
-function processTokens(tokens) {
+function parseOperations(tokens) {
     let result = pullSubExpressions(tokens);
     if (result.length === 0)
         return [];
@@ -39,26 +18,21 @@ function processTokens(tokens) {
     if (last.type === 'operator') {
         throw new Error(`trailing operator: ${last.value}`);
     }
-    // convert registers and literals to AST nodes
-    for (let i = 0; i < result.length; i++) {
-        let token = result[i];
-        if (token.type === 'register') {
-            result[i] = new nodes_1.RegisterNode(token.value);
-        }
-        else if (token.type === 'literal') {
-            result[i] = new nodes_1.LiteralNode(token.value);
-        }
-    }
     // process binary (and unary '-') operators in order of precedence
-    result = processOperator(['^'], result);
-    result = processOperator(['*', '/'], result);
-    result = processOperator(['+', '-'], result);
+    result = pullOperators(['^'], result);
+    result = pullOperators(['*', '/'], result);
+    result = pullOperators(['+', '-'], result);
     if (result.length !== 1)
         throw new Error('Incorrect result'); // TODO: better error
     return result[0];
 }
+exports.parseOperations = parseOperations;
+// HELPER FUNCTIONS
+// ================================================================================================
 function pullSubExpressions(tokens) {
-    let parenDepth = 0, subExprTokens, output = [];
+    let parenDepth = 0;
+    let subExprTokens;
+    let output = [];
     for (let i = 0; i < tokens.length; i++) {
         let token = tokens[i];
         if (parenDepth === 0) {
@@ -76,7 +50,7 @@ function pullSubExpressions(tokens) {
             if (token.type === 'paren') {
                 parenDepth += ((token.value === '(') ? +1 : -1);
                 if (parenDepth === 0) {
-                    let subAST = processTokens(subExprTokens);
+                    let subAST = parseOperations(subExprTokens);
                     output.push(subAST);
                 }
                 else {
@@ -93,7 +67,7 @@ function pullSubExpressions(tokens) {
     }
     return output;
 }
-function processOperator(operators, tokens) {
+function pullOperators(operators, tokens) {
     const output = [];
     let processed = [[], null];
     while (true) {

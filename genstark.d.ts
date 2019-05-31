@@ -16,22 +16,19 @@ declare module '@guildofweavers/genstark' {
         /** field for all math operations in the computation */
         field: FiniteField;
 
-        /** Number of mutable registers in the computation */
-        registerCount: number;
-
         /** Number of  readonly registers in the computation */
         constantCount?: number;
 
-        /** State transition function for the computation */
-        tFunction: TransitionFunction;
+        /** State transition expressions for each register */
+        tFunction: { [register: string]: string };
 
         /** A list of transition constraints for the computation */
-        tConstraints: TransitionConstraint[];
+        tConstraints: string[];
 
         /** Maximum degree of transition constraints */
         tConstraintDegree: number;
 
-        /** Execution trace extension factor; defaults to 8 */
+        /** Execution trace extension factor */
         extensionFactor?: number;
 
         /** Number of spot checks for the execution trace; defaults to 80 */
@@ -42,15 +39,12 @@ declare module '@guildofweavers/genstark' {
 
         /** Hash algorithm for Merkle trees; defaults to sha256 */
         hashAlgorithm?: HashAlgorithm;
-
-        /** Logger for tracking proof / verification processes */
-        logger?: Logger;
     }
 
     export class Stark {
 
         /** Create a STARK based on the provided config parameters */
-        constructor(config: StarkConfig);
+        constructor(config: StarkConfig, logger?: Logger);
 
         /**
          * Generate a proof of computation for this STARK
@@ -118,46 +112,6 @@ declare module '@guildofweavers/genstark' {
         value: bigint;
     }
 
-    export interface TransitionFunction {
-        (this: ExecutionFrame): void;
-    }
-
-    export interface TransitionConstraint {
-        (this: EvaluationFrame): bigint;
-    }
-
-    // FRAMES
-    // --------------------------------------------------------------------------------------------
-    export interface ExecutionFrame extends FrameOps {
-        /** Get the current value from a mutable register specified by the index */
-        getValue(index: number): bigint;
-
-        /** Get the current value from a readonly register specified by the index  */
-        getConst(index: number): bigint;
-
-        /** Set the next value for a mutable register specified by the index */
-        setNextValue(index: number, value: bigint): void;
-    }
-
-    export interface EvaluationFrame extends FrameOps {
-        /** Get the current value from a mutable register specified by the index */
-        getValue(index: number): bigint;
-
-        /** Get the current value from a readonly register specified by the index  */
-        getConst(index: number): bigint;
-
-        /** Get the next value from a mutable register specified by the index */
-        getNextValue(index: number): bigint;
-    }
-
-    interface FrameOps {
-        add(a: bigint, b: bigint): bigint;
-        sub(a: bigint, b: bigint): bigint;
-        mul(a: bigint, b: bigint): bigint;
-        div(a: bigint, b: bigint): bigint;
-        exp(b: bigint, p: bigint): bigint;
-    }
-
     // LOW DEGREE PROOF
     // --------------------------------------------------------------------------------------------
     export interface LowDegreeProof {
@@ -181,6 +135,18 @@ declare module '@guildofweavers/genstark' {
         registerCount   : number;
         constantCount   : number;
         hashAlgorithm   : HashAlgorithm;
+    }
+
+    export interface TransitionFunction {
+        (r: bigint[][], k: ReadonlyRegister[], steps: number, field: FiniteField): void;
+    }
+
+    export interface TransitionConstraints {
+        (q: bigint[][], r: bigint[][], k: ReadonlyRegister[], steps: number, skip: number, field: FiniteField): void;
+    }
+
+    export interface ConstraintEvaluator {
+        (r: bigint[], n: bigint[], k: bigint[], field: FiniteField): bigint[];
     }
 
     export interface ReadonlyRegister {

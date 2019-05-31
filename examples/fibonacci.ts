@@ -2,7 +2,6 @@
 // ================================================================================================
 import * as assert from 'assert';
 import { Stark, PrimeField } from '../index';
-import { ExecutionFrame, EvaluationFrame } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -12,40 +11,19 @@ const field = new PrimeField(modulus);
 
 // define state transition function for Fibonacci sequence:
 // each step advances Fibonacci sequence by 2 values
-function fibTransition(this: ExecutionFrame) {
-    const v0 = this.getValue(0);
-    const v1 = this.getValue(1);
-    const v2 = this.add(v0, v1);
-    const v3 = this.add(v1, v2);
-
-    this.setNextValue(0, v2);
-    this.setNextValue(1, v3);
-}
-
-// make sure register 0 is updated correctly
-function fibConstraint1(this: EvaluationFrame) {
-    const v0 = this.getValue(0);
-    const v1 = this.getValue(1);
-    const v2 = this.getNextValue(0);
-    return this.sub(v2, this.add(v0, v1));
-}
-
-// make sure register 1 is updated correctly
-function fibConstraint2(this: EvaluationFrame) {
-    const v0 = this.getValue(0);
-    const v1 = this.getValue(1);
-    const v2 = this.add(v0, v1);
-    const v3 = this.getNextValue(1);
-    return this.sub(v3, this.add(v1, v2));
-}
 
 // create the STARK for Fibonacci calculation
 const fibStark = new Stark({
     field               : field,
-    registerCount       : 2,                            // we are working with 2 registers
-    tFunction           : fibTransition,
-    tConstraints        : [fibConstraint1, fibConstraint2],
-    tConstraintDegree   : 1                             // max degree of our constraints is 1
+    tFunction: {
+        'n0': 'r0 + r1',
+        'n1': 'r1 + (r0 + r1)'
+    },
+    tConstraints: [
+        'n0 - (r0 + r1)',
+        'n1 - (r1 + r0 + r1)'
+    ],
+    tConstraintDegree   : 1 // max degree of our constraints is 1
 });
 
 // TESTING

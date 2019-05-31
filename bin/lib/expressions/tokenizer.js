@@ -9,7 +9,22 @@ const matchers = [
     { type: 'paren', match: /^[\(\)]/ },
     { type: 'operator', match: /^[\+\-\*\/\^]/ }
 ];
-// CLASS DEFINITION
+// PUBLIC FUNCTIONS
+// ================================================================================================
+function tokenize(expression, skipWhitespace) {
+    const tokens = [];
+    let remainder = expression;
+    while (remainder) {
+        let next = Token.read(remainder);
+        if (!skipWhitespace || next.token.type !== 'space') {
+            tokens.push(next.token);
+        }
+        remainder = next.remainder;
+    }
+    return tokens;
+}
+exports.tokenize = tokenize;
+// TOKEN CLASS
 // ================================================================================================
 class Token {
     // CONSTRUCTOR
@@ -29,4 +44,4 @@ class Token {
     }
 }
 exports.Token = Token;
-//# sourceMappingURL=Token.js.map
+//# sourceMappingURL=tokenizer.js.map
