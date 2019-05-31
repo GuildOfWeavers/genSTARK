@@ -16,7 +16,7 @@ declare module '@guildofweavers/genstark' {
         /** field for all math operations in the computation */
         field: FiniteField;
 
-        /** State transition expressions for each register */
+        /** A set of transition expressions for all mutable registers */
         tExpressions: { [register: string]: string };
 
         /** A list of transition constraints for the computation */
@@ -25,7 +25,7 @@ declare module '@guildofweavers/genstark' {
         /** Maximum degree of transition constraints */
         tConstraintDegree: number;
 
-        /** Constants available via readonly registers during the computation */
+        /** A list of constant definitions for all readonly registers */
         constants?: Constant[];
 
         /** Execution trace extension factor */
@@ -97,7 +97,7 @@ declare module '@guildofweavers/genstark' {
     // CONSTRAINTS
     // --------------------------------------------------------------------------------------------
     export interface Assertion {
-        /** register index */
+        /** index of a mutable register */
         register: number;
 
         /** step in the execution trace */

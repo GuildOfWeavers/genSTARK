@@ -10,32 +10,17 @@ $ npm install @guildofweavers/genstark --save
 ```
 
 # Usage
-Here is a trivial example of how to use this library. In this case, the computation is just adding 1 to the current value at each step. That is: x<sub>n+1</sub> = x<sub>n</sub> + 1.
+Here is a trivial example of how to use this library. In this example, the computation is just adding 1 to the current value at each step. That is: x<sub>n+1</sub> = x<sub>n</sub> + 1.
 
 ```TypeScript
-import { Stark, PrimeField, ExecutionFrame, EvaluationFrame } from '@guildofweavers/genstark';
-
-// define a very simple state transition function 
-function fooTransition(this: ExecutionFrame) {
-    const v = this.getValue(0);     // get value for current step from register 0
-    const nv = this.add(v, 1n);
-    this.setNextValue(0, nv);       // next state = current state + 1
-} 
-
-// define a corresponding transition constraint
-function fooConstraint(this: EvaluationFrame): bigint {
-    const v = this.getValue(0);             // get value for current step from register 0
-    const nv = this.getNextValue(0);        // get value for the next step from register 0
-    return this.sub(nv, this.add(v, 1n));   // return nv - (v + 1)
-}
+import { Stark, PrimeField } from '@guildofweavers/genstark';
 
 // build a STARK for this computation
 const fooStark = new Stark({
     field               : new PrimeField(2n**32n - 3n * 2n**25n + 1n),
-    registerCount       : 1,                // we only need 1 register
-    tFunction           : fooTransition,
-    tConstraints        : [fooConstraint],
-    tConstraintDegree   : 1                 // degree of our constraint is 1
+    tExpressions        : { 'n0': 'r0 + 1' },   // define transition function
+    tConstraints        : ['n0 - (r0 + 1)'],    // define transition constraints
+    tConstraintDegree   : 1                     // degree of our constraint is 1
 });
 
 // create a proof that if we start computation at 1, we end up at 64 after 64 steps
@@ -105,21 +90,19 @@ The `config` object passed to the STARK constructor can have the following prope
 | Property           | Description |
 | ------------------ | ----------- |
 | field              | A finite field for all math operations during the computation. Currently, only `PrimeField` is available (it is actually just re-exported from the [galois](https://github.com/GuildOfWeavers/galois) project). |
-| registerCount      | Number of mutable registers for the computation. Must be at least 1, and cannot be greater than 63. The `inputs` array passed to `prove()` method must hold values to initialize all specified registers. |
-| constantCount?     | Number of readonly registers for the computation. These registers are populated with data based on the `constants` parameter passed to `prove()` and `verify()` methods. This property is optional; the default is 0; the max is 64. |
-| tFunction          | State [transition function](#Transition-function) for the computation. |
-| tConstraints       | An array of [transition constraint](#Transition-constraints) functions for the computation. The array must contain at least one element. |
+| tExpressions       | An object with expressions defining state [transition function](#Transition-function) for all register. The number of registers must be between 1 and 64. |
+| tConstraints       | An array of [transition constraint](#Transition-constraints) expressions for the computation. The number of constraints must be between 1 and 1024. |
 | tConstraintDegree  | The highest algebraic degree of the provided transition constraints. |
+| constants?         | An array of [constant definitions](#Constants) for values that will be available in readonly registers during the computation. If provided, cannot have more than 64 elements. |
 | extensionFactor?   | Number by which the execution trace is "stretched." Must be a power of 2 at least 2x of the `tConstraintDegree`, but cannot exceed 32. This property is optional, the default is smallest power of 2 that is greater than `tConstraintDegree * 2`. |
 | exeSpotCheckCount? | Number of positions in the execution trace to include into the proof. This property is optional; the default is 80; the max is 128. |
 | friSpotCheckCount? | Number of positions in the columns of low degree proof to include into the proof. This property is optional; the default is 40; the max is 64. |
 | hashAlgorithm?     | Hash algorithm to use when building Merkle trees for the proof. Currently, can be one of two values: `sha256` or `blake2s256`. This property is optional; the default is `sha256`. |
-| logger?            | An optional [Logger](/lib/utils/Logger.ts) object to collect info about how STARK proof/verification are running. The default logger just prints everything to the console, but you can provide any other object that complies with the Logger interface. |
 
 ## Generating and verifying proofs
 Once you have a `Stark` object, you can start generating proofs using `Stark.prove()` method like so:
 ```TypeScript
-const proof = myStark.prove(assertions, steps, inputs, constants);
+const proof = myStark.prove(assertions, steps, inputs);
 ```
 The meaning of the parameters is as follows:
 
@@ -128,12 +111,12 @@ The meaning of the parameters is as follows:
 | assertions | An array of [Assertion](#Assertions) objects (also called boundary constraints). These assertions specify register values at specific steps of a valid computation. At least 1 assertion must be provided. |
 | steps      | Number of steps in the computation. Number of steps must be a power of 2. |
 | inputs     | An array of `BigInt`'s containing initial values for all mutable registers. The length of the array must be the same as `registerCount` specified in STARK config. |
-| constants? | An array of [Constant](#Constants) objects defining how readonly registers are populated. The length of the array must be the same as `constantCount` specified in STARK config. If `constantCount=0`, this parameter should be omitted. |
+
 
 Once you've generated a proof, you can verify it using `Stark.verify()` method like so:
 
 ```TypeScript
-const result = myStark.verify(assertions, proof, steps, constants);
+const result = myStark.verify(assertions, proof, steps);
 ```
 The meaning of the parameters is as follows:
 
@@ -142,7 +125,6 @@ The meaning of the parameters is as follows:
 | assertions | The same array of [Assertion](#Assertions) objects that was passed to the `prove()` method. |
 | proof      | The proof object that was generated by the `prove()` method. |
 | steps      | The same number of steps that was passed to the `prove()` method. |
-| constants? | The same array of [Constant](#Constants) objects that was passed to the `prove()` method. |
 
 Notice that `inputs` array does not need to be provided to the `verify()` method. Verifying the proof basically attests to something like this: 
 
@@ -151,78 +133,65 @@ Notice that `inputs` array does not need to be provided to the `verify()` method
 
 
 ## Transition function
-A core component of STARK's definition is the state transition function. The transition function is called once for each step of the computation, and must update all mutable registers to the next set of values. The function can access the current `ExecutionFrame` via `this` object.
-
-You can use the execution frame to update a mutable register to the next value like so:
+A core component of STARK's definition is the state transition function. You can define a state transition function by supplying transition expressions for all mutable registers like so:
 ```TypeScript
-this.setNextValue(index, value);
-```
-where, `index` is a 0-based register index, and `value` is the new value for the register.
-
-You can also use the execution frame to read current register values like so:
-```TypeScript
-this.getValue(index);  // returns current value from a mutable register at the specified index
-this.getConst(index);  // returns current value from a readonly register at the specified index
-```
-
-Lastly, the execution frame exposes a set of math operations that you can use within the transition function:
-
-```TypeScript
-interface FrameOps {
-    add(a: bigint, b: bigint): bigint;
-    sub(a: bigint, b: bigint): bigint;
-    mul(a: bigint, b: bigint): bigint;
-    div(a: bigint, b: bigint): bigint;
-    exp(b: bigint, p: bigint): bigint;
+{
+    'n0': 'r0 + k0 + 1'
 }
 ```
+The above example defines a transition expression for a single register. Here is how to interpret it:
 
-**Important:** you should rely only on the exposed math operations to calculate the next set of register values. Using other operations or conditional logic may generate proofs that will fail upon verification.
+* `r0` is a reference to the current value of mutable register 0.
+* `n0` is a reference to the next value of mutable register 0.
+* `k0` is a reference to the current value of readonly register 0.
+
+So, the expression says: next value of mutable register 0 is equal to the current value of the register, plus current value of readonly register 0, plus 1.
+
+You can use simple algebraic operators `+`, `-`, `*`, `/`, `^` to define expressions of any complexity. You can also have up to 64 mutable registers and up to 64 readonly registers. In case of multiple registers, you can refer to them as `r1`, `r2`, `r3`, etc.
+
+One thing to note, you cannot reference future register states within the transition expression. So, something like this would not be valid:
+```TypeScript
+{
+    'n0': 'r0 + 1',
+    'n1': 'n0 * 2'
+}
+```
+But you can easily redefine this as a valid expression like so:
+```TypeScript
+{
+    'n0': 'r0 + 1',
+    'n1': '(r0 + 1) * 2'
+}
+```
 
 ## Transition constraints
-Another core component of STARK's definition is a set of transition constraints. A computation is considered valued only if transition constraints are satisfied for all steps (except the last one).
+Another core component of STARK's definition is a set of transition constraints. A computation is considered valid only if transition constraints are satisfied for all steps (except the last one).
 
-Similarly to transition function, a transition constraint is a function that is called once for each step of the computation. If the constraint function returns 0, the constraint is satisfied, otherwise the constraint fails. At each step, the function can access the current `EvaluationFrame` via `this` object.
-
-An evaluation frame is similar to the execution frame, except instead of `setNextValue()` method, it exposes a `getNextValue()` method:
-
+Similarly to transition function, a transition constraint is defined using algebraic expressions like so:
 ```TypeScript
-this.getValue(index);       // returns current value from a mutable register at the specified index
-this.getConst(index);       // returns current value from a readonly register at the specified index
-this.getNextValue(index);   // returns next value from a mutable register at the specified index
+[
+    `n0 - (r0 + k0 + 1)`
+]
 ```
+However, unlike transition expressions, transition constraints can reference future states of mutable registers.
 
-Also, similarly to the execution frame, evaluation frame exposes a set of math operations that you can use within the transition constraint function:
-
-```TypeScript
-interface FrameOps {
-    add(a: bigint, b: bigint): bigint;
-    sub(a: bigint, b: bigint): bigint;
-    mul(a: bigint, b: bigint): bigint;
-    div(a: bigint, b: bigint): bigint;
-    exp(b: bigint, p: bigint): bigint;
-}
-```
-
-**Important:** you should rely only on the exposed math operations to perform calculations with the function. Using other operations or conditional logic may generate proofs that will fail upon verification.
-
-**Note:** you should note the highest algebraic degree of calculations you use in the constraint function and pass it to the `Stark` constructor as `tConstraintDegree` property. For example, if you raise register value to power 3, your `tConstraintDegree` should be set to 3.
+**Note:** you should note the highest algebraic degree you use in the constraint expressions and pass it to the `Stark` constructor as `tConstraintDegree` property. For example, if you raise register value to power 3, your `tConstraintDegree` should be set to 3.
 
 ## Assertions
-Assertions (or boundary constraints) are objects that specify the exact value of a given register at a given step. An assertion object has the following form:
+Assertions (or boundary constraints) are objects that specify the exact value of a given mutable register at a given step. An assertion object has the following form:
 
 ```TypeScript
 interface Assertion {
-    register: number;   // register index
+    register: number;   // index of a mutable register
     step    : number;   // step in the execution trace
     value   : bigint;   // value that the register should have at the specified step
 }
 ```
 
 ## Constants
-In addition to mutable registers, you can define STARKs with readonly registers. A readonly register is a register whose value cannot be changed during the computation. You can read values from such registers using `getConst()` method of execution and evaluation frames as described previously.
+In addition to mutable registers, you can define STARKs with readonly registers. A readonly register is a register whose value cannot be changed during the computation. You can reference readonly registers in your expressions by using the `k` prefix. For example, `k0`, `k1`, `k2` etc.
 
-You can defined readonly registers by using `Constant` object, which has the following form:
+You can defined readonly registers by providing constant definitions to `Stark` constructor. Constant definitions have the following form:
 ```TypeScript
 interface Constant {
     values  : bigint[];
@@ -232,7 +201,7 @@ interface Constant {
 where, `values` is an array of constant values for the register, and `pattern` is a flag indicating how the values will appear in the register. The `pattern` can be one of the following:
 
 * **repeat** - the constants will be "cycled" during execution. For example, if `values = [1, 2, 3, 4]`, and the execution trace is 16 steps long, the constants will appear in the execution trace as: `[1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]`.
-* **stretch** - the constants will be "stretched" during execution. For example, if `values = [1, 2, 3, 4]`, and the execution trace is 16 steps long, the constants will appear as: `[1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0]`.
+* **spread** - the constants will be "spread" during execution. For example, if `values = [1, 2, 3, 4]`, and the execution trace is 16 steps long, the constants will appear as: `[1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 0]`.
 
 For more explanation see [demo](/examples/demo.ts) example.
 
