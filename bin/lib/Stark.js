@@ -7,9 +7,6 @@ const merkle_1 = require("@guildofweavers/merkle");
 const config_1 = require("./config");
 const Serializer_1 = require("./Serializer");
 const StarkError_1 = require("./StarkError");
-// MODULE VARIABLES
-// ================================================================================================
-const MAX_DOMAIN_SIZE = 2 ** 32;
 // CLASS DEFINITION
 // ================================================================================================
 class Stark {
@@ -41,13 +38,17 @@ class Stark {
             throw new TypeError('At least one assertion must be provided');
         if (!utils_1.isPowerOf2(steps))
             throw new TypeError('Number of steps must be a power of 2');
-        const maxSteps = MAX_DOMAIN_SIZE / this.extensionFactor;
+        const maxSteps = config_1.MAX_DOMAIN_SIZE / this.extensionFactor;
         if (steps > maxSteps)
             throw new TypeError(`Number of steps cannot exceed ${maxSteps}`);
         if (!Array.isArray(inputs))
             throw new TypeError(`Inputs parameter must be an array`);
         if (inputs.length !== this.registerCount)
             throw new TypeError(`Inputs array must have exactly ${this.registerCount} elements`);
+        for (let i = 0; i < inputs.length; i++) {
+            if (typeof inputs[i] !== 'bigint')
+                throw new TypeError(`Input for register r${i} is not a BigInt`);
+        }
         if (this.constantCount > 0) {
             if (!constants)
                 throw new TypeError(`Constants array must be provided`);
@@ -86,7 +87,12 @@ class Stark {
             executionTrace[register][0] = inputs[register];
         }
         // then, apply transition function for all steps
-        this.applyTransitions(executionTrace, cRegisters, steps, this.field);
+        try {
+            this.applyTransitions(executionTrace, cRegisters, steps, this.field);
+        }
+        catch (error) {
+            throw new StarkError_1.StarkError('Failed to generate execution trace', error);
+        }
         // finally, make sure assertions don't contradict execution trace
         for (let c of assertions) {
             if (executionTrace[c.register][c.step] !== c.value) {
@@ -106,7 +112,12 @@ class Stark {
         for (let i = 0; i < this.constraintCount; i++) {
             qEvaluations[i] = new Array(evaluationDomainSize);
         }
-        this.applyConstraints(qEvaluations, pEvaluations, cRegisters, evaluationDomainSize, this.extensionFactor, this.field);
+        try {
+            this.applyConstraints(qEvaluations, pEvaluations, cRegisters, evaluationDomainSize, this.extensionFactor, this.field);
+        }
+        catch (error) {
+            throw new StarkError_1.StarkError('Failed to evaluate transition constraints', error);
+        }
         this.logger.log(label, 'Computed Q(x) polynomials');
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
         const zEvaluations = zPoly.evaluateAll(evaluationDomain);
@@ -211,7 +222,7 @@ class Stark {
             throw new TypeError('At least one assertion must be provided');
         if (!utils_1.isPowerOf2(steps))
             throw new TypeError('Number of steps must be a power of 2');
-        const maxSteps = MAX_DOMAIN_SIZE / this.extensionFactor;
+        const maxSteps = config_1.MAX_DOMAIN_SIZE / this.extensionFactor;
         if (steps > maxSteps)
             throw new TypeError(`Number of steps cannot exceed ${maxSteps}`);
         if (this.constantCount > 0) {

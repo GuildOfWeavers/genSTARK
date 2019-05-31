@@ -8,6 +8,8 @@ import { isPowerOf2 } from './utils';
 
 // MODULE VARIABLES
 // ================================================================================================
+export const MAX_DOMAIN_SIZE = 2**32;
+
 const MAX_REGISTER_COUNT = 64;
 const MAX_CONSTANT_COUNT = 64;
 const MAX_CONSTRAINT_COUNT = 1024;
@@ -156,8 +158,10 @@ function buildTransitionFunction(expressions: Map<string,string>, constantCount:
         throw new Error(`Failed to build transition expression for register n${i}: ${error.message}`);
     }
 
-    let body = `for (let i = 0; i < steps - 1; i++) {\n  ${assignments.join(';\n')};\n}`;
-    return new Function('r', 'k', 'steps', 'field', body) as TransitionFunction;
+    const cBody = `  throw new Error('Error in transition function at step ' + i + ':' + error.message);`;
+    const lBody = `  for (; i < steps - 1; i++) {\n    ${assignments.join(';\n')};\n  }`;
+    const fBody = `let i = 0;\ntry {\n${lBody}\n}\ncatch(error){\n${cBody}\n}`;
+    return new Function('r', 'k', 'steps', 'field', fBody) as TransitionFunction;
 }
 
 function parseTransitionConstraints(expressions: string[], registerCount: number, constantCount: number) {
@@ -183,6 +187,7 @@ function buildBatchConstraintEvaluator(expressions: AstNode[]): BatchConstraintE
 
     const constraintCount = expressions.length;
     const assignments = new Array<string>(constraintCount);
+    const validators = new Array<string>(constraintCount);
     
     const regRefBuilder = function(name: string, index: number): string {
         if (name === 'n') {
@@ -200,16 +205,18 @@ function buildBatchConstraintEvaluator(expressions: AstNode[]): BatchConstraintE
     let i = 0;
     try {
         for (; i < constraintCount; i++) {
-            // TODO: add error handling
             assignments[i] = `q[${i}][i] = ${expressions[i].toCode(regRefBuilder)}`;
+            validators[i] = `if (q[${i}][i] !== 0n) throw new Error('Constraint ' + ${i} + ' didn\\'t evaluate to 0 at step: ' + (i/skip));`;
         }
     }
     catch (error) {
         throw new Error(`Failed to build transition constraint ${i}: ${error.message}`);
     }
 
-    const body = `for (let i = 0; i < steps; i++) {\n  ${assignments.join(';\n')};\n}`;
-    return new Function('q', 'r', 'k', 'steps', 'skip', 'field', body) as BatchConstraintEvaluator;
+    const cBody = `  if (i < nfSteps && i % skip === 0) {\n    ${validators.join(';\n')}\n  }`;
+    const lBody = `  ${assignments.join(';\n')};\n${cBody}`
+    const fBody = `const nfSteps = steps - skip;\nfor (let i = 0; i < steps; i++) {\n${lBody}\n}`;
+    return new Function('q', 'r', 'k', 'steps', 'skip', 'field', fBody) as BatchConstraintEvaluator;
 }
 
 function buildConstraintEvaluator(expressions: AstNode[]): ConstraintEvaluator {

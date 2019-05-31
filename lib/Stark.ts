@@ -8,13 +8,9 @@ import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver } from './componen
 import { Logger, isPowerOf2, getPseudorandomIndexes, sizeOf, bigIntsToBuffers, buffersToBigInts } from './utils';
 import { RepeatedConstants, SpreadConstants } from './registers';
 import { MerkleTree, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
-import { parseStarkConfig } from './config';
+import { parseStarkConfig, MAX_DOMAIN_SIZE } from './config';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
-
-// MODULE VARIABLES
-// ================================================================================================
-const MAX_DOMAIN_SIZE = 2**32;
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -74,6 +70,9 @@ export class Stark {
         if (steps > maxSteps) throw new TypeError(`Number of steps cannot exceed ${maxSteps}`);
         if (!Array.isArray(inputs)) throw new TypeError(`Inputs parameter must be an array`);
         if (inputs.length !== this.registerCount) throw new TypeError(`Inputs array must have exactly ${this.registerCount} elements`);
+        for (let i = 0; i < inputs.length; i++) {
+            if (typeof inputs[i] !== 'bigint') throw new TypeError(`Input for register r${i} is not a BigInt`);
+        }
         if (this.constantCount > 0) {
             if (!constants) throw new TypeError(`Constants array must be provided`);
             if (!Array.isArray(constants)) throw new TypeError(`Constants parameter must be an array`);
@@ -114,7 +113,12 @@ export class Stark {
         }
 
         // then, apply transition function for all steps
-        this.applyTransitions(executionTrace, cRegisters, steps, this.field);
+        try {
+            this.applyTransitions(executionTrace, cRegisters, steps, this.field);
+        }
+        catch (error) {
+            throw new StarkError('Failed to generate execution trace', error);
+        }
 
         // finally, make sure assertions don't contradict execution trace
         for (let c of assertions) {
@@ -137,7 +141,12 @@ export class Stark {
         for (let i = 0; i < this.constraintCount; i++) {
             qEvaluations[i] = new Array<bigint>(evaluationDomainSize);
         }
-        this.applyConstraints(qEvaluations, pEvaluations, cRegisters, evaluationDomainSize, this.extensionFactor, this.field);
+        try {
+            this.applyConstraints(qEvaluations, pEvaluations, cRegisters, evaluationDomainSize, this.extensionFactor, this.field);
+        }
+        catch (error) {
+            throw new StarkError('Failed to evaluate transition constraints', error);
+        }
         this.logger.log(label, 'Computed Q(x) polynomials');
 
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
