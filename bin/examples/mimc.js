@@ -18,7 +18,7 @@ for (let i = 0; i < 64; i++) {
 const mimcStark = new index_1.Stark({
     field: field,
     constantCount: 1,
-    tFunction: {
+    tExpressions: {
         'n0': 'r0^3 + k0'
     },
     tConstraints: [
@@ -35,7 +35,7 @@ let steps = 2 ** 13, result = 95224774355499767951968048714566316597785297695903
 const inputs = [3n]; // we need to provide starting value for 1 register
 const constants = [{
         values: roundConstants,
-        pattern: 1 /* repeat */ // specify that round constants cycle during execution
+        pattern: 'repeat' // specify that round constants cycle during execution
     }];
 const assertions = [
     { step: 0, register: 0, value: inputs[0] },

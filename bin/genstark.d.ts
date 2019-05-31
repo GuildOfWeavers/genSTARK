@@ -12,17 +12,33 @@ declare module '@guildofweavers/genstark' {
 
     // STARK
     // --------------------------------------------------------------------------------------------
-    
     export interface StarkConfig {
-        field               : FiniteField;
-        constantCount?      : number;
-        tFunction           : { [register: string]: string };
-        tConstraints        : string[];
-        tConstraintDegree   : number;
-        extensionFactor?    : number;
+        /** field for all math operations in the computation */
+        field: FiniteField;
+
+        /** Number of  readonly registers in the computation */
+        constantCount?: number;
+
+        /** State transition expressions for each register */
+        tExpressions: { [register: string]: string };
+
+        /** A list of transition constraints for the computation */
+        tConstraints: string[];
+
+        /** Maximum degree of transition constraints */
+        tConstraintDegree: number;
+
+        /** Execution trace extension factor */
+        extensionFactor?: number;
+
+        /** Number of spot checks for the execution trace; defaults to 80 */
         exeSpotCheckCount?  : number;
+
+        /** Number of spot checks for low degree proof; defaults to 40 */
         friSpotCheckCount?  : number;
-        hashAlgorithm?      : HashAlgorithm;
+
+        /** Hash algorithm for Merkle trees; defaults to sha256 */
+        hashAlgorithm?: HashAlgorithm;
     }
 
     export class Stark {
@@ -73,14 +89,11 @@ declare module '@guildofweavers/genstark' {
         }
     }
 
+    export type ConstantPattern = 'repeat' | 'spread';
+
     export interface Constant {
         values  : bigint[];
         pattern : ConstantPattern;
-    }
-
-    export const enum ConstantPattern {
-        repeat = 1,
-        stretch = 2
     }
 
     // CONSTRAINTS
@@ -125,7 +138,7 @@ declare module '@guildofweavers/genstark' {
         (r: bigint[][], k: ReadonlyRegister[], steps: number, field: FiniteField): void;
     }
 
-    export interface TransitionConstraints {
+    export interface BatchConstraintEvaluator {
         (q: bigint[][], r: bigint[][], k: ReadonlyRegister[], steps: number, skip: number, field: FiniteField): void;
     }
 

@@ -1,12 +1,12 @@
 // IMPORTS
 // ================================================================================================
 import {
-    FiniteField, Assertion, StarkConfig, TransitionFunction, TransitionConstraints, HashAlgorithm, StarkProof,
-    BatchMerkleProof, EvaluationContext, ReadonlyRegister, Constant, ConstantPattern, Logger as ILogger, ConstraintEvaluator
+    StarkConfig, FiniteField, Assertion, TransitionFunction, ConstraintEvaluator, BatchConstraintEvaluator, 
+    HashAlgorithm, StarkProof, BatchMerkleProof, EvaluationContext, ReadonlyRegister, Constant, Logger as ILogger
 } from '@guildofweavers/genstark';
 import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver } from './components';
 import { Logger, isPowerOf2, getPseudorandomIndexes, sizeOf, bigIntsToBuffers, buffersToBigInts } from './utils';
-import { RepeatedConstants, StretchedConstants } from './registers';
+import { RepeatedConstants, SpreadConstants } from './registers';
 import { MerkleTree, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
 import { parseStarkConfig } from './config';
 import { Serializer } from './Serializer';
@@ -24,14 +24,14 @@ export class Stark {
     readonly registerCount      : number;
     readonly constantCount      : number;
     readonly constraintCount    : number;
-    readonly constraintDegree   : number;
+    readonly maxConstraintDegree: number;
     readonly extensionFactor    : number;
 
     readonly exeSpotCheckCount  : number;
     readonly friSpotCheckCount  : number;
 
     readonly applyTransitions   : TransitionFunction;
-    readonly applyConstraints   : TransitionConstraints;
+    readonly applyConstraints   : BatchConstraintEvaluator;
     readonly evaluateConstraints: ConstraintEvaluator;
 
     readonly hashAlgorithm      : HashAlgorithm;
@@ -46,15 +46,15 @@ export class Stark {
         this.registerCount = vConfig.registerCount;
         this.constantCount = vConfig.constantCount;
         this.constraintCount = vConfig.constraintCount;
-        this.constraintDegree = vConfig.tConstraintDegree;
+        this.maxConstraintDegree = vConfig.tConstraints.maxDegree;
         this.extensionFactor = vConfig.extensionFactor;
         
         this.exeSpotCheckCount = vConfig.exeSpotCheckCount;
         this.friSpotCheckCount = vConfig.friSpotCheckCount;
 
         this.applyTransitions = vConfig.tFunction;
-        this.applyConstraints = vConfig.tConstraints;
-        this.evaluateConstraints = vConfig.tConstraintEvaluator;
+        this.applyConstraints = vConfig.tConstraints.batchEvaluator;
+        this.evaluateConstraints = vConfig.tConstraints.evaluator;
 
         this.hashAlgorithm = vConfig.hashAlgorithm;
         this.logger = logger || new Logger();
@@ -451,7 +451,7 @@ export class Stark {
         // deg(Q(x)) = steps * deg(constraints) = deg(D(x)) + deg(Z(x))
         // thus, deg(D(x)) = deg(Q(x)) - steps;
         // and, linear combination degree is max(deg(D(x)), steps)
-        const degree = steps * Math.max(this.constraintDegree - 1, 1);
+        const degree = steps * Math.max(this.maxConstraintDegree - 1, 1);
         return degree;
     }
 }
@@ -462,11 +462,11 @@ function buildReadonlyRegisters(constants: Constant[] | undefined, context: Eval
     const registers = new Array<ReadonlyRegister>(constants ? constants.length : 0);
     for (let i = 0; i < registers.length; i++) {
         let c = constants![i];
-        if (c.pattern === ConstantPattern.repeat) {
+        if (c.pattern === 'repeat') {
             registers[i] = new RepeatedConstants(c.values, context, domain !== undefined);
         }
-        else if (c.pattern === ConstantPattern.stretch) {
-            registers[i] = new StretchedConstants(c.values, context, domain);
+        else if (c.pattern === 'spread') {
+            registers[i] = new SpreadConstants(c.values, context, domain);
         }
     }
     return registers;

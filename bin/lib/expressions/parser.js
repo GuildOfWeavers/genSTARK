@@ -23,7 +23,7 @@ function parseOperations(tokens) {
     result = pullOperators(['*', '/'], result);
     result = pullOperators(['+', '-'], result);
     if (result.length !== 1)
-        throw new Error('Incorrect result'); // TODO: better error
+        throw new Error('Expression evaluated to more than one root');
     return result[0];
 }
 exports.parseOperations = parseOperations;

@@ -47,7 +47,7 @@ export class Token {
     // --------------------------------------------------------------------------------------------
     static read(expression: string) {
         const matcher = matchers.find(m => m.match.test(expression));
-        if (!matcher) throw new Error('Invalid token'); // TODO: better error
+        if (!matcher) throw new Error('Expression contains an invalid token');
         const token = new Token(matcher.type as TokenType, expression.match(matcher.match)![0]);
         return { token, remainder: expression.slice(token.value.length) };
     }

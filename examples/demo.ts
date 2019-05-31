@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { Stark, PrimeField } from '../index';
-import { ConstantPattern } from '@guildofweavers/genstark';
+import { Constant } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -17,7 +17,7 @@ const field = new PrimeField(modulus);
 const demoStark = new Stark({
     field               : field,
     constantCount       : 2,
-    tFunction: {
+    tExpressions: {
         'n0': 'r0 + 1 + k0 + 2 * k1'
     },
     tConstraints: [
@@ -32,13 +32,13 @@ let steps = 2**6, result = 292n;
 
 // set up inputs and assertions
 const inputs = [1n];
-const constants = [{
+const constants: Constant[] = [{
     values: [1n, 2n, 3n, 4n],
-    pattern: ConstantPattern.repeat
+    pattern: 'repeat'
 },
 {
     values: [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n],
-    pattern: ConstantPattern.stretch
+    pattern: 'spread'
 }];
 const assertions = [
     { step: 0, register: 0, value: 1n },

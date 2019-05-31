@@ -2,7 +2,7 @@
 // ================================================================================================
 import * as assert from 'assert';
 import { Stark, PrimeField } from '../index';
-import { ConstantPattern } from '@guildofweavers/genstark';
+import { Constant } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -20,7 +20,7 @@ for (let i = 0; i < 64; i++) {
 const mimcStark = new Stark({
     field               : field,
     constantCount       : 1,
-    tFunction: {
+    tExpressions: {
         'n0': 'r0^3 + k0'
     },
     tConstraints: [
@@ -37,9 +37,9 @@ let steps = 2**13, result = 9522477435549976795196804871456631659778529769590369
 
 // set up inputs and assertions
 const inputs = [3n];                                    // we need to provide starting value for 1 register
-const constants = [{                                    // we need to provide definition for 1 constant
+const constants: Constant[] = [{                                    // we need to provide definition for 1 constant
     values: roundConstants,
-    pattern: ConstantPattern.repeat                     // specify that round constants cycle during execution
+    pattern: 'repeat'                                   // specify that round constants cycle during execution
 }];
 const assertions = [
     { step: 0, register: 0, value: inputs[0] },         // value at first step is equal to input

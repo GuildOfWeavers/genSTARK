@@ -38,7 +38,7 @@ class Token {
     static read(expression) {
         const matcher = matchers.find(m => m.match.test(expression));
         if (!matcher)
-            throw new Error('Invalid token'); // TODO: better error
+            throw new Error('Expression contains an invalid token');
         const token = new Token(matcher.type, expression.match(matcher.match)[0]);
         return { token, remainder: expression.slice(token.value.length) };
     }

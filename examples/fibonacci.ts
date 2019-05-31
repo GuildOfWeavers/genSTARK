@@ -15,7 +15,7 @@ const field = new PrimeField(modulus);
 // create the STARK for Fibonacci calculation
 const fibStark = new Stark({
     field               : field,
-    tFunction: {
+    tExpressions: {
         'n0': 'r0 + r1',
         'n1': 'r1 + (r0 + r1)'
     },

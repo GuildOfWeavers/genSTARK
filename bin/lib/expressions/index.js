@@ -29,14 +29,14 @@ exports.parseExpression = parseExpression;
 function validateRegisterIndex(r, maxRegisters, maxConstants) {
     if (r.isReadonly && r.index >= maxConstants) {
         if (maxConstants === 0) {
-            throw new Error(`Invalid constant reference '${r.name}${r.index}'; no constants have been defined`);
+            throw new Error(`Invalid constant reference '${r.name}${r.index}': no constants have been defined`);
         }
         else {
-            throw new Error(`Invalid constant reference '${r.name}${r.index}'; constant index must be smaller than ${maxConstants}`);
+            throw new Error(`Invalid constant reference '${r.name}${r.index}': constant index must be smaller than ${maxConstants}`);
         }
     }
     else if (r.index >= maxRegisters) {
-        throw new Error(`Invalid register reference '${r.name}${r.index}'; register index must be smaller than ${maxRegisters}`);
+        throw new Error(`Invalid register reference '${r.name}${r.index}': register index must be smaller than ${maxRegisters}`);
     }
 }
 //# sourceMappingURL=index.js.map

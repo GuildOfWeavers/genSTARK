@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import {
-    StarkConfig, TransitionFunction, TransitionConstraints, HashAlgorithm, ConstraintEvaluator
+    StarkConfig, TransitionFunction, ConstraintEvaluator, BatchConstraintEvaluator, HashAlgorithm
 } from '@guildofweavers/genstark';
 import { parseExpression, AstNode } from './expressions';
 import { isPowerOf2 } from './utils';
@@ -61,8 +61,8 @@ export function parseStarkConfig(config: StarkConfig) {
     }
 
     // transition function
-    if (!config.tFunction) throw new TypeError('Transition function was not provided');
-    const tExpressions = new Map(Object.entries(config.tFunction));
+    if (!config.tExpressions) throw new TypeError('Transition function was not provided');
+    const tExpressions = new Map(Object.entries(config.tExpressions));
     const registerCount = tExpressions.size;
     if (registerCount === 0) {
         throw new TypeError('At least one register must be defined in transition function');
@@ -83,9 +83,9 @@ export function parseStarkConfig(config: StarkConfig) {
     if (constraintCount > MAX_CONSTRAINT_COUNT) {
         throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
     }
-    const tConstraints2 = parseTransitionConstraints(cExpressions, registerCount, constantCount);
-    const tConstraints = buildTransitionConstraints(tConstraints2); // TODO: rename
-    const tConstraintEvaluator = buildConstraintEvaluator(tConstraints2);
+    const tConstraints = parseTransitionConstraints(cExpressions, registerCount, constantCount);
+    const tBatchConstraintEvaluator = buildBatchConstraintEvaluator(tConstraints);
+    const tConstraintEvaluator = buildConstraintEvaluator(tConstraints);
 
     // execution trace spot checks
     const exeSpotCheckCount = config.exeSpotCheckCount || DEFAULT_EXE_SPOT_CHECK_COUNT;
@@ -111,9 +111,11 @@ export function parseStarkConfig(config: StarkConfig) {
         constantCount       : constantCount,
         constraintCount     : constraintCount,
         tFunction           : tFunction,
-        tConstraints        : tConstraints,
-        tConstraintEvaluator: tConstraintEvaluator,
-        tConstraintDegree   : tConstraintDegree,
+        tConstraints: {
+            evaluator       : tConstraintEvaluator,
+            batchEvaluator  : tBatchConstraintEvaluator,
+            maxDegree       : tConstraintDegree
+        },
         extensionFactor     : extensionFactor,
         exeSpotCheckCount   : exeSpotCheckCount,
         friSpotCheckCount   : friSpotCheckCount,
@@ -177,7 +179,7 @@ function parseTransitionConstraints(expressions: string[], registerCount: number
     return output;
 }
 
-function buildTransitionConstraints(expressions: AstNode[]): TransitionConstraints {
+function buildBatchConstraintEvaluator(expressions: AstNode[]): BatchConstraintEvaluator {
 
     const constraintCount = expressions.length;
     const assignments = new Array<string>(constraintCount);
@@ -207,7 +209,7 @@ function buildTransitionConstraints(expressions: AstNode[]): TransitionConstrain
     }
 
     const body = `for (let i = 0; i < steps; i++) {\n  ${assignments.join(';\n')};\n}`;
-    return new Function('q', 'r', 'k', 'steps', 'skip', 'field', body) as TransitionConstraints;
+    return new Function('q', 'r', 'k', 'steps', 'skip', 'field', body) as BatchConstraintEvaluator;
 }
 
 function buildConstraintEvaluator(expressions: AstNode[]): ConstraintEvaluator {

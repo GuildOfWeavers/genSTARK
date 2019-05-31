@@ -20,7 +20,7 @@ declare module '@guildofweavers/genstark' {
         constantCount?: number;
 
         /** State transition expressions for each register */
-        tFunction: { [register: string]: string };
+        tExpressions: { [register: string]: string };
 
         /** A list of transition constraints for the computation */
         tConstraints: string[];
@@ -89,14 +89,11 @@ declare module '@guildofweavers/genstark' {
         }
     }
 
+    export type ConstantPattern = 'repeat' | 'spread';
+
     export interface Constant {
         values  : bigint[];
         pattern : ConstantPattern;
-    }
-
-    export const enum ConstantPattern {
-        repeat = 1,
-        stretch = 2
     }
 
     // CONSTRAINTS
@@ -141,7 +138,7 @@ declare module '@guildofweavers/genstark' {
         (r: bigint[][], k: ReadonlyRegister[], steps: number, field: FiniteField): void;
     }
 
-    export interface TransitionConstraints {
+    export interface BatchConstraintEvaluator {
         (q: bigint[][], r: bigint[][], k: ReadonlyRegister[], steps: number, skip: number, field: FiniteField): void;
     }
 

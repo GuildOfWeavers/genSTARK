@@ -49,9 +49,9 @@ function parseStarkConfig(config) {
         }
     }
     // transition function
-    if (!config.tFunction)
+    if (!config.tExpressions)
         throw new TypeError('Transition function was not provided');
-    const tExpressions = new Map(Object.entries(config.tFunction));
+    const tExpressions = new Map(Object.entries(config.tExpressions));
     const registerCount = tExpressions.size;
     if (registerCount === 0) {
         throw new TypeError('At least one register must be defined in transition function');
@@ -73,9 +73,9 @@ function parseStarkConfig(config) {
     if (constraintCount > MAX_CONSTRAINT_COUNT) {
         throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
     }
-    const tConstraints2 = parseTransitionConstraints(cExpressions, registerCount, constantCount);
-    const tConstraints = buildTransitionConstraints(tConstraints2); // TODO: rename
-    const tConstraintEvaluator = buildConstraintEvaluator(tConstraints2);
+    const tConstraints = parseTransitionConstraints(cExpressions, registerCount, constantCount);
+    const tBatchConstraintEvaluator = buildBatchConstraintEvaluator(tConstraints);
+    const tConstraintEvaluator = buildConstraintEvaluator(tConstraints);
     // execution trace spot checks
     const exeSpotCheckCount = config.exeSpotCheckCount || DEFAULT_EXE_SPOT_CHECK_COUNT;
     if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT || !Number.isInteger(exeSpotCheckCount)) {
@@ -97,9 +97,11 @@ function parseStarkConfig(config) {
         constantCount: constantCount,
         constraintCount: constraintCount,
         tFunction: tFunction,
-        tConstraints: tConstraints,
-        tConstraintEvaluator: tConstraintEvaluator,
-        tConstraintDegree: tConstraintDegree,
+        tConstraints: {
+            evaluator: tConstraintEvaluator,
+            batchEvaluator: tBatchConstraintEvaluator,
+            maxDegree: tConstraintDegree
+        },
         extensionFactor: extensionFactor,
         exeSpotCheckCount: exeSpotCheckCount,
         friSpotCheckCount: friSpotCheckCount,
@@ -157,7 +159,7 @@ function parseTransitionConstraints(expressions, registerCount, constantCount) {
     }
     return output;
 }
-function buildTransitionConstraints(expressions) {
+function buildBatchConstraintEvaluator(expressions) {
     const constraintCount = expressions.length;
     const assignments = new Array(constraintCount);
     const regRefBuilder = function (name, index) {

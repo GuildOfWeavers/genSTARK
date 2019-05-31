@@ -15,7 +15,7 @@ const field = new index_1.PrimeField(modulus);
 const demoStark = new index_1.Stark({
     field: field,
     constantCount: 2,
-    tFunction: {
+    tExpressions: {
         'n0': 'r0 + 1 + k0 + 2 * k1'
     },
     tConstraints: [
@@ -30,11 +30,11 @@ let steps = 2 ** 6, result = 292n;
 const inputs = [1n];
 const constants = [{
         values: [1n, 2n, 3n, 4n],
-        pattern: 1 /* repeat */
+        pattern: 'repeat'
     },
     {
         values: [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n],
-        pattern: 2 /* stretch */
+        pattern: 'spread'
     }];
 const assertions = [
     { step: 0, register: 0, value: 1n },

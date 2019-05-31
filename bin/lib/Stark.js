@@ -21,13 +21,13 @@ class Stark {
         this.registerCount = vConfig.registerCount;
         this.constantCount = vConfig.constantCount;
         this.constraintCount = vConfig.constraintCount;
-        this.constraintDegree = vConfig.tConstraintDegree;
+        this.maxConstraintDegree = vConfig.tConstraints.maxDegree;
         this.extensionFactor = vConfig.extensionFactor;
         this.exeSpotCheckCount = vConfig.exeSpotCheckCount;
         this.friSpotCheckCount = vConfig.friSpotCheckCount;
         this.applyTransitions = vConfig.tFunction;
-        this.applyConstraints = vConfig.tConstraints;
-        this.evaluateConstraints = vConfig.tConstraintEvaluator;
+        this.applyConstraints = vConfig.tConstraints.batchEvaluator;
+        this.evaluateConstraints = vConfig.tConstraints.evaluator;
         this.hashAlgorithm = vConfig.hashAlgorithm;
         this.logger = logger || new utils_1.Logger();
     }
@@ -386,7 +386,7 @@ class Stark {
         // deg(Q(x)) = steps * deg(constraints) = deg(D(x)) + deg(Z(x))
         // thus, deg(D(x)) = deg(Q(x)) - steps;
         // and, linear combination degree is max(deg(D(x)), steps)
-        const degree = steps * Math.max(this.constraintDegree - 1, 1);
+        const degree = steps * Math.max(this.maxConstraintDegree - 1, 1);
         return degree;
     }
 }
@@ -397,11 +397,11 @@ function buildReadonlyRegisters(constants, context, domain) {
     const registers = new Array(constants ? constants.length : 0);
     for (let i = 0; i < registers.length; i++) {
         let c = constants[i];
-        if (c.pattern === 1 /* repeat */) {
+        if (c.pattern === 'repeat') {
             registers[i] = new registers_1.RepeatedConstants(c.values, context, domain !== undefined);
         }
-        else if (c.pattern === 2 /* stretch */) {
-            registers[i] = new registers_1.StretchedConstants(c.values, context, domain);
+        else if (c.pattern === 'spread') {
+            registers[i] = new registers_1.SpreadConstants(c.values, context, domain);
         }
     }
     return registers;
