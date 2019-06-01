@@ -2,57 +2,32 @@
 // ================================================================================================
 import * as assert from 'assert';
 import { Stark, PrimeField } from '../index';
-import { ExecutionFrame, EvaluationFrame } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
 // ================================================================================================
-// define a filed in which we'll be working
-const modulus = 2n**32n - 3n * 2n**25n + 1n;
-const field = new PrimeField(modulus);
+// This example shows how to create a STARK to verify computation of Fibonacci numbers. Because a
+// Fibonacci number depends on 2 values preceding it, we set up the STARK with 2 mutable registers
+// holding 2 consecutive Fibonacci numbers. So, in effect, a single step in the computation
+// advances the Fibonacci sequence by 2 values.
 
-// define state transition function for Fibonacci sequence:
-// each step advances Fibonacci sequence by 2 values
-function fibTransition(this: ExecutionFrame) {
-    const v0 = this.getValue(0);
-    const v1 = this.getValue(1);
-    const v2 = this.add(v0, v1);
-    const v3 = this.add(v1, v2);
-
-    this.setNextValue(0, v2);
-    this.setNextValue(1, v3);
-}
-
-// make sure register 0 is updated correctly
-function fibConstraint1(this: EvaluationFrame) {
-    const v0 = this.getValue(0);
-    const v1 = this.getValue(1);
-    const v2 = this.getNextValue(0);
-    return this.sub(v2, this.add(v0, v1));
-}
-
-// make sure register 1 is updated correctly
-function fibConstraint2(this: EvaluationFrame) {
-    const v0 = this.getValue(0);
-    const v1 = this.getValue(1);
-    const v2 = this.add(v0, v1);
-    const v3 = this.getNextValue(1);
-    return this.sub(v3, this.add(v1, v2));
-}
-
-// create the STARK for Fibonacci calculation
 const fibStark = new Stark({
-    field               : field,
-    registerCount       : 2,                            // we are working with 2 registers
-    tFunction           : fibTransition,
-    tConstraints        : [fibConstraint1, fibConstraint2],
-    tConstraintDegree   : 1                             // max degree of our constraints is 1
+    field: new PrimeField(2n**32n - 3n * 2n**25n + 1n),
+    tExpressions: {
+        'n0': 'r0 + r1',
+        'n1': 'r1 + (r0 + r1)'
+    },
+    tConstraints: [
+        'n0 - (r0 + r1)',
+        'n1 - (r1 + r0 + r1)'
+    ],
+    tConstraintDegree: 1 // max degree of our constraints is 1
 });
 
 // TESTING
 // ================================================================================================
-//let steps = 2**6, result = 1783540607n;           // ~50 ms to prove, ~12 KB proof size
-let steps = 2**13, result = 203257732n;             // ~1 second to prove, ~147 KB proof size
-//let steps = 2**17, result = 2391373091n;          // ~13 seconds to prove, ~290 KB proof size
+//const steps = 2**6, result = 1783540607n;         // ~50 ms to prove, ~12 KB proof size
+const steps = 2**13, result = 203257732n;           // ~1 second to prove, ~147 KB proof size
+//const steps = 2**17, result = 2391373091n;        // ~13 seconds to prove, ~290 KB proof size
 
 // set up inputs and assertions
 const inputs = [1n, 1n];                            // step 0 and 1 in Fibonacci sequence are 1

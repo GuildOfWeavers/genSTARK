@@ -1,74 +1,48 @@
 // IMPORTS
 // ================================================================================================
 import { Stark, PrimeField } from '../index';
-import { ExecutionFrame, EvaluationFrame, ConstantPattern } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
 // ================================================================================================
-// This demo stark shows how different types of constant registers can be used. The transition
+// This example shows how different types of constant registers can be used. The transition
 // function is very simple: it operates with 1 mutable register and 2 readonly registers. The full
 // execution trace is shown at the end of this file. 
 
-// define a filed in which we'll be working
-const modulus = 96769n;
-const field = new PrimeField(modulus);
-
-// define state transition function
-function demoTransition(this: ExecutionFrame) {
-    const v0 = this.getValue(0);
-    const k0 = this.getConst(0);
-    const k1 = this.getConst(1);
-
-    // nv0 = v0 + 1 + k0 + 2 * k1
-    const nv0 = this.add(this.add(this.add(v0, 1n), k0), this.mul(2n, k1));
-    this.setNextValue(0, nv0);
-}
-
-// define state transition constraint
-function demoConstraint(this: EvaluationFrame) {
-    const v0 = this.getValue(0);
-    const k0 = this.getConst(0);
-    const k1 = this.getConst(1);
-    const nv0 = this.getNextValue(0);
-
-    return field.sub(nv0, field.add(field.add(field.add(v0, 1n), k0), field.mul(2n, k1)));
-}
-
-// define the STARK for the computation
 const demoStark = new Stark({
-    field               : field,
-    registerCount       : 1,
-    constantCount       : 2,
-    tFunction           : demoTransition,
-    tConstraints        : [demoConstraint],
-    tConstraintDegree   : 1
+    field: new PrimeField(96769n),
+    tExpressions: {
+        'n0': 'r0 + 1 + k0 + 2 * k1'
+    },
+    tConstraints: [
+        'n0 - (r0 + 1 + k0 + 2 * k1)'
+    ],
+    tConstraintDegree: 1,
+    constants: [{
+        values  : [1n, 2n, 3n, 4n],
+        pattern : 'repeat'
+    }, {
+        values  : [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n],
+        pattern : 'spread'
+    }]
 });
 
 // TESTING
 // ================================================================================================
-let steps = 2**6, result = 292n;
+const steps = 2**6, result = 292n;
 
 // set up inputs and assertions
 const inputs = [1n];
-const constants = [{
-    values: [1n, 2n, 3n, 4n],
-    pattern: ConstantPattern.repeat
-},
-{
-    values: [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n],
-    pattern: ConstantPattern.stretch
-}];
 const assertions = [
     { step: 0, register: 0, value: 1n },
     { step: steps-1, register: 0, value: result }
 ];
 
 // generate a proof
-const proof = demoStark.prove(assertions, steps, inputs, constants);
+const proof = demoStark.prove(assertions, steps, inputs);
 console.log('-'.repeat(20));
 
 // verify the proof
-demoStark.verify(assertions, proof, steps, constants);
+demoStark.verify(assertions, proof, steps);
 console.log('-'.repeat(20));
 
 // EXECUTION TRACE

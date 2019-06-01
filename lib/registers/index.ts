@@ -1,2 +1,2 @@
 export { RepeatedConstants } from './RepeatedConstants';
-export { StretchedConstants } from './StretchedConstants';
+export { SpreadConstants } from './SpreadConstants';
