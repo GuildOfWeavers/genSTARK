@@ -6,14 +6,12 @@ const assert = require("assert");
 const index_1 = require("../index");
 // STARK DEFINITION
 // ================================================================================================
-// define a filed in which we'll be working
-const modulus = 2n ** 32n - 3n * 2n ** 25n + 1n;
-const field = new index_1.PrimeField(modulus);
-// define state transition function for Fibonacci sequence:
-// each step advances Fibonacci sequence by 2 values
-// create the STARK for Fibonacci calculation
+// This example shows how to create a STARK to verify computation of Fibonacci numbers. Because a
+// Fibonacci number depends on 2 values preceding it, we set up the STARK with 2 mutable registers
+// holding 2 consecutive Fibonacci numbers. So, in effect, a single step in the computation
+// advances the Fibonacci sequence by 2 values.
 const fibStark = new index_1.Stark({
-    field: field,
+    field: new index_1.PrimeField(2n ** 32n - 3n * 2n ** 25n + 1n),
     tExpressions: {
         'n0': 'r0 + r1',
         'n1': 'r1 + (r0 + r1)'

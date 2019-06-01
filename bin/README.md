@@ -1,5 +1,8 @@
 # genSTARK
-This library is intended to help you quickly and easily generate STARK-based proofs of computation using JavaScript. The goal is to take care of as much boilerplate code as possible, and let you focus on the specifics of the task at hand.
+This library is intended to help you quickly and easily generate STARK-based proofs of computation using JavaScript. The goal is to take care of as much boilerplate code as possible, and let you focus on the specific "business logic" of your computations.
+
+### Background
+A STARK is a novel proof-of-computation scheme that allows you to create an efficiently verifiable proof that a computation was executed correctly. The scheme was developed by Eli-Ben Sasson and team at Technion-Israel Institute of Technology. STARKs do not require an initial trusted setup, and rely on very few cryptographic assumptions. See [references](#References) for more info.
 
 ### Disclaimer
 **DO NOT USE THIS LIBRARY IN PRODUCTION.** At this point, this is a research-grade library. It has known and unknown bugs and security flaws.
@@ -10,27 +13,27 @@ $ npm install @guildofweavers/genstark --save
 ```
 
 # Usage
-Here is a trivial example of how to use this library. In this example, the computation is just adding 1 to the current value at each step. That is: x<sub>n+1</sub> = x<sub>n</sub> + 1.
+Here is a trivial example of how to use this library. In this example, the computation is just adding 2 to the current value at each step. That is: x<sub>n+1</sub> = x<sub>n</sub> + 2.
 
 ```TypeScript
 import { Stark, PrimeField } from '@guildofweavers/genstark';
 
-// build a STARK for this computation
+// define a STARK for this computation
 const fooStark = new Stark({
     field               : new PrimeField(2n**32n - 3n * 2n**25n + 1n),
-    tExpressions        : { 'n0': 'r0 + 1' },   // define transition function
-    tConstraints        : ['n0 - (r0 + 1)'],    // define transition constraints
+    tExpressions        : { 'n0': 'r0 + 2' },   // define transition function
+    tConstraints        : ['n0 - (r0 + 2)'],    // define transition constraints
     tConstraintDegree   : 1                     // degree of our constraint is 1
 });
 
-// create a proof that if we start computation at 1, we end up at 64 after 64 steps
+// create a proof that if we start computation at 1, we end up at 127 after 64 steps
 const assertions = [
     { register: 0, step: 0, value: 1n },    // value at first step is 1
-    { register: 0, step: 63, value: 64n }   // value at last step is 64
+    { register: 0, step: 63, value: 127n }  // value at last step is 127
 ];
 const proof = fooStark.prove(assertions, 64, [1n]);
 
-// verify that if we start at 1 and run the computation for 64 steps, we get 64
+// verify that if we start at 1 and run the computation for 64 steps, we get 127
 const result = fooStark.verify(assertions, proof, 64);
 console.log(result); // true
 ```
@@ -145,11 +148,11 @@ The above example defines a transition expression for a single register. Here is
 * `n0` is a reference to the next value of mutable register 0.
 * `k0` is a reference to the current value of readonly register 0.
 
-So, the expression says: next value of mutable register 0 is equal to the current value of the register, plus current value of readonly register 0, plus 1.
+So, the expression says: the next value of mutable register 0 is equal to the current value of the register, plus the current value of readonly register 0, plus 1.
 
 You can use simple algebraic operators `+`, `-`, `*`, `/`, `^` to define expressions of any complexity. You can also have up to 64 mutable registers and up to 64 readonly registers. In case of multiple registers, you can refer to them as `r1`, `r2`, `r3`, etc.
 
-One thing to note, you cannot reference future register states within the transition expression. So, something like this would not be valid:
+One thing to note, you cannot reference future register states within a transition expression. So, something like this would not be valid:
 ```TypeScript
 {
     'n0': 'r0 + 1',
@@ -173,9 +176,9 @@ Similarly to transition function, a transition constraint is defined using algeb
     `n0 - (r0 + k0 + 1)`
 ]
 ```
-However, unlike transition expressions, transition constraints can reference future states of mutable registers.
+However, unlike transition function, transition constraints can reference future states of mutable registers.
 
-**Note:** you should note the highest algebraic degree you use in the constraint expressions and pass it to the `Stark` constructor as `tConstraintDegree` property. For example, if you raise register value to power 3, your `tConstraintDegree` should be set to 3.
+**Note:** you should note the highest algebraic degree you use in the constraint expressions and pass it to the `Stark` constructor as `tConstraintDegree` property. For example, if you raise value of some register to power 3 (or perform equivalent computation), your `tConstraintDegree` should be set to 3.
 
 ## Assertions
 Assertions (or boundary constraints) are objects that specify the exact value of a given mutable register at a given step. An assertion object has the following form:
@@ -189,7 +192,7 @@ interface Assertion {
 ```
 
 ## Constants
-In addition to mutable registers, you can define STARKs with readonly registers. A readonly register is a register whose value cannot be changed during the computation. You can reference readonly registers in your expressions by using the `k` prefix. For example, `k0`, `k1`, `k2` etc.
+In addition to mutable registers, you can define STARKs with readonly registers. A readonly register is a register whose value cannot be changed by a transition function. You can reference readonly registers in your expressions by using the `k` prefix. For example, `k0`, `k1`, `k2` etc.
 
 You can defined readonly registers by providing constant definitions to `Stark` constructor. Constant definitions have the following form:
 ```TypeScript
@@ -206,18 +209,18 @@ where, `values` is an array of constant values for the register, and `pattern` i
 For more explanation see [demo](/examples/demo.ts) example.
 
 # Performance
-Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz:
+Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single thread):
 
-| STARK     | Degree | Registers | Steps          | Proof Time | Proof Size |
-| --------- | :----: | :-------: | :------------: | :--------: | :--------: |
-| MiMC      | 3      | 1         | 2<sup>6</sup>  | 100 ms     | 46 KB      |
-| MiMC      | 3      | 1         | 2<sup>13</sup> | 4.5 sec    | 220 KB     |
-| MiMC      | 3      | 1         | 2<sup>17</sup> | 72 sec     | 394 KB     |
-| Fibonacci | 1      | 2         | 2<sup>6</sup>  | 50 ms      | 12 KB      |
-| Fibonacci | 1      | 2         | 2<sup>13</sup> | 1 sec      | 147 KB     |
-| Fibonacci | 1      | 2         | 2<sup>17</sup> | 13 sec     | 290 KB     |
+| STARK     | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
+| --------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
+| MiMC      | 256 bits   | 3      | 1         | 2<sup>6</sup>  | 100 ms     | 46 KB      |
+| MiMC      | 256 bits   | 3      | 1         | 2<sup>13</sup> | 4.5 sec    | 220 KB     |
+| MiMC      | 256 bits   | 3      | 1         | 2<sup>17</sup> | 72 sec     | 394 KB     |
+| Fibonacci | 32 bits    | 1      | 2         | 2<sup>6</sup>  | 50 ms      | 12 KB      |
+| Fibonacci | 32 bits    | 1      | 2         | 2<sup>13</sup> | 1 sec      | 147 KB     |
+| Fibonacci | 32 bits    | 1      | 2         | 2<sup>17</sup> | 13 sec     | 290 KB     |
 
-The potential to improve proof time is at least 10x (by moving hashing and math functions out of JavaScript), and potentially as much as 100x (by using SIMD and parallelism).
+The potential to improve proof time is at least 10x (by moving hashing and math functions out of JavaScript), and potentially much higher (by using SIMD and parallelism).
 
 # References
 This library is largely based on Vitalik Buterin's [zk-STARK/MiMC tutorial](https://github.com/ethereum/research/tree/master/mimc_stark). Other super useful resources:

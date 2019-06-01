@@ -4,11 +4,10 @@ import { Stark, PrimeField } from '../index';
 
 // STARK DEFINITION
 // ================================================================================================
-// This demo stark shows how different types of constant registers can be used. The transition
+// This example shows how different types of constant registers can be used. The transition
 // function is very simple: it operates with 1 mutable register and 2 readonly registers. The full
 // execution trace is shown at the end of this file. 
 
-// define the STARK for the computation
 const demoStark = new Stark({
     field: new PrimeField(96769n),
     tExpressions: {

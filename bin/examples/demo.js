@@ -5,10 +5,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const index_1 = require("../index");
 // STARK DEFINITION
 // ================================================================================================
-// This demo stark shows how different types of constant registers can be used. The transition
+// This example shows how different types of constant registers can be used. The transition
 // function is very simple: it operates with 1 mutable register and 2 readonly registers. The full
 // execution trace is shown at the end of this file. 
-// define the STARK for the computation
 const demoStark = new index_1.Stark({
     field: new index_1.PrimeField(96769n),
     tExpressions: {

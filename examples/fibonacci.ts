@@ -5,16 +5,13 @@ import { Stark, PrimeField } from '../index';
 
 // STARK DEFINITION
 // ================================================================================================
-// define a filed in which we'll be working
-const modulus = 2n**32n - 3n * 2n**25n + 1n;
-const field = new PrimeField(modulus);
+// This example shows how to create a STARK to verify computation of Fibonacci numbers. Because a
+// Fibonacci number depends on 2 values preceding it, we set up the STARK with 2 mutable registers
+// holding 2 consecutive Fibonacci numbers. So, in effect, a single step in the computation
+// advances the Fibonacci sequence by 2 values.
 
-// define state transition function for Fibonacci sequence:
-// each step advances Fibonacci sequence by 2 values
-
-// create the STARK for Fibonacci calculation
 const fibStark = new Stark({
-    field               : field,
+    field: new PrimeField(2n**32n - 3n * 2n**25n + 1n),
     tExpressions: {
         'n0': 'r0 + r1',
         'n1': 'r1 + (r0 + r1)'
@@ -23,7 +20,7 @@ const fibStark = new Stark({
         'n0 - (r0 + r1)',
         'n1 - (r1 + r0 + r1)'
     ],
-    tConstraintDegree   : 1 // max degree of our constraints is 1
+    tConstraintDegree: 1 // max degree of our constraints is 1
 });
 
 // TESTING
