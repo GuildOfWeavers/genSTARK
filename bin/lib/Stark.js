@@ -258,13 +258,27 @@ class Stark {
             nodes: proof.evaluations.nodes,
             depth: proof.evaluations.depth
         };
-        if (!merkle_1.MerkleTree.verifyBatch(eRoot, augmentedPositions, eProof, this.hashAlgorithm)) {
-            throw new StarkError_1.StarkError(`Verification of evaluation Merkle proof failed`);
+        try {
+            if (!merkle_1.MerkleTree.verifyBatch(eRoot, augmentedPositions, eProof, this.hashAlgorithm)) {
+                throw new StarkError_1.StarkError(`Verification of evaluation Merkle proof failed`);
+            }
+        }
+        catch (error) {
+            if (error instanceof StarkError_1.StarkError === false) {
+                throw new StarkError_1.StarkError(`Verification of evaluation Merkle proof failed`, error);
+            }
         }
         this.logger.log(label, `Verified evaluation merkle proof`);
         // 5 ----- verify linear combination proof
-        if (!merkle_1.MerkleTree.verifyBatch(proof.degree.root, positions, proof.degree.lcProof, this.hashAlgorithm)) {
-            throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`);
+        try {
+            if (!merkle_1.MerkleTree.verifyBatch(proof.degree.root, positions, proof.degree.lcProof, this.hashAlgorithm)) {
+                throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`);
+            }
+        }
+        catch (error) {
+            if (error instanceof StarkError_1.StarkError === false) {
+                throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`, error);
+            }
         }
         const lEvaluations = new Map();
         const lEvaluationValues = utils_1.buffersToBigInts(proof.degree.lcProof.values);

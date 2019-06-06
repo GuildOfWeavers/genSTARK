@@ -312,14 +312,28 @@ export class Stark {
             nodes   : proof.evaluations.nodes,
             depth   : proof.evaluations.depth
         };
-        if (!MerkleTree.verifyBatch(eRoot, augmentedPositions, eProof, this.hashAlgorithm)) {
-            throw new StarkError(`Verification of evaluation Merkle proof failed`);
+        try {
+            if (!MerkleTree.verifyBatch(eRoot, augmentedPositions, eProof, this.hashAlgorithm)) {
+                throw new StarkError(`Verification of evaluation Merkle proof failed`);
+            }
+        }
+        catch (error) {
+            if (error instanceof StarkError === false) {
+                throw new StarkError(`Verification of evaluation Merkle proof failed`, error);
+            }
         }
         this.logger.log(label, `Verified evaluation merkle proof`);
 
         // 5 ----- verify linear combination proof
-        if (!MerkleTree.verifyBatch(proof.degree.root, positions, proof.degree.lcProof, this.hashAlgorithm)) {
-            throw new StarkError(`Verification of linear combination Merkle proof failed`);
+        try {
+            if (!MerkleTree.verifyBatch(proof.degree.root, positions, proof.degree.lcProof, this.hashAlgorithm)) {
+                throw new StarkError(`Verification of linear combination Merkle proof failed`);
+            }
+        }
+        catch (error) {
+            if (error instanceof StarkError === false) {
+                throw new StarkError(`Verification of linear combination Merkle proof failed`, error);
+            }
         }
 
         const lEvaluations = new Map<number, bigint>();

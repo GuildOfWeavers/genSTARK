@@ -61,7 +61,7 @@ Computed random linear combination of evaluations in 468 ms
 Computed low-degree proof in 1358 ms
 STARK computed in 4530 ms
 --------------------
-Proof serialized in 3 ms; size: 229.25 KB
+Proof serialized in 3 ms; size: 220.04 KB
 --------------------
 Proof parsed in 8 ms
 --------------------
@@ -113,7 +113,7 @@ The meaning of the parameters is as follows:
 | ---------- | ----------- |
 | assertions | An array of [Assertion](#Assertions) objects (also called boundary constraints). These assertions specify register values at specific steps of a valid computation. At least 1 assertion must be provided. |
 | steps      | Number of steps in the computation. Number of steps must be a power of 2. |
-| inputs     | An array of `BigInt`'s containing initial values for all mutable registers. The length of the array must be the same as `registerCount` specified in STARK config. |
+| inputs     | An array of `BigInt`'s containing initial values for all mutable registers. The length of the array must be the same as the number of transition function expressions specified in STARK config. |
 
 
 Once you've generated a proof, you can verify it using `Stark.verify()` method like so:
