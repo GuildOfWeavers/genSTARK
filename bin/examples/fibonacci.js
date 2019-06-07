@@ -17,10 +17,11 @@ const fibStark = new index_1.Stark({
         'n0': 'a0',
         'n1': 'r1 + a0'
     },
-    tConstraints: [
-        'n0 - (r0 + r1)',
-        'n1 - (r1 + r0 + r1)'
-    ],
+    tConstraints: {
+        [index_1.script]: 'a0: r0 + r1',
+        'q0': 'n0 - a0',
+        'q1': 'n1 - (r1 + a0)'
+    },
     tConstraintDegree: 1 // max degree of our constraints is 1
 });
 // TESTING

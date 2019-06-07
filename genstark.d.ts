@@ -17,10 +17,10 @@ declare module '@guildofweavers/genstark' {
         field: FiniteField;
 
         /** A set of transition expressions for all mutable registers */
-        tExpressions: { [register: string]: string } & { [script]?: string;};
+        tExpressions: { [register: string]: string } & { [script]?: string; };
 
-        /** A list of transition constraints for the computation */
-        tConstraints: string[];
+        /** A set of transition constraints for the computation */
+        tConstraints: { [register: string]: string } & { [script]?: string; };
 
         /** Maximum degree of transition constraints */
         tConstraintDegree: number;
@@ -41,6 +41,7 @@ declare module '@guildofweavers/genstark' {
         hashAlgorithm?: HashAlgorithm;
     }
 
+    /** A symbol for defining scripts in transition functions and constraints */
     export const script: unique symbol;
 
     export class Stark {

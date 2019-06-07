@@ -4,7 +4,7 @@ import {
     StarkConfig, TransitionFunction, ConstraintEvaluator, BatchConstraintEvaluator, HashAlgorithm, 
     Constant, ConstantPattern
 } from '@guildofweavers/genstark';
-import { parseExpression, AstNode, symScript, parseScript } from './expressions';
+import { parseExpression, AstNode, symScript, parseScript, Script } from './expressions';
 import { isPowerOf2 } from './utils';
 
 // MODULE VARIABLES
@@ -90,7 +90,7 @@ export function parseStarkConfig(config: StarkConfig) {
     }
 
     // transition function
-    if (!config.tExpressions) throw new TypeError('Transition function was not provided');
+    if (!config.tExpressions) throw new TypeError('Transition expressions were not provided');
     const tExpressions = new Map(Object.entries(config.tExpressions));
     const registerCount = tExpressions.size;
     if (registerCount === 0) {
@@ -103,19 +103,19 @@ export function parseStarkConfig(config: StarkConfig) {
     const tFunction = buildTransitionFunction(tExpressions, tFunctionScript, constantCount);
     
     // transition constraints
-    if (!config.tConstraints) throw new TypeError('Transition constraints array was not provided');
-    const cExpressions = config.tConstraints;
-    if (Array.isArray(!cExpressions)) {
-        throw new TypeError('Transition constraints must be provided as an array');
+    if (!config.tConstraints) throw new TypeError('Transition constraints were not provided');
+    const cExpressions = new Map(Object.entries(config.tConstraints));
+    const constraintCount = cExpressions.size;
+    if (constraintCount === 0) {
+        throw new TypeError('At least one transition constraint must be provided');
     }
-    const constraintCount = cExpressions.length;
-    if (constraintCount === 0) throw new TypeError('Transition constraints array was empty');
     if (constraintCount > MAX_CONSTRAINT_COUNT) {
         throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
     }
-    const tConstraints = parseTransitionConstraints(cExpressions, registerCount, constantCount);
-    const tBatchConstraintEvaluator = buildBatchConstraintEvaluator(tConstraints);
-    const tConstraintEvaluator = buildConstraintEvaluator(tConstraints);
+    const tConstraintScript = config.tExpressions[symScript as any];
+    const tConstraints = parseTransitionConstraints(cExpressions, tConstraintScript, registerCount, constantCount);
+    const tBatchConstraintEvaluator = buildBatchConstraintEvaluator(tConstraints.expressions, tConstraints.script);
+    const tConstraintEvaluator = buildConstraintEvaluator(tConstraints.expressions, tConstraints.script);
 
     // execution trace spot checks
     const exeSpotCheckCount = config.exeSpotCheckCount || DEFAULT_EXE_SPOT_CHECK_COUNT;
@@ -173,19 +173,16 @@ function buildTransitionFunction(expressions: Map<string,string>, script: string
         throw new Error(`Register reference '${name}${index}' is invalid`);
     };
 
-    let variables = new Set<string>();
+    let variables = new Set<string>(), scriptCode = '';
     if (script) {
         try {
-            const s = parseScript(script, registerCount, constantCount);
-            variables = s.variables;
-            script = s.toCode(regRefBuilder);
+            const parsedScript = parseScript(script, registerCount, constantCount);
+            variables = parsedScript.variables;
+            scriptCode = parsedScript.toCode(regRefBuilder);
         }
         catch (error) {
             throw new Error(`Failed to build transition function script: ${error.message}`);
         }
-    }
-    else {
-        script = '';
     }
 
     let i = 0;
@@ -202,32 +199,43 @@ function buildTransitionFunction(expressions: Map<string,string>, script: string
     }
 
     const cBody = `  throw new Error('Error in transition function at step ' + i + ':' + error.message);`;
-    const lBody = `  for (; i < steps - 1; i++) {\n${script}\n    ${assignments.join(';\n')};\n  }`;
+    const lBody = `  for (; i < steps - 1; i++) {\n${scriptCode}\n    ${assignments.join(';\n')};\n  }`;
     const fBody = `let i = 0;\ntry {\n${lBody}\n}\ncatch(error){\n${cBody}\n}`;
     return new Function('r', 'k', 'steps', 'field', fBody) as TransitionFunction;
 }
 
-function parseTransitionConstraints(expressions: string[], registerCount: number, constantCount: number) {
-    const constraintCount = expressions.length;
+function parseTransitionConstraints(expressions: Map<string,string>, script: string | undefined, registerCount: number, constantCount: number) {
+    const constraintCount = expressions.size;
     const output = new Array<AstNode>(constraintCount);
+
+    let parsedScript;
+    let variables = new Set<string>();
+    if (script) {
+        try {
+            parsedScript = parseScript(script, registerCount, constantCount);
+            variables = parsedScript.variables;
+        }
+        catch (error) {
+            throw new Error(`Failed to build transition constraints script: ${error.message}`);
+        }
+    }
 
     let i = 0;
     try {
-        let variables = new Set<string>(); // TODO
         for (; i < constraintCount; i++) {
-            let expression = expressions[i];
+            let expression = expressions.get(`q${i}`);
             if (!expression) throw new Error('transition constraint is undefined');
             output[i] = parseExpression(expression, variables, registerCount, constantCount);
         }
     }
     catch (error) {
-        throw new Error(`Failed to parse transition constraint ${i}: ${error.message}`);
+        throw new Error(`Failed to parse transition constraint q${i}: ${error.message}`);
     }
 
-    return output;
+    return { script: parsedScript, expressions: output};
 }
 
-function buildBatchConstraintEvaluator(expressions: AstNode[]): BatchConstraintEvaluator {
+function buildBatchConstraintEvaluator(expressions: AstNode[], script: Script | undefined): BatchConstraintEvaluator {
 
     const constraintCount = expressions.length;
     const assignments = new Array<string>(constraintCount);
@@ -246,6 +254,8 @@ function buildBatchConstraintEvaluator(expressions: AstNode[]): BatchConstraintE
         throw new Error(`Register reference '${name}${index}' is invalid`);
     };
 
+    const scriptCode = script ? script.toCode(regRefBuilder) : '';
+
     let i = 0;
     try {
         for (; i < constraintCount; i++) {
@@ -258,23 +268,25 @@ function buildBatchConstraintEvaluator(expressions: AstNode[]): BatchConstraintE
     }
 
     const cBody = `  if (i < nfSteps && i % skip === 0) {\n    ${validators.join(';\n')}\n  }`;
-    const lBody = `  ${assignments.join(';\n')};\n${cBody}`
+    const lBody = `  ${scriptCode}\n${assignments.join(';\n')};\n${cBody}`
     const fBody = `const nfSteps = steps - skip;\nfor (let i = 0; i < steps; i++) {\n${lBody}\n}`;
     return new Function('q', 'r', 'k', 'steps', 'skip', 'field', fBody) as BatchConstraintEvaluator;
 }
 
-function buildConstraintEvaluator(expressions: AstNode[]): ConstraintEvaluator {
+function buildConstraintEvaluator(expressions: AstNode[], script: Script | undefined): ConstraintEvaluator {
 
     const constraintCount = expressions.length;
     const regRefBuilder = function(name: string, index: number): string {
         return `${name}[${index}]`;
     }
 
+    const scriptCode = script ? script.toCode(regRefBuilder) : '';
+
     const assignments = new Array<string>(constraintCount);
     for (let i = 0; i < constraintCount; i++) {
         assignments[i] = `q[${i}] = ${expressions[i].toCode(regRefBuilder)};`;
     }
 
-    const body = `const q = new Array(${constraintCount});\n${assignments.join('\n')}\nreturn q;`;
+    const body = `const q = new Array(${constraintCount});\n${scriptCode}\n${assignments.join('\n')}\nreturn q;`;
     return new Function('r', 'n', 'k', 'field', body) as ConstraintEvaluator;
 }

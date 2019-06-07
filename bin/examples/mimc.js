@@ -17,9 +17,9 @@ const mimcStark = new index_1.Stark({
     tExpressions: {
         'n0': 'r0^3 + k0'
     },
-    tConstraints: [
-        'n0 - (r0^3 + k0)'
-    ],
+    tConstraints: {
+        'q0': 'n0 - (r0^3 + k0)'
+    },
     tConstraintDegree: 3,
     constants: [{
             values: roundConstants,
