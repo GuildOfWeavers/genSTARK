@@ -7,13 +7,32 @@ class LiteralNode {
         this.value = BigInt(value);
     }
     toCode() {
-        return `${this.value.toString(10)}n`;
+        if (this.value < 0) {
+            return `(${this.value.toString(10)}n)`;
+        }
+        else {
+            return `${this.value.toString(10)}n`;
+        }
     }
     toString() {
         return this.value.toString(10);
     }
 }
 exports.LiteralNode = LiteralNode;
+// VARIABLE
+// ================================================================================================
+class VariableNode {
+    constructor(name) {
+        this.name = name;
+    }
+    toCode() {
+        return this.name;
+    }
+    toString() {
+        return this.name;
+    }
+}
+exports.VariableNode = VariableNode;
 // REGISTER
 // ================================================================================================
 class RegisterNode {

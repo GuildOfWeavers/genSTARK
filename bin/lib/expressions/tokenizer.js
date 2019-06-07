@@ -2,10 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 // MODULE VARIABLES
 // ================================================================================================
-const matchers = [
+exports.matchers = [
     { type: 'space', match: /^\s+/ },
     { type: 'literal', match: /^(\d+)/ },
     { type: 'register', match: /^[nrk]\d{1,2}/ },
+    { type: 'variable', match: /^[abcdef]\d{1,2}/ },
     { type: 'paren', match: /^[\(\)]/ },
     { type: 'operator', match: /^[\+\-\*\/\^]/ }
 ];
@@ -36,7 +37,7 @@ class Token {
     // PUBLIC FUNCTIONS
     // --------------------------------------------------------------------------------------------
     static read(expression) {
-        const matcher = matchers.find(m => m.match.test(expression));
+        const matcher = exports.matchers.find(m => m.match.test(expression));
         if (!matcher)
             throw new Error('Expression contains an invalid token');
         const token = new Token(matcher.type, expression.match(matcher.match)[0]);

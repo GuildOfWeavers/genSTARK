@@ -13,8 +13,9 @@ const index_1 = require("../index");
 const fibStark = new index_1.Stark({
     field: new index_1.PrimeField(2n ** 32n - 3n * 2n ** 25n + 1n),
     tExpressions: {
-        'n0': 'r0 + r1',
-        'n1': 'r1 + (r0 + r1)'
+        [index_1.script]: 'a0: r0 + r1',
+        'n0': 'a0',
+        'n1': 'r1 + a0'
     },
     tConstraints: [
         'n0 - (r0 + r1)',

@@ -85,7 +85,8 @@ function parseStarkConfig(config) {
     if (registerCount > MAX_REGISTER_COUNT) {
         throw new TypeError(`Number of state registers cannot exceed ${MAX_REGISTER_COUNT}`);
     }
-    const tFunction = buildTransitionFunction(tExpressions, constantCount);
+    const tFunctionScript = config.tExpressions[expressions_1.symScript];
+    const tFunction = buildTransitionFunction(tExpressions, tFunctionScript, constantCount);
     // transition constraints
     if (!config.tConstraints)
         throw new TypeError('Transition constraints array was not provided');
@@ -137,7 +138,7 @@ function parseStarkConfig(config) {
 exports.parseStarkConfig = parseStarkConfig;
 // HELPER FUNCTIONS
 // ================================================================================================
-function buildTransitionFunction(expressions, constantCount) {
+function buildTransitionFunction(expressions, script, constantCount) {
     const registerCount = expressions.size;
     const assignments = new Array(registerCount);
     const regRefBuilder = function (name, index) {
@@ -152,13 +153,27 @@ function buildTransitionFunction(expressions, constantCount) {
         }
         throw new Error(`Register reference '${name}${index}' is invalid`);
     };
+    let variables = new Set();
+    if (script) {
+        try {
+            const s = expressions_1.parseScript(script, registerCount, constantCount);
+            variables = s.variables;
+            script = s.toCode(regRefBuilder);
+        }
+        catch (error) {
+            throw new Error(`Failed to build transition function script: ${error.message}`);
+        }
+    }
+    else {
+        script = '';
+    }
     let i = 0;
     try {
         for (; i < registerCount; i++) {
             let expression = expressions.get(`n${i}`);
             if (!expression)
                 throw new Error('transition expression is undefined');
-            let ast = expressions_1.parseExpression(expression, registerCount, constantCount);
+            let ast = expressions_1.parseExpression(expression, variables, registerCount, constantCount);
             assignments[i] = `r[${i}][i+1] = ${ast.toCode(regRefBuilder)}`;
         }
     }
@@ -166,7 +181,7 @@ function buildTransitionFunction(expressions, constantCount) {
         throw new Error(`Failed to build transition expression for register n${i}: ${error.message}`);
     }
     const cBody = `  throw new Error('Error in transition function at step ' + i + ':' + error.message);`;
-    const lBody = `  for (; i < steps - 1; i++) {\n    ${assignments.join(';\n')};\n  }`;
+    const lBody = `  for (; i < steps - 1; i++) {\n${script}\n    ${assignments.join(';\n')};\n  }`;
     const fBody = `let i = 0;\ntry {\n${lBody}\n}\ncatch(error){\n${cBody}\n}`;
     return new Function('r', 'k', 'steps', 'field', fBody);
 }
@@ -175,11 +190,12 @@ function parseTransitionConstraints(expressions, registerCount, constantCount) {
     const output = new Array(constraintCount);
     let i = 0;
     try {
+        let variables = new Set(); // TODO
         for (; i < constraintCount; i++) {
             let expression = expressions[i];
             if (!expression)
                 throw new Error('transition constraint is undefined');
-            output[i] = expressions_1.parseExpression(expression, registerCount, constantCount);
+            output[i] = expressions_1.parseExpression(expression, variables, registerCount, constantCount);
         }
     }
     catch (error) {

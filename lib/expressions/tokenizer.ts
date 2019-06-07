@@ -1,13 +1,14 @@
 // INTERFACES
 // ================================================================================================
-export type TokenType = 'space' | 'literal' | 'register' | 'paren' | 'operator';
+export type TokenType = 'space' | 'literal' | 'register' | 'variable' | 'paren' | 'operator';
 
 // MODULE VARIABLES
 // ================================================================================================
-const matchers = [
+export const matchers = [
     { type: 'space',    match: /^\s+/ },
     { type: 'literal',  match: /^(\d+)/ },
     { type: 'register', match: /^[nrk]\d{1,2}/ },
+    { type: 'variable', match: /^[abcdef]\d{1,2}/ },
     { type: 'paren',    match: /^[\(\)]/ },
     { type: 'operator', match: /^[\+\-\*\/\^]/ }
 ];
@@ -20,7 +21,7 @@ export function tokenize(expression: string, skipWhitespace: boolean): Token[] {
     let remainder = expression;
     while (remainder) {
         let next = Token.read(remainder);
-        if (!skipWhitespace || next.token.type !== 'space') {
+        if (!skipWhitespace || next.token.type !== 'space') {            
             tokens.push(next.token);
         }
         remainder = next.remainder;

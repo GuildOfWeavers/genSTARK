@@ -75,12 +75,24 @@ function pullOperators(operators: string[], tokens: any[]) {
 
         // process the operator
         if (t.type === 'operator' && operators.includes(t.value)) {
-            // convert unary '-x' to binary '0 - x'
+            let node;
+            
+            // convert unary '-x' to binary '0 - x', unless x is a literal
             if (t.value === '-' && tL === undefined) {
-                tL = new LiteralNode('0');
+                if (tR && tR instanceof LiteralNode) {
+                    node = new LiteralNode(`-${tR.value}`);
+                }
+                else {
+                    tL = new LiteralNode('0');
+                }
             }
-            assertNotOpToken([tL, tR]);
-            let node = new OperationNode(t.value, [tL, tR]);
+
+            // if unary '-' hasn't been collapsed into a literal, create an operation node
+            if (!node) {
+                assertNotOpToken([tL, tR]);
+                node = new OperationNode(t.value, [tL, tR]);
+            }
+            
             processed = [[node], null];
         }
         else {

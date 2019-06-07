@@ -17,7 +17,7 @@ declare module '@guildofweavers/genstark' {
         field: FiniteField;
 
         /** A set of transition expressions for all mutable registers */
-        tExpressions: { [register: string]: string };
+        tExpressions: { [register: string]: string } & { [script]?: string;};
 
         /** A list of transition constraints for the computation */
         tConstraints: string[];
@@ -40,6 +40,8 @@ declare module '@guildofweavers/genstark' {
         /** Hash algorithm for Merkle trees; defaults to sha256 */
         hashAlgorithm?: HashAlgorithm;
     }
+
+    export const script: unique symbol;
 
     export class Stark {
 

@@ -5,7 +5,7 @@ export interface AstNode {
     toCode(regRefBuilder: RegRefBuilder): string;
 }
 
-interface RegRefBuilder {
+export interface RegRefBuilder {
     (name: string, index: number): string;
 }
 
@@ -20,11 +20,35 @@ export class LiteralNode {
     }
 
     toCode() {
-        return `${this.value.toString(10)}n`;
+        if (this.value < 0) {
+            return `(${this.value.toString(10)}n)`;
+        }
+        else {
+            return `${this.value.toString(10)}n`;
+        }
     }
 
     toString() {
         return this.value.toString(10);
+    }
+}
+
+// VARIABLE
+// ================================================================================================
+export class VariableNode {
+
+    readonly name: string;
+
+    constructor(name: string) {
+        this.name = name;
+    }
+
+    toCode() {
+        return this.name;
+    }
+
+    toString() {
+        return this.name;
     }
 }
 
