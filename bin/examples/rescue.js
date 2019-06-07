@@ -48,7 +48,7 @@ const roundConstants = [
 // STARK DEFINITION
 // ================================================================================================
 const field = new index_1.PrimeField(2n ** 64n - 21n * 2n ** 30n + 1n);
-const steps = 2 ** 13;
+const steps = 32;
 const alpha = 3n;
 const invAlpha = -6148914683720324437n;
 // MDS matrix
