@@ -112,7 +112,7 @@ export function parseStarkConfig(config: StarkConfig) {
     if (constraintCount > MAX_CONSTRAINT_COUNT) {
         throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
     }
-    const tConstraintScript = config.tExpressions[symScript as any];
+    const tConstraintScript = config.tConstraints[symScript as any];
     const tConstraints = parseTransitionConstraints(cExpressions, tConstraintScript, registerCount, constantCount);
     const tBatchConstraintEvaluator = buildBatchConstraintEvaluator(tConstraints.expressions, tConstraints.script);
     const tConstraintEvaluator = buildConstraintEvaluator(tConstraints.expressions, tConstraints.script);
