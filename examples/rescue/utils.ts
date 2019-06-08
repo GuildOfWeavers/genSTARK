@@ -1,163 +1,180 @@
 // IMPORTS
 // ================================================================================================
-import { PrimeField } from '../../index';
+import { PrimeField } from '@guildofweavers/galois';
 
-// STARK DEFINITION
+// RESCUE CLASS DEFINITION
 // ================================================================================================
-const field = new PrimeField(2n**64n - 21n * 2n**30n + 1n);
-const alpha = 3n;
-const invAlpha = -6148914683720324437n;
-const registers = 2;
-const rounds = 32;
+export class Rescue {
 
-// MDS matrix
-const mds = [
-    [18446744051160973310n, 18446744051160973301n],
-    [                   4n,                   13n]
-];
+    readonly field      : PrimeField;
+    readonly alpha      : bigint;
+    readonly invAlpha   : bigint;
+    readonly registers  : number;
+    readonly rounds     : number;
+    readonly mds        : bigint[][];
+    readonly iConstants : bigint[];
+    readonly cConstants : bigint[];
+    readonly cMatrix    : bigint[][];
 
-const initialConstants  = [1908230773479027697n,  11775995824954138427n];
-const constantsConstant = [17002767073604012844n,  4907993559994152336n];
-const constantsMatrix = [
-    [18345613653544031596n, 8765075832563166921n],
-    [10398013025088720944n, 5494050611496560306n]
-];
+    // CONSTRUCTOR
+    // --------------------------------------------------------------------------------------------
+    constructor(field: PrimeField, alpha: bigint, invAlpha: bigint, registers: number, rounds: number, mds: bigint[][], constants: bigint[]) {
+        this.field = field;
+        this.alpha = alpha;
+        this.invAlpha = invAlpha;
+        this.registers = registers;
+        this.rounds = rounds;
+        this.mds = mds;
 
-const keyConstants = unrollConstants();
-//printConstants(keyConstants);
+        const split = this.splitConstants(constants);
+        this.iConstants = split.iConstants;
+        this.cConstants = split.cConstants;
+        this.cMatrix = split.constantMatrix;
+    }
 
-const result = sponge([42n], keyConstants);
-console.log(result.hash);
+    // HASH FUNCTION
+    // --------------------------------------------------------------------------------------------
+    sponge(inputs: bigint[], unrolledKeys: bigint[][]) {
 
-// CONSTANT PROCESSORS
-// ================================================================================================
-function unrollConstants() {
-    const result = new Array<bigint[]>();
+        const trace = new Array<bigint[]>();
     
-    // initial state
-    let keyState = new Array<bigint>(registers).fill(0n);
-    let keyInjection = initialConstants;
-    keyState = vadd(keyState, keyInjection);
-    result.push([...keyState]);
-
-    // record key state for each round
-    for (let r = 0; r <= rounds; r++) {
-
-        // round r, step 1
-        for (let i = 0; i < registers; i++) {
-            keyState[i] = field.exp(keyState[i], invAlpha);
+        // copy inputs to state
+        let state = new Array(this.registers).fill(0n);
+        for (let i = 0; i < inputs.length; i++) {
+            state[i] = inputs[i];
         }
-        keyInjection = vadd(mmul(constantsMatrix, keyInjection), constantsConstant);
-        keyState = vadd(mmul(mds, keyState), keyInjection);
-        result.push([...keyState]);
-
-        // round r, step 2
-        for (let i = 0; i < registers; i++) {
-            keyState[i] = field.exp(keyState[i], alpha);
-        }
-        keyInjection = vadd(mmul(constantsMatrix, keyInjection), constantsConstant);
-        keyState = vadd(mmul(mds, keyState), keyInjection);
-        result.push([...keyState]);
-    }
-
-    return result;
-}
-
-function printConstants(constants: bigint[][]) {
+        trace.push([...state]);
     
-    // first 2 elements from constant trace go into initial constants
-    const initialConstants = [...constants[0], ...constants[1]];
-
-    // all other elements go into round constants
-    const roundConstants = new Array<bigint[]>(registers * 2);
-    for (let i = 0; i < roundConstants.length; i++) {
-        roundConstants[i] = new Array<bigint>(rounds);
-    }
-
-    for (let i = 0, k = 2; i < rounds; i++, k += 2) {
-        for (let j = 0; j < registers; j++) {
-            roundConstants[j][i] = constants[k][j];
-            roundConstants[registers + j][i] = constants[k + 1][j];
-        }
-    }
-
-    // print the constants in pretty form
-    let output = `const initialConstants = [\n\t\t${initialConstants.join('n,\t')}\n];\n\n`;
-    output += 'const roundConstants = [\n';
-    for (let i = 0; i < registers * 2; i++) {
-        output += '\t[\n\t';
-        for (let j = 0; j < rounds; j++) {
-            if (j !== 0 && j % 4 === 0) {
-                output += '\n\t';
+        // run through block cipher rounds
+        state = this.vadd(state, unrolledKeys[0]);
+        trace.push([...state]);
+    
+        for (let r = 0, k = 1; r < this.rounds; r++, k += 2) {
+    
+            // round r, step 1
+            for (let i = 0; i < this.registers; i++) {
+                state[i] = this.field.exp(state[i], this.invAlpha);
             }
-            output += `\t${roundConstants[i][j]}n,`;
+            state = this.vadd(this.mmul(this.mds, state), unrolledKeys[k]);
+            trace.push([...state]);
+    
+            // round r, step 2
+            for (let i = 0; i < this.registers; i++) {
+                state[i] = this.field.exp(state[i], this.alpha);
+            }
+            state = this.vadd(this.mmul(this.mds, state), unrolledKeys[k + 1]);
+            trace.push([...state]);
         }
-        output += '\n\t],\n';
-    }
-    console.log(`${output}];`);
-}
-
-// SPONGE FUNCTION
-// ================================================================================================
-function sponge(inputs: bigint[], unrolledKeys: bigint[][]) {
-
-    const trace = new Array<bigint[]>();
-
-    // copy inputs to state
-    let state = new Array(registers).fill(0n);
-    for (let i = 0; i < inputs.length; i++) {
-        state[i] = inputs[i];
-    }
-    trace.push([...state]);
-
-    // run through block cipher rounds
-    state = vadd(state, unrolledKeys[0]);
-    trace.push([...state]);
-
-    for (let r = 0, k = 1; r < rounds; r++, k += 2) {
-
-        // round r, step 1
-        for (let i = 0; i < registers; i++) {
-            state[i] = field.exp(state[i], invAlpha);
+    
+        // build and return output
+        const output = new Array<bigint>(inputs.length);
+        for (let i = 0; i < output.length; i++) {
+            output[i] = state[i];
         }
-        state = vadd(mmul(mds, state), unrolledKeys[k]);
-        trace.push([...state]);
+    
+        return { hash: output, trace };
+    }
 
-        // round r, step 2
-        for (let i = 0; i < registers; i++) {
-            state[i] = field.exp(state[i], alpha);
+    // CONSTANT PROCESSORS
+    // --------------------------------------------------------------------------------------------
+    unrollConstants() {
+
+        const result = new Array<bigint[]>();
+
+        // initial state
+        let keyState = new Array<bigint>(this.registers).fill(0n);
+        let keyInjection = this.iConstants;
+        keyState = this.vadd(keyState, keyInjection);
+        result.push([...keyState]);
+
+        // record key state for each round
+        for (let r = 0; r <= this.rounds; r++) {
+
+            // round r, step 1
+            for (let i = 0; i < this.registers; i++) {
+                keyState[i] = this.field.exp(keyState[i], this.invAlpha);
+            }
+            keyInjection = this.vadd(this.mmul(this.cMatrix, keyInjection), this.cConstants);
+            keyState = this.vadd(this.mmul(this.mds, keyState), keyInjection);
+            result.push([...keyState]);
+
+            // round r, step 2
+            for (let i = 0; i < this.registers; i++) {
+                keyState[i] = this.field.exp(keyState[i], this.alpha);
+            }
+            keyInjection = this.vadd(this.mmul(this.cMatrix, keyInjection), this.cConstants);
+            keyState = this.vadd(this.mmul(this.mds, keyState), keyInjection);
+            result.push([...keyState]);
         }
-        state = vadd(mmul(mds, state), unrolledKeys[k + 1]);
-        trace.push([...state]);
+
+        return result;
     }
 
-    // build and return output
-    const output = new Array<bigint>(inputs.length);
-    for (let i = 0; i < output.length; i++) {
-        output[i] = state[i];
-    }
+    groupConstants(constants: bigint[][]) {
 
-    return { hash: output, trace };
-}
-
-// HELPER FUNCTIONS
-// ================================================================================================
-function vadd(a: bigint[], b: bigint[]) {
-    const result = [];
-    for (let i = 0; i < a.length; i++) {
-        result.push(field.add(a[i], b[i]));
-    }
-    return result;
-}
-
-function mmul(a: bigint[][], b: bigint[]) {
-    const result = [];
-    for (let i = 0; i < a.length; i++) {
-        let s = 0n;
-        for (let j = 0; j < a[i].length; j++) {
-            s = field.add(s, field.mul(a[i][j], b[j]));
+        // first 2 elements from constant trace go into initial constants
+        const initialConstants = [...constants[0], ...constants[1]];
+    
+        // all other elements go into round constants
+        const roundConstants = new Array<bigint[]>(this.registers * 2);
+        for (let i = 0; i < roundConstants.length; i++) {
+            roundConstants[i] = new Array<bigint>(this.rounds);
         }
-        result.push(s);
+    
+        for (let i = 0, k = 2; i < this.rounds; i++, k += 2) {
+            for (let j = 0; j < this.registers; j++) {
+                roundConstants[j][i] = constants[k][j];
+                roundConstants[this.registers + j][i] = constants[k + 1][j];
+            }
+        }
+    
+        return { initialConstants, roundConstants };
     }
-    return result;
+
+    // HELPER METHODS
+    // --------------------------------------------------------------------------------------------
+    private vadd(a: bigint[], b: bigint[]) {
+        const result = [];
+        for (let i = 0; i < a.length; i++) {
+            result.push(this.field.add(a[i], b[i]));
+        }
+        return result;
+    }
+
+    private mmul(a: bigint[][], b: bigint[]) {
+        const result = [];
+        for (let i = 0; i < a.length; i++) {
+            let s = 0n;
+            for (let j = 0; j < a[i].length; j++) {
+                s = this.field.add(s, this.field.mul(a[i][j], b[j]));
+            }
+            result.push(s);
+        }
+        return result;
+    }
+
+    private splitConstants(constants: bigint[]) {
+        constants = constants.slice();
+
+        const iConstants = new Array<bigint>();
+        for (let i = 0; i < this.registers; i++) {
+            iConstants.push(constants.shift()!);
+        }
+
+        const constantMatrix = new Array<bigint[]>();
+        for (let i = 0; i < this.registers; i++) {
+            let row = new Array<bigint>();
+            for (let j = 0; j < this.registers; j++) {
+                row.push(constants.shift()!);
+            }
+            constantMatrix.push(row);
+        }
+
+        const cConstants = new Array<bigint>()
+        for (let i = 0; i < this.registers; i++) {
+            cConstants.push(constants.shift()!);
+        }
+
+        return { iConstants, cConstants, constantMatrix };
+    }
 }
