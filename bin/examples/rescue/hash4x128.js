@@ -150,7 +150,7 @@ const tConstraintsScript = `
     e2: d2^${alpha};
     e3: d3^${alpha};
 `;
-// create the STARK for MiMC computation
+// create the STARK for Rescue computation
 const rescStark = new index_1.Stark({
     field: field,
     tExpressions: {

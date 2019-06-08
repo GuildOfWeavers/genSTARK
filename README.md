@@ -21,9 +21,9 @@ import { Stark, PrimeField } from '@guildofweavers/genstark';
 // define a STARK for this computation
 const fooStark = new Stark({
     field               : new PrimeField(2n**32n - 3n * 2n**25n + 1n),
-    tExpressions        : { 'n0': 'r0 + 2' },   // define transition function
-    tConstraints        : ['n0 - (r0 + 2)'],    // define transition constraints
-    tConstraintDegree   : 1                     // degree of our constraint is 1
+    tExpressions        : { n0: 'r0 + 2' },         // define transition function
+    tConstraints        : { q0: 'n0 - (r0 + 2)' },  // define transition constraints
+    tConstraintDegree   : 1                         // degree of our constraint is 1
 });
 
 // create a proof that if we start computation at 1, we end up at 127 after 64 steps
@@ -39,9 +39,10 @@ console.log(result); // true
 ```
 
 There are a few more sophisticated examples in this repository:
-* [MiMC STARK](/examples/mimc.ts) - basically the same as Vitalik Buterin's [MiMC tutorial](https://vitalik.ca/general/2018/07/21/starks_part_3.html).
-* [Fibonacci STARK](/examples/fibonacci.ts) - proofs of computation for [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number).
 * [Demo STARK](/examples/demo.ts) - demonstration of how to use readonly registers.
+* [Fibonacci STARK](/examples/fibonacci.ts) - proofs of computation for [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number).
+* [MiMC STARK](/examples/mimc.ts) - basically the same as Vitalik Buterin's [MiMC tutorial](https://vitalik.ca/general/2018/07/21/starks_part_3.html).
+* [Rescue STARK](/examples/rescue) - proof of knowledge of hash preimage of [Rescue](https://eprint.iacr.org/2019/426.pdf) hash function.
 
 When you run the examples, you should get a nice log documenting each step. Here is an example output of running MiMC STARK for 2<sup>13</sup> steps:
 ```
@@ -94,7 +95,7 @@ The `config` object passed to the STARK constructor can have the following prope
 | ------------------ | ----------- |
 | field              | A finite field for all math operations during the computation. Currently, only `PrimeField` is available (it is actually just re-exported from the [galois](https://github.com/GuildOfWeavers/galois) project). |
 | tExpressions       | An object with expressions defining state [transition function](#Transition-function) for all register. The number of registers must be between 1 and 64. |
-| tConstraints       | An array of [transition constraint](#Transition-constraints) expressions for the computation. The number of constraints must be between 1 and 1024. |
+| tConstraints       | An object with expressions defining [transition constraint](#Transition-constraints) for the computation. The number of constraints must be between 1 and 1024. |
 | tConstraintDegree  | The highest algebraic degree of the provided transition constraints. |
 | constants?         | An array of [constant definitions](#Constants) for values that will be available in readonly registers during the computation. If provided, cannot have more than 64 elements. |
 | extensionFactor?   | Number by which the execution trace is "stretched." Must be a power of 2 at least 2x of the `tConstraintDegree`, but cannot exceed 32. This property is optional, the default is smallest power of 2 that is greater than `tConstraintDegree * 2`. |
@@ -139,7 +140,7 @@ Notice that `inputs` array does not need to be provided to the `verify()` method
 A core component of STARK's definition is the state transition function. You can define a state transition function by supplying transition expressions for all mutable registers like so:
 ```TypeScript
 {
-    'n0': 'r0 + k0 + 1'
+    n0: 'r0 + k0 + 1'
 }
 ```
 The above example defines a transition expression for a single register. Here is how to interpret it:
@@ -155,15 +156,23 @@ You can use simple algebraic operators `+`, `-`, `*`, `/`, `^` to define express
 One thing to note, you cannot reference future register states within a transition expression. So, something like this would not be valid:
 ```TypeScript
 {
-    'n0': 'r0 + 1',
-    'n1': 'n0 * 2'
+    n0: 'r0 + 1',
+    n1: 'n0 * 2'
 }
 ```
 But you can easily redefine this as a valid expression like so:
 ```TypeScript
 {
-    'n0': 'r0 + 1',
-    'n1': '(r0 + 1) * 2'
+    n0: 'r0 + 1',
+    n1: '(r0 + 1) * 2'
+}
+```
+You can also define a [script](#Scripts) to help reduce the number of repeated computations. The following example is equivalent to the example above:
+```TypeScript
+{
+    [script]: 'a0: r0 + 1;',
+    n0: 'a0',
+    n1: 'a0 * 2'
 }
 ```
 
@@ -172,13 +181,33 @@ Another core component of STARK's definition is a set of transition constraints.
 
 Similarly to transition function, a transition constraint is defined using algebraic expressions like so:
 ```TypeScript
-[
-    `n0 - (r0 + k0 + 1)`
-]
+{
+    q0: `n0 - (r0 + k0 + 1)`
+}
 ```
-However, unlike transition function, transition constraints can reference future states of mutable registers.
+where the key for each expression is prefixed with letter `q` (e.g. `q0`, `q1`, `q2`, etc.) However, Unlike transition function, transition constraints can reference future states of mutable registers.
 
 **Note:** you should note the highest algebraic degree you use in the constraint expressions and pass it to the `Stark` constructor as `tConstraintDegree` property. For example, if you raise value of some register to power 3 (or perform equivalent computation), your `tConstraintDegree` should be set to 3.
+
+## Scripts
+If your transition function and/or transition constraints are fairly complex, it might get cumbersome to write them all out individually. To make the task a bit simpler, you can use scripts to aggregate common computations into logical variables.
+
+A script is a series of assignment statements, separated by `;`, which assign a value of some expression to a variable. This variable can then be referenced in the subsequent statements and/or in transition expressions and constraints.
+
+You can define a script by adding a script property (using `script` symbol as the key) to transition expression and transition constraints object like so:
+```TypeScript
+{
+    [script]: `
+        a0: r0 + r1;
+        b0: a0 + k0;
+    `,
+    n0: 'b0',
+    n1: 'r1 + 1'
+}
+```
+In the above example, the result of `r0 + r1` is assigned to variable `a0`, and then `a0` is used in computing value of variable `b0`, and then finally the next value of mutable register 0 (`n0`) is set to the value of `b0`;
+
+Currently, the names of variables are limited to letters `a`, `b`, `c`, `d`, `e`, `f`, followed by a 1 or 2-digit number (e.g. `a0`, `b1`, `c29` etc.).
 
 ## Assertions
 Assertions (or boundary constraints) are objects that specify the exact value of a given mutable register at a given step. An assertion object has the following form:

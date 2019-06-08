@@ -19,10 +19,12 @@ function parseScript(script, maxRegisters, maxConstants) {
         let statement = statements[i].trim();
         if (statement.length === 0)
             continue;
-        let [variable, expression] = statement.split(':');
-        variable = validateVariableName(variable);
+        let parts = statement.split(':');
+        if (parts.length !== 2)
+            throw new Error(`Statment ${i} is malformed`);
+        let variable = validateVariableName(parts[0]);
         variables.add(variable);
-        expressions.push([variable, parseExpression(expression, variables, maxRegisters, maxConstants)]);
+        expressions.push([variable, parseExpression(parts[1], variables, maxRegisters, maxConstants)]);
     }
     return new Script(variables, expressions);
 }

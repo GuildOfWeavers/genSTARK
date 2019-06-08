@@ -156,7 +156,7 @@ const tConstraintsScript = `
     e3: d3^${alpha};
 `;
 
-// create the STARK for MiMC computation
+// create the STARK for Rescue computation
 const rescStark = new Stark({
     field: field,
     tExpressions: {
