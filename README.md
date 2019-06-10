@@ -152,7 +152,7 @@ out: [a0, a1];
 The above example describes a state transition function that operates over 2 registers:
 
 * The next value of register 0 is set to the sum of the current values of both registers;
-* The next value of register 1 is set the same sum plus current value of register 1 again.
+* The next value of register 1 is set to the same sum plus current value of register 1 again.
 
 (this is actually a somewhat convoluted way to describe a transition function for a Fibonacci sequence).
 
@@ -167,7 +167,7 @@ out: $n0 - ($r0 + $k0 + 1);
 ```
 where `$n0` contains value of register `$r0` at the next step of computation.
 
-If you are working with more than one constraint, your transition script should return a vector with evaluations for all your constraints. For example:
+If you are working with more than one constraint, your transition script should return a vector with evaluations for all of your constraints. For example:
 ```
 a0: $r0 + $r1;
 out: [$n0 - a0, $n1 - ($r1 + a0)];
@@ -194,7 +194,7 @@ Here is what this means:
 
 Every statement of an arithmetic script is an *assignment* statement. It assigns a value of an expression (the right side) to a variable (left side). Every script must terminate with an `out` statement which defines the return value of the script.
 
-Within the script you can reference registers of the execution trace, constants, variables, and perform arithmetic operations with them. All of this is described below.
+Within the script you can reference registers, constants, variables, and perform arithmetic operations with them. All of this is described below.
 
 ### Registers
 A computation's execution trace consists of a series of state transitions. A state of a computation at a given step is held in an array of registers. There are two types of registers:
@@ -259,7 +259,7 @@ One important thing to note: if both operands are vectors, the operations make s
 
 Even though the examples above focus on vectors, you can apply the same operations to matrixes (of same dimensions), and they'll work in the same way.
 
-There is one additional operation we can apply to vectors and matrixes (but not to scalars): `#`. The meaning of the operation is as follows:
+There is one additional operation we can apply to vectors and matrixes (but not to scalars): `#`. The meaning of this operation is as follows:
 
 * **matrix # matrix** - performs a standard [matrix multiplication](https://en.wikipedia.org/wiki/Matrix_multiplication) of two matrixes. If the input matrixes have dimensions [*n*,*p*] and [*p*,*m*], the output matrix will have dimensions [*n*,*m*].
 * **matrix # vector** - also performs matrix multiplication, but the output is a vector. If the input matrix dimensions are [*n*,*m*], and the length of the input vector is *m*, the output vector will have length *n*.
@@ -277,7 +277,7 @@ interface Assertion {
 ```
 
 ## Constants
-In addition to mutable registers, you can define STARKs with readonly registers. A readonly register is a register whose value cannot be changed by a transition function. You can reference readonly registers in your expressions by using the `k` prefix. For example, `k0`, `k1`, `k2` etc.
+In addition to mutable registers, you can define STARKs with readonly registers. A readonly register is a register whose value cannot be changed by a transition function. You can reference readonly registers in your scripts by using the `$k` prefix. For example, `$k0`, `$k1`, `$k2` etc.
 
 You can defined readonly registers by providing constant definitions to `Stark` constructor. Constant definitions have the following form:
 ```TypeScript
