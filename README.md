@@ -21,8 +21,8 @@ import { Stark, PrimeField } from '@guildofweavers/genstark';
 // define a STARK for this computation
 const fooStark = new Stark({
     field               : new PrimeField(2n**32n - 3n * 2n**25n + 1n),
-    tExpressions        : { n0: 'r0 + 2' },         // define transition function
-    tConstraints        : { q0: 'n0 - (r0 + 2)' },  // define transition constraints
+    tFunction           : 'out: $r0 + 2;',          // define transition function
+    tConstraints        : 'out: $n0 - ($r0 + 2);',  // define transition constraints
     tConstraintDegree   : 1                         // degree of our constraint is 1
 });
 
@@ -94,8 +94,8 @@ The `config` object passed to the STARK constructor can have the following prope
 | Property           | Description |
 | ------------------ | ----------- |
 | field              | A finite field for all math operations during the computation. Currently, only `PrimeField` is available (it is actually just re-exported from the [galois](https://github.com/GuildOfWeavers/galois) project). |
-| tExpressions       | An object with expressions defining state [transition function](#Transition-function) for all register. The number of registers must be between 1 and 64. |
-| tConstraints       | An object with expressions defining [transition constraint](#Transition-constraints) for the computation. The number of constraints must be between 1 and 1024. |
+| tFunction         | An arithmetic script defining state [transition function](#Transition-function) for the computation. |
+| tConstraints       | An arithmetic script defining [transition constraint](#Transition-constraints) for the computation. |
 | tConstraintDegree  | The highest algebraic degree of the provided transition constraints. |
 | constants?         | An array of [constant definitions](#Constants) for values that will be available in readonly registers during the computation. If provided, cannot have more than 64 elements. |
 | extensionFactor?   | Number by which the execution trace is "stretched." Must be a power of 2 at least 2x of the `tConstraintDegree`, but cannot exceed 32. This property is optional, the default is smallest power of 2 that is greater than `tConstraintDegree * 2`. |
@@ -137,77 +137,133 @@ Notice that `inputs` array does not need to be provided to the `verify()` method
 
 
 ## Transition function
-A core component of STARK's definition is the state transition function. You can define a state transition function by supplying transition expressions for all mutable registers like so:
-```TypeScript
-{
-    n0: 'r0 + k0 + 1'
-}
+A core component of STARK's definition is the state transition function. You can define a state transition function by providing an [arithmetic script](#Arithmetic-script) which evaluates to the next state of the computation. For example:
 ```
-The above example defines a transition expression for a single register. Here is how to interpret it:
-
-* `r0` is a reference to the current value of mutable register 0.
-* `n0` is a reference to the next value of mutable register 0.
-* `k0` is a reference to the current value of readonly register 0.
-
-So, the expression says: the next value of mutable register 0 is equal to the current value of the register, plus the current value of readonly register 0, plus 1.
-
-You can use simple algebraic operators `+`, `-`, `*`, `/`, `^` to define expressions of any complexity. You can also have up to 64 mutable registers and up to 64 readonly registers. In case of multiple registers, you can refer to them as `r1`, `r2`, `r3`, etc.
-
-One thing to note, you cannot reference future register states within a transition expression. So, something like this would not be valid:
-```TypeScript
-{
-    n0: 'r0 + 1',
-    n1: 'n0 * 2'
-}
+out: $r0 + $k0 + 1;
 ```
-But you can easily redefine this as a valid expression like so:
-```TypeScript
-{
-    n0: 'r0 + 1',
-    n1: '(r0 + 1) * 2'
-}
+The script says: the next value of mutable register 0 is equal to the current value of the register, plus the current value of readonly register 0, plus 1.
+
+If your computation involves more than 1 mutable register, your script should return a vector with values for the next state of all registers. Here is an example:
 ```
-You can also define a [script](#Scripts) to help reduce the number of repeated computations. The following example is equivalent to the example above:
-```TypeScript
-{
-    [script]: 'a0: r0 + 1;',
-    n0: 'a0',
-    n1: 'a0 * 2'
-}
+a0: $r0 + $r1;
+a1: a0 + $r1;
+out: [a0, a1];
 ```
+The above example describes a state transition function that operates over 2 registers:
+
+* The next value of register 0 is set to the sum of the current values of both registers;
+* The next value of register 1 is set the same sum plus current value of register 1 again.
+
+(this is actually a somewhat convoluted way to describe a transition function for a Fibonacci sequence).
+
+In general, the length of the vector in the `out` statement defines the width of the state (i.e. number of mutable registers).
 
 ## Transition constraints
 Another core component of STARK's definition is a set of transition constraints. A computation is considered valid only if transition constraints are satisfied for all steps (except the last one).
 
-Similarly to transition function, a transition constraint is defined using algebraic expressions like so:
-```TypeScript
-{
-    q0: `n0 - (r0 + k0 + 1)`
-}
+Similarly to transition functions, transition constraints are defined by an [arithmetic script](#Arithmetic-script). However, unlike scripts for transition functions, scripts for transition constraints can reference future states of mutable registers. For example:
 ```
-where the key for each expression is prefixed with letter `q` (e.g. `q0`, `q1`, `q2`, etc.) However, Unlike transition function, transition constraints can reference future states of mutable registers.
+out: $n0 - ($r0 + $k0 + 1);
+```
+where `$n0` contains value of register `$r0` at the next step of computation.
+
+If you are working with more than one constraint, your transition script should return a vector with evaluations for all your constraints. For example:
+```
+a0: $r0 + $r1;
+out: [$n0 - a0, $n1 - ($r1 + a0)];
+```
+(these are constraints matching the Fibonacci transition function described previously).
 
 **Note:** you should note the highest algebraic degree you use in the constraint expressions and pass it to the `Stark` constructor as `tConstraintDegree` property. For example, if you raise value of some register to power 3 (or perform equivalent computation), your `tConstraintDegree` should be set to 3.
 
-## Scripts
-If your transition function and/or transition constraints are fairly complex, it might get cumbersome to write them all out individually. To make the task a bit simpler, you can use scripts to aggregate common computations into logical variables.
+## Arithmetic script
+If your transition functions and constraints are fairly complex, it will get extremely tedious (and error prone) to write them all out individually. But fear not, arithmetic script is here to help.
 
-A script is a series of assignment statements, separated by `;`, which assign a value of some expression to a variable. This variable can then be referenced in the subsequent statements and/or in transition expressions and constraints.
+An arithmetic script is nothing more than a series of arithmetic statements (separated by semicolons) which evaluate to a number or to a vector of numbers. Here is an example:
 
-You can define a script by adding a script property (using `script` symbol as the key) to transition expression and transition constraints object like so:
-```TypeScript
-{
-    [script]: `
-        a0: r0 + r1;
-        b0: a0 + k0;
-    `,
-    n0: 'b0',
-    n1: 'r1 + 1'
-}
 ```
-In the above example, the result of `r0 + r1` is assigned to variable `a0`, and then `a0` is used in computing value of variable `b0`, and then finally the next value of mutable register 0 (`n0`) is set to the value of `b0`;
+a0: $r0 + $r1;
+a1: $k0 * a0;
+out: [a0, a1];
+```
+Here is what this means:
 
-Currently, the names of variables are limited to letters `a`, `b`, `c`, `d`, `e`, `f`, followed by a 1 or 2-digit number (e.g. `a0`, `b1`, `c29` etc.).
+* Define variable `a0` to be the sum of values from *mutable* registers `$r0` and `$r1`.
+* Define variable `a1` to be the product of value from *readonly* register `$k0` and variable `a0`.
+* Set the return value of the script to a vector of two elements with values of `a0` and `a1` being first and second elements respectively.
+
+Every statement of an arithmetic script is an *assignment* statement. It assigns a value of an expression (the right side) to a variable (left side). Every script must terminate with an `out` statement which defines the return value of the script.
+
+Within the script you can reference registers of the execution trace, constants, variables, and perform arithmetic operations with them. All of this is described below.
+
+### Registers
+A computation's execution trace consists of a series of state transitions. A state of a computation at a given step is held in an array of registers. There are two types of registers:
+
+* **mutable** registers - values in these registers are defined by the state [transition function](#Transition-function). Currently, you can have up to 64 mutable registers.
+* **readonly** registers - values in these registers are defined by the [constant definitions](#Constants). Currently, you can have up to 64 readonly registers.
+
+To reference a given register you need to specify the name of the register bank and the index of the register within that bank. Names of all register banks start with `$` - so, register references can look like this: `$r1`, `$k23`, `$n11` etc. Currently, there are 3 register banks:
+
+* **$r** bank holds values of *mutable* registers for the current step of the computation.
+* **$n** bank holds values of *mutable* registers for the next step of the computation. This bank can be referenced only in transition constraints script (not in the transition function script).
+* **$k** bank holds values of *readonly* registers for the current step of the computation.
+
+### Variables
+To simplify your scripts you can aggregate common computations into variables. Once a variable is defined, it can be used in all subsequent statements. You can also change the value of a variable be re-assigning to it. For example, something like this is perfectly valid:
+```
+a0: $r0 + 1;
+a0: a0 + $r1;
+out: a0;
+```
+Variable can be of 3 different types: ***scalars***, ***vectors***, and ***matrixes***.
+
+#### Scalars
+A variable that holds a simple numerical value is a scalar. Implicitly, all registers hold scalar values. All constant literals are also scalars. A name of scalar variable can include lower-case letters, numbers, and underscores (and must start with a letter). Here are a few examples:
+```
+a0: 1;
+foo: $r0;
+foo_bar: $r0 + 1;
+```
+
+#### Vectors
+Two or more scalars can be aggregated into a vector (a vector is just a 1-dimensional array). You can define a vector by putting a comma-separated list of scalars between square brackets. A name of a vector variable can include upper-case letters, numbers, and underscores (and must start with a letter). Here are a few examples:
+```
+V0: [1, 2];
+FOO: [$r0, $r1];
+FOO_BAR: [$r0, $r1 + 1, $k0];
+```
+
+#### Matrixes
+A matrix is a 2-dimensional array of scalars with at least 1 row and 2 columns. Similarly to vectors, matrix variable names can include upper-case letters, numbers, and underscores. You can define a matrix by listing its elements in a row-major form. Here are a few examples:
+```
+M0: [[1, 2], [1, 2]];
+FOO: [[$k0, $r0, 1], [$r1 + $r2, 42, $r3 * 8]];
+```
+
+### Operations
+To do something useful with registers, variables etc. you can apply arithmetic operations to them. These operations are `+`, `-`, `*`, `/`, `^`.
+
+When you work with scalar values, these operations behave as you've been taught in the elementary school (though, the math takes place in a finite field). But you can also apply these operations to vectors and matrixes. In such cases, these are treated as **element-wise** operations. Here are a few examples:
+```
+V0: [1, 2];
+V1: [3, 4];
+V2: V0 + V1;    // result is [4, 6]
+v2: V1^2;       // result is [9, 16]
+```
+You can also replace the second operand with a scalar. Here is how it'll work:
+```
+V0: [1, 2];
+V1: V0 * 2;     // result is [2, 4]
+```
+One important thing to note: if both operands are vectors, the operations make sense only if vectors have the same dimensions (i.e. you can't do element-wise addition between vectors of different lengths).
+
+Even though the examples above focus on vectors, you can apply the same operations to matrixes (of same dimensions), and they'll work in the same way.
+
+There is one additional operation we can apply to vectors and matrixes (but not to scalars): `#`. The meaning of the operation is as follows:
+
+* **matrix # matrix** - performs a standard [matrix multiplication](https://en.wikipedia.org/wiki/Matrix_multiplication) of two matrixes. If the input matrixes have dimensions [*n*,*p*] and [*p*,*m*], the output matrix will have dimensions [*n*,*m*].
+* **matrix # vector** - also performs matrix multiplication, but the output is a vector. If the input matrix dimensions are [*n*,*m*], and the length of the input vector is *m*, the output vector will have length *n*.
+* **vector # vector** - performs a [linear combination](https://en.wikipedia.org/wiki/Linear_combination) of two vectors. Vectors must have the same length, and the output is a scalar.
 
 ## Assertions
 Assertions (or boundary constraints) are objects that specify the exact value of a given mutable register at a given step. An assertion object has the following form:
