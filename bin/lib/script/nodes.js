@@ -29,6 +29,7 @@ class VariableNode {
         this.name = name;
         this.dimensions = dimensions;
         this.maxRegRef = this.maxConstRef = 0;
+        utils_1.validateVariableName(name, dimensions);
     }
     toCode() {
         return `${this.name}`;
@@ -42,12 +43,12 @@ exports.VariableNode = VariableNode;
 // ================================================================================================
 class RegisterNode {
     constructor(register) {
-        this.name = register[0].toLowerCase();
-        this.index = Number.parseInt(register.slice(1));
+        this.name = register.slice(0, 2);
+        this.index = Number.parseInt(register.slice(2));
         this.dimensions = [1, 1];
     }
     get isReadonly() {
-        return this.name === 'k';
+        return this.name === '$k';
     }
     get maxRegRef() {
         return (this.isReadonly ? 0 : this.index);

@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { OperationHandler, getOperationHandler } from './operations';
-import { Dimensions, isScalar } from './utils';
+import { Dimensions, isScalar, validateVariableName } from './utils';
 
 // INTERFACES
 // ================================================================================================
@@ -49,14 +49,15 @@ export class LiteralNode implements AstNode {
 export class VariableNode implements AstNode {
 
     readonly name           : string;
-    readonly dimensions     : [number, number];
+    readonly dimensions     : Dimensions;
     readonly maxRegRef      : number;
     readonly maxConstRef    : number;
 
-    constructor(name: string, dimensions: [number, number]) {
+    constructor(name: string, dimensions: Dimensions) {
         this.name = name;
         this.dimensions = dimensions;
         this.maxRegRef = this.maxConstRef = 0;
+        validateVariableName(name, dimensions);
     }
 
     toCode() {
@@ -77,13 +78,13 @@ export class RegisterNode implements AstNode {
     readonly dimensions : Dimensions;
 
     constructor(register: string) {
-        this.name = register[0].toLowerCase();
-        this.index = Number.parseInt(register.slice(1));
+        this.name = register.slice(0, 2);
+        this.index = Number.parseInt(register.slice(2));
         this.dimensions = [1, 1];
     }
 
     get isReadonly(): boolean {
-        return this.name === 'k';
+        return this.name === '$k';
     }
 
     get maxRegRef(): number {

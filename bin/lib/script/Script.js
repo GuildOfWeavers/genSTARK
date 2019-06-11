@@ -8,7 +8,6 @@ const utils_1 = require("./utils");
 // MODULE VARIABLE
 // ================================================================================================
 exports.OUTPUT_NAME = 'out';
-const vNamePattern = tokenizer_1.matchers.find(m => m.type === 'variable').match;
 // CLASS DEFINITION
 // ================================================================================================
 class Script {
@@ -64,11 +63,11 @@ class Script {
         catch (error) {
             throw new Error(`Out statement is malformed: ${error.message}`);
         }
-        validateReferences(this.statements, this.stateWidth, maxConstants);
+        validateRegisterReferences(this.statements, this.outputWidth, maxConstants);
     }
     // PUBLIC ACCESSORS
     // --------------------------------------------------------------------------------------------
-    get stateWidth() {
+    get outputWidth() {
         return this.output.dimensions[0];
     }
     // PUBLIC METHODS
@@ -127,13 +126,7 @@ function addVariable(variable, dimensions, variables) {
         }
     }
     else {
-        const match = variable.match(vNamePattern);
-        if (!match) {
-            throw new Error(`Variable name '${variable}' is invalid`);
-        }
-        else if (match[0].length !== variable.length) {
-            throw new Error(`Variable name '${variable}' is invalid`);
-        }
+        utils_1.validateVariableName(variable, dimensions);
         variables.set(variable, dimensions);
     }
     return variable;
@@ -147,7 +140,7 @@ function parseVectorOrMatrix(tokens, variables) {
         ? parsers_1.parseMatrix(tokens, variables)
         : parsers_1.parseVector(tokens, variables);
 }
-function validateReferences(statements, maxRegisters, maxConstants) {
+function validateRegisterReferences(statements, maxRegisters, maxConstants) {
     const regInfoMessage = `register index must be smaller than ${maxRegisters}`;
     const constInfoMessage = (maxConstants === 0)
         ? `no constants have been defined`

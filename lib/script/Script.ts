@@ -1,14 +1,13 @@
 // IMPORTS
 // ================================================================================================
-import { tokenize, matchers } from './tokenizer';
+import { tokenize } from './tokenizer';
 import { parseExpression, parseVector, parseMatrix } from './parsers';
 import { AstNode, RegRefBuilder } from './nodes';
-import { Dimensions, isVector, isMatrix } from './utils';
+import { Dimensions, isVector, isMatrix, validateVariableName } from './utils';
 
 // MODULE VARIABLE
 // ================================================================================================
 export const OUTPUT_NAME = 'out';
-const vNamePattern = matchers.find(m => m.type === 'variable')!.match;
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -76,12 +75,12 @@ export class Script {
             throw new Error(`Out statement is malformed: ${error.message}`);
         }
 
-        validateReferences(this.statements, this.stateWidth, maxConstants);
+        validateRegisterReferences(this.statements, this.outputWidth, maxConstants);
     }
 
     // PUBLIC ACCESSORS
     // --------------------------------------------------------------------------------------------
-    get stateWidth(): number {
+    get outputWidth(): number {
         return this.output.dimensions[0];
     }
 
@@ -148,13 +147,7 @@ function addVariable(variable: string, dimensions: Dimensions, variables: Map<st
         }
     }
     else {
-        const match = variable.match(vNamePattern);
-        if (!match) {
-            throw new Error(`Variable name '${variable}' is invalid`);
-        }
-        else if (match[0].length !== variable.length) {
-            throw new Error(`Variable name '${variable}' is invalid`);
-        }
+        validateVariableName(variable, dimensions);
         variables.set(variable, dimensions);
     }
 
@@ -169,7 +162,7 @@ function parseVectorOrMatrix(tokens: any[], variables: Map<string, Dimensions>) 
         : parseVector(tokens, variables);
 }
 
-function validateReferences(statements: Array<[string, AstNode]>, maxRegisters: number, maxConstants: number) {
+function validateRegisterReferences(statements: Array<[string, AstNode]>, maxRegisters: number, maxConstants: number) {
 
     const regInfoMessage = `register index must be smaller than ${maxRegisters}`;
     const constInfoMessage = (maxConstants === 0)

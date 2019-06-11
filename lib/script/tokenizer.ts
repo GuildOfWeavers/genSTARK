@@ -7,8 +7,8 @@ export type TokenType = 'space' | 'literal' | 'register' | 'variable' | 'paren'|
 export const matchers = [
     { type: 'space',    match: /^\s+/ },
     { type: 'literal',  match: /^(\d+)/ },
-    { type: 'register', match: /^[nrk]\d{1,2}/ },
-    { type: 'variable', match: /^[abcdef]\d{1,2}/ },
+    { type: 'register', match: /^\$[nrk]\d{1,2}/ },
+    { type: 'variable', match: /^[A-Za-z]\w*/ },
     { type: 'paren',    match: /^[\(\)]/ },
     { type: 'bracket',  match: /^[\[\]]/ },
     { type: 'operator', match: /^[\+\-\*\/\^\#]/ },

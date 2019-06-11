@@ -114,8 +114,7 @@ The meaning of the parameters is as follows:
 | ---------- | ----------- |
 | assertions | An array of [Assertion](#Assertions) objects (also called boundary constraints). These assertions specify register values at specific steps of a valid computation. At least 1 assertion must be provided. |
 | steps      | Number of steps in the computation. Number of steps must be a power of 2. |
-| inputs     | An array of `BigInt`'s containing initial values for all mutable registers. The length of the array must be the same as the number of transition function expressions specified in STARK config. |
-
+| inputs     | An array of `BigInt`'s containing initial values for all mutable registers. The length of the array must be the same as the width of the vector returned by the [transition function](#Transition-function) script. |
 
 Once you've generated a proof, you can verify it using `Stark.verify()` method like so:
 
@@ -141,7 +140,7 @@ A core component of STARK's definition is the state transition function. You can
 ```
 out: $r0 + $k0 + 1;
 ```
-The script says: the next value of mutable register 0 is equal to the current value of the register, plus the current value of readonly register 0, plus 1.
+This script says: the next value of mutable register `$r0` is equal to the current value of the register, plus the current value of readonly register `$k0`, plus 1.
 
 If your computation involves more than 1 mutable register, your script should return a vector with values for the next state of all registers. Here is an example:
 ```
@@ -209,7 +208,7 @@ To reference a given register you need to specify the name of the register bank 
 * **$k** bank holds values of *readonly* registers for the current step of the computation.
 
 ### Variables
-To simplify your scripts you can aggregate common computations into variables. Once a variable is defined, it can be used in all subsequent statements. You can also change the value of a variable be re-assigning to it. For example, something like this is perfectly valid:
+To simplify your scripts you can aggregate common computations into variables. Once a variable is defined, it can be used in all subsequent statements. You can also change the value of a variable by re-assigning to it. For example, something like this is perfectly valid:
 ```
 a0: $r0 + 1;
 a0: a0 + $r1;
