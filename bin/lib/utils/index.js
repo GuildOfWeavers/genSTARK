@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // IMPORTS
 // ================================================================================================
 const crypto = require("crypto");
+const inliners = require("./inliners");
 // RE-EXPORTS
 // ================================================================================================
 var serializaton_1 = require("./serializaton");
@@ -16,6 +17,7 @@ var sizeof_1 = require("./sizeof");
 exports.sizeOf = sizeof_1.sizeOf;
 var Logger_1 = require("./Logger");
 exports.Logger = Logger_1.Logger;
+exports.inline = inliners;
 // PUBLIC FUNCTIONS
 // ================================================================================================
 function isPowerOf2(value) {

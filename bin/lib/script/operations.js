@@ -36,11 +36,11 @@ const addition = {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
         if (utils_1.isScalar(d1))
-            return `field.add(${parameters})`;
+            return `$field.add(${parameters})`;
         else if (utils_1.isVector(d1))
-            return `field.addVectorElements(${parameters})`;
+            return `$field.addVectorElements(${parameters})`;
         else
-            return `field.addMatrixElements(${parameters})`;
+            return `$field.addMatrixElements(${parameters})`;
     }
 };
 // SUBTRACTION
@@ -59,11 +59,11 @@ const subtraction = {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
         if (utils_1.isScalar(d1))
-            return `field.sub(${parameters})`;
+            return `$field.sub(${parameters})`;
         else if (utils_1.isVector(d1))
-            return `field.subVectorElements(${parameters})`;
+            return `$field.subVectorElements(${parameters})`;
         else
-            return `field.subMatrixElements(${parameters})`;
+            return `$field.subMatrixElements(${parameters})`;
     }
 };
 // MULTIPLICATION
@@ -82,11 +82,11 @@ const multiplication = {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
         if (utils_1.isScalar(d1))
-            return `field.mul(${parameters})`;
+            return `$field.mul(${parameters})`;
         else if (utils_1.isVector(d1))
-            return `field.mulVectorElements(${parameters})`;
+            return `$field.mulVectorElements(${parameters})`;
         else
-            return `field.mulMatrixElements(${parameters})`;
+            return `$field.mulMatrixElements(${parameters})`;
     }
 };
 // DIVISION
@@ -105,11 +105,11 @@ const division = {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
         if (utils_1.isScalar(d1))
-            return `field.div(${parameters})`;
+            return `$field.div(${parameters})`;
         else if (utils_1.isVector(d1))
-            return `field.divVectorElements(${parameters})`;
+            return `$field.divVectorElements(${parameters})`;
         else
-            return `field.divMatrixElements(${parameters})`;
+            return `$field.divMatrixElements(${parameters})`;
     }
 };
 // EXPONENTIATION
@@ -126,11 +126,11 @@ const exponentiation = {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
         if (utils_1.isScalar(d1))
-            return `field.exp(${parameters})`;
+            return `$field.exp(${parameters})`;
         else if (utils_1.isVector(d1))
-            return `field.expVectorElements(${parameters})`;
+            return `$field.expVectorElements(${parameters})`;
         else
-            return `field.expMatrixElements(${parameters})`;
+            return `$field.expMatrixElements(${parameters})`;
     }
 };
 // MATRIX AND VECTOR PRODUCT
@@ -150,11 +150,11 @@ const product = {
         const d2 = op2.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
         if (utils_1.isVector(d1) && utils_1.isVector(d2))
-            return `field.combineVectors(${parameters})`;
+            return `$field.combineVectors(${parameters})`;
         else if (utils_1.isMatrix(d1) && utils_1.isVector(d2))
-            return `field.mulMatrixByVector(${parameters})`;
+            return `$field.mulMatrixByVector(${parameters})`;
         else
-            return `field.mulMatrixes(${parameters})`;
+            return `$field.mulMatrixes(${parameters})`;
     }
 };
 //# sourceMappingURL=operations.js.map

@@ -70,6 +70,9 @@ class Script {
     get outputWidth() {
         return this.output.dimensions[0];
     }
+    get outputVariableName() {
+        return exports.OUTPUT_NAME;
+    }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
     toCode(regRefBuilder) {

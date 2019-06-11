@@ -10,12 +10,8 @@ import { Stark, PrimeField } from '../index';
 
 const demoStark = new Stark({
     field: new PrimeField(96769n),
-    tExpressions: {
-        'n0': 'r0 + 1 + k0 + 2 * k1'
-    },
-    tConstraints: {
-        'q0': 'n0 - (r0 + 1 + k0 + 2 * k1)'
-    },
+    tFunction   : 'out: $r0 + 1 + $k0 + 2 * $k1',
+    tConstraints: 'out: $n0 - ($r0 + 1 + $k0 + 2 * $k1)',
     tConstraintDegree: 1,
     constants: [{
         values  : [1n, 2n, 3n, 4n],

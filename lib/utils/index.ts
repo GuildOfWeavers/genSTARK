@@ -1,12 +1,14 @@
 // IMPORTS
 // ================================================================================================
 import * as crypto from 'crypto';
+import * as inliners from './inliners';
 
 // RE-EXPORTS
 // ================================================================================================
 export { writeMerkleProof, readMerkleProof, writeMatrix, readMatrix, writeArray, readArray } from './serializaton';
 export { sizeOf } from './sizeof';
 export { Logger } from './Logger';
+export const inline = inliners;
 
 // PUBLIC FUNCTIONS
 // ================================================================================================

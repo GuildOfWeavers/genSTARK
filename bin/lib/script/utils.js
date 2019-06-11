@@ -22,6 +22,7 @@ exports.isMatrix = isMatrix;
 // ================================================================================================
 function validateVariableName(name, dimensions) {
     const errorMessage = `Variable name '${name}' is invalid`;
+    // TODO: check for 'out' and JavaScript reserved words
     const match = name.match(variableNamePattern);
     if (!match || match[0].length !== name.length) {
         throw new Error(errorMessage);

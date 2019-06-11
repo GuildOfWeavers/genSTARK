@@ -10,7 +10,7 @@ class LiteralNode {
     constructor(value) {
         this.value = BigInt(value);
         this.dimensions = [1, 1];
-        this.maxRegRef = this.maxConstRef = 0;
+        this.maxRegRef = this.maxConstRef = -1;
     }
     toCode() {
         return ((this.value < 0))
@@ -28,7 +28,7 @@ class VariableNode {
     constructor(name, dimensions) {
         this.name = name;
         this.dimensions = dimensions;
-        this.maxRegRef = this.maxConstRef = 0;
+        this.maxRegRef = this.maxConstRef = -1;
         utils_1.validateVariableName(name, dimensions);
     }
     toCode() {
@@ -51,10 +51,10 @@ class RegisterNode {
         return this.name === '$k';
     }
     get maxRegRef() {
-        return (this.isReadonly ? 0 : this.index);
+        return (this.isReadonly ? -1 : this.index);
     }
     get maxConstRef() {
-        return (this.isReadonly ? this.index : 0);
+        return (this.isReadonly ? this.index : -1);
     }
     toCode(regRefBuilder) {
         return regRefBuilder(this.name, this.index);
@@ -97,7 +97,7 @@ class VectorNode {
         if (children.length <= 1) {
             throw new Error('Vectors must contain at least 2 elements');
         }
-        this.maxRegRef = this.maxConstRef = 0;
+        this.maxRegRef = this.maxConstRef = -1;
         for (let child of children) {
             if (!utils_1.isScalar(child.dimensions)) {
                 throw new Error('All vector elements must be scalars');
@@ -142,7 +142,7 @@ class MatrixNode {
         if (colCount <= 1)
             throw new Error('Matrix must contain at least 2 columns');
         this.dimensions = [rowCount, colCount];
-        this.maxRegRef = this.maxConstRef = 0;
+        this.maxRegRef = this.maxConstRef = -1;
         for (let i = 0; i < rowCount; i++) {
             let row = children[i];
             if (row.length !== colCount) {

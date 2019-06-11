@@ -35,9 +35,9 @@ const addition = {
     getCode(op1: AstNode, op2: AstNode, regRefBuilder: RegRefBuilder): string {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
-        if (isScalar(d1))       return `field.add(${parameters})`;
-        else if (isVector(d1))  return `field.addVectorElements(${parameters})`;
-        else                    return `field.addMatrixElements(${parameters})`;
+        if (isScalar(d1))       return `$field.add(${parameters})`;
+        else if (isVector(d1))  return `$field.addVectorElements(${parameters})`;
+        else                    return `$field.addMatrixElements(${parameters})`;
     }
 };
 
@@ -53,9 +53,9 @@ const subtraction = {
     getCode(op1: AstNode, op2: AstNode, regRefBuilder: RegRefBuilder): string {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
-        if (isScalar(d1))       return `field.sub(${parameters})`;
-        else if (isVector(d1))  return `field.subVectorElements(${parameters})`;
-        else                    return `field.subMatrixElements(${parameters})`;
+        if (isScalar(d1))       return `$field.sub(${parameters})`;
+        else if (isVector(d1))  return `$field.subVectorElements(${parameters})`;
+        else                    return `$field.subMatrixElements(${parameters})`;
     }
 };
 
@@ -71,9 +71,9 @@ const multiplication = {
     getCode(op1: AstNode, op2: AstNode, regRefBuilder: RegRefBuilder): string {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
-        if (isScalar(d1))       return `field.mul(${parameters})`;
-        else if (isVector(d1))  return `field.mulVectorElements(${parameters})`;
-        else                    return `field.mulMatrixElements(${parameters})`;
+        if (isScalar(d1))       return `$field.mul(${parameters})`;
+        else if (isVector(d1))  return `$field.mulVectorElements(${parameters})`;
+        else                    return `$field.mulMatrixElements(${parameters})`;
     }
 };
 
@@ -89,9 +89,9 @@ const division = {
     getCode(op1: AstNode, op2: AstNode, regRefBuilder: RegRefBuilder): string {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
-        if (isScalar(d1))       return `field.div(${parameters})`;
-        else if (isVector(d1))  return `field.divVectorElements(${parameters})`;
-        else                    return `field.divMatrixElements(${parameters})`;
+        if (isScalar(d1))       return `$field.div(${parameters})`;
+        else if (isVector(d1))  return `$field.divVectorElements(${parameters})`;
+        else                    return `$field.divMatrixElements(${parameters})`;
     }
 };
 
@@ -106,9 +106,9 @@ const exponentiation = {
     getCode(op1: AstNode, op2: AstNode, regRefBuilder: RegRefBuilder): string {
         const d1 = op1.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
-        if (isScalar(d1))       return `field.exp(${parameters})`;
-        else if (isVector(d1))  return `field.expVectorElements(${parameters})`;
-        else                    return `field.expMatrixElements(${parameters})`;
+        if (isScalar(d1))       return `$field.exp(${parameters})`;
+        else if (isVector(d1))  return `$field.expVectorElements(${parameters})`;
+        else                    return `$field.expMatrixElements(${parameters})`;
     }
 };
 
@@ -125,8 +125,8 @@ const product = {
         const d1 = op1.dimensions;
         const d2 = op2.dimensions;
         const parameters = `${op1.toCode(regRefBuilder)}, ${op2.toCode(regRefBuilder)}`;
-        if (isVector(d1) && isVector(d2))       return `field.combineVectors(${parameters})`;
-        else if (isMatrix(d1) && isVector(d2))  return `field.mulMatrixByVector(${parameters})`;
-        else                                    return `field.mulMatrixes(${parameters})`;
+        if (isVector(d1) && isVector(d2))       return `$field.combineVectors(${parameters})`;
+        else if (isMatrix(d1) && isVector(d2))  return `$field.mulMatrixByVector(${parameters})`;
+        else                                    return `$field.mulMatrixes(${parameters})`;
     }
 };

@@ -12,16 +12,14 @@ const index_1 = require("../index");
 // advances the Fibonacci sequence by 2 values.
 const fibStark = new index_1.Stark({
     field: new index_1.PrimeField(2n ** 32n - 3n * 2n ** 25n + 1n),
-    tExpressions: {
-        [index_1.script]: 'a0: r0 + r1',
-        'n0': 'a0',
-        'n1': 'r1 + a0'
-    },
-    tConstraints: {
-        [index_1.script]: 'a0: r0 + r1',
-        'q0': 'n0 - a0',
-        'q1': 'n1 - (r1 + a0)'
-    },
+    tFunction: `
+        a0: $r0 + $r1;
+        out: [a0, a0 + $r1];
+    `,
+    tConstraints: `
+        a0: $r0 + $r1;
+        out: [$n0 - a0, $n1 - (a0 + $r1)];
+    `,
     tConstraintDegree: 1 // max degree of our constraints is 1
 });
 // TESTING

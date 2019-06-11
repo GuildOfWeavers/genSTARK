@@ -84,6 +84,10 @@ export class Script {
         return this.output.dimensions[0];
     }
 
+    get outputVariableName(): string {
+        return OUTPUT_NAME;
+    }
+
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
     toCode(regRefBuilder: RegRefBuilder) {

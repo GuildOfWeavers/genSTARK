@@ -17,7 +17,7 @@
 
 // IMPORTS
 // ================================================================================================
-import { Stark, PrimeField, script } from '../../index';
+import { Stark, PrimeField, inline } from '../../index';
 import { Rescue } from './utils';
 
 // STARK PARAMETERS
@@ -52,52 +52,32 @@ const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 
 // STARK DEFINITION
 // ================================================================================================
-/** Rescue transition function; k0, k1, k2, k3 hold unrolled key constants */
-const tFunctionScript = `
-    a0: r0^${alpha};
-    a1: r1^${alpha};
-
-    b0: (${mds[0][0]} * a0) + (${mds[0][1]} * a1) + k0;
-    b1: (${mds[1][0]} * a0) + (${mds[1][1]} * a1) + k1;
-
-    c0: b0^(${invAlpha});
-    c1: b1^(${invAlpha});
-
-    d0: (${mds[0][0]} * c0) + (${mds[0][1]} * c1) + k2;
-    d1: (${mds[1][0]} * c0) + (${mds[1][1]} * c1) + k3;
-`;
-
-/** Rescue transition constraints */
-const tConstraintsScript = `
-    a0: r0^${alpha};
-    a1: r1^${alpha};
-
-    b0: (${mds[0][0]} * a0) + (${mds[0][1]} * a1) + k0;
-    b1: (${mds[1][0]} * a0) + (${mds[1][1]} * a1) + k1;
-
-    c0: (n0 - k2);
-    c1: (n1 - k3);
-    
-    d0: (${invMds[0][0]} * c0) + (${invMds[0][1]} * c1);
-    d1: (${invMds[1][0]} * c0) + (${invMds[1][1]} * c1);
-    
-    e0: d0^${alpha};
-    e1: d1^${alpha};
-`;
-
-// create the STARK for Rescue computation
 const rescStark = new Stark({
     field: field,
-    tExpressions: {
-        [script]: tFunctionScript,
-        n0      : 'd0',
-        n1      : 'd1'
-    },
-    tConstraints: {
-        [script]: tConstraintsScript,
-        q0      : `b0 - e0`,
-        q1      : `b1 - e1`
-    },
+    tFunction: `
+        S: [$r0, $r1];
+        K1: [$k0, $k1];
+        K2: [$k2, $k3];
+
+        MDS: ${inline.matrix(mds)};
+
+        S: MDS # S^${alpha} + K1;
+        out: MDS # S^(${invAlpha}) + K2;
+    `,
+    tConstraints: `
+        S: [$r0, $r1];
+        N: [$n0, $n1];
+        K1: [$k0, $k1];
+        K2: [$k2, $k3];
+
+        MDS: ${inline.matrix(mds)};
+        INV_MDS: ${inline.matrix(invMds)};
+
+        T1: MDS # S^${alpha} + K1;
+        T2: (INV_MDS # (N - K2))^${alpha};
+
+        out: T1 - T2;
+    `,
     tConstraintDegree: 3,
     constants: [
         { values: roundConstants[0], pattern: 'repeat' },

@@ -14,12 +14,8 @@ for (let i = 0; i < 64; i++) {
 // create the STARK for MiMC computation
 const mimcStark = new index_1.Stark({
     field: new index_1.PrimeField(2n ** 256n - 351n * 2n ** 32n + 1n),
-    tExpressions: {
-        'n0': 'r0^3 + k0'
-    },
-    tConstraints: {
-        'q0': 'n0 - (r0^3 + k0)'
-    },
+    tFunction: 'out: $r0^3 + $k0',
+    tConstraints: 'out: $n0 - ($r0^3 + $k0)',
     tConstraintDegree: 3,
     constants: [{
             values: roundConstants,

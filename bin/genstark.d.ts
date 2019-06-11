@@ -16,11 +16,11 @@ declare module '@guildofweavers/genstark' {
         /** field for all math operations in the computation */
         field: FiniteField;
 
-        /** A set of transition expressions for all mutable registers */
-        tExpressions: { [register: string]: string } & { [script]?: string; };
+        /** An arithmetic script defining state transition function for the computation */
+        tFunction: string;
 
-        /** A set of transition constraints for the computation */
-        tConstraints: { [register: string]: string } & { [script]?: string; };
+        /** An arithmetic script defining transition constraint for the computation */
+        tConstraints: string;
 
         /** Maximum degree of transition constraints */
         tConstraintDegree: number;
@@ -40,9 +40,6 @@ declare module '@guildofweavers/genstark' {
         /** Hash algorithm for Merkle trees; defaults to sha256 */
         hashAlgorithm?: HashAlgorithm;
     }
-
-    /** A symbol for defining scripts in transition functions and constraints */
-    export const script: unique symbol;
 
     export class Stark {
 
@@ -122,6 +119,13 @@ declare module '@guildofweavers/genstark' {
         columnProof : BatchMerkleProof;
         polyProof   : BatchMerkleProof;
     }
+
+    // UTILITIES
+    // --------------------------------------------------------------------------------------------
+    export const inline: { 
+        vector(v: bigint[]): string;
+        matrix(m: bigint[][]): string;
+    };
 
     // INTERNAL
     // --------------------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { Stark, PrimeField, script } from '../../index';
+import { Stark, PrimeField, inline } from '../../index';
 import { Rescue } from './utils';
 
 // STARK PARAMETERS
@@ -41,73 +41,33 @@ const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 
 // STARK DEFINITION
 // ================================================================================================
-const tFunctionScript = `
-    a0: r0^${alpha};
-    a1: r1^${alpha};
-    a2: r2^${alpha};
-    a3: r3^${alpha};
-
-    b0: (${mds[0][0]} * a0) + (${mds[0][1]} * a1) + (${mds[0][2]} * a2) + (${mds[0][3]} * a3) + k0;
-    b1: (${mds[1][0]} * a0) + (${mds[1][1]} * a1) + (${mds[1][2]} * a2) + (${mds[1][3]} * a3) + k1;
-    b2: (${mds[2][0]} * a0) + (${mds[2][1]} * a1) + (${mds[2][2]} * a2) + (${mds[2][3]} * a3) + k2;
-    b3: (${mds[3][0]} * a0) + (${mds[3][1]} * a1) + (${mds[3][2]} * a2) + (${mds[3][3]} * a3) + k3;
-
-    c0: b0^(${invAlpha});
-    c1: b1^(${invAlpha});
-    c2: b2^(${invAlpha});
-    c3: b3^(${invAlpha});
-
-    d0: (${mds[0][0]} * c0) + (${mds[0][1]} * c1) + (${mds[0][2]} * c2) + (${mds[0][3]} * c3) + k4;
-    d1: (${mds[1][0]} * c0) + (${mds[1][1]} * c1) + (${mds[1][2]} * c2) + (${mds[1][3]} * c3) + k5;
-    d2: (${mds[2][0]} * c0) + (${mds[2][1]} * c1) + (${mds[2][2]} * c2) + (${mds[2][3]} * c3) + k6;
-    d3: (${mds[3][0]} * c0) + (${mds[3][1]} * c1) + (${mds[3][2]} * c2) + (${mds[3][3]} * c3) + k7;
-`;
-
-const tConstraintsScript = `
-    a0: r0^${alpha};
-    a1: r1^${alpha};
-    a2: r2^${alpha};
-    a3: r3^${alpha};
-
-    b0: (${mds[0][0]} * a0) + (${mds[0][1]} * a1) + (${mds[0][2]} * a2) + (${mds[0][3]} * a3) + k0;
-    b1: (${mds[1][0]} * a0) + (${mds[1][1]} * a1) + (${mds[1][2]} * a2) + (${mds[1][3]} * a3) + k1;
-    b2: (${mds[2][0]} * a0) + (${mds[2][1]} * a1) + (${mds[2][2]} * a2) + (${mds[2][3]} * a3) + k2;
-    b3: (${mds[3][0]} * a0) + (${mds[3][1]} * a1) + (${mds[3][2]} * a2) + (${mds[3][3]} * a3) + k3;
-
-    c0: (n0 - k4);
-    c1: (n1 - k5);
-    c2: (n2 - k6);
-    c3: (n3 - k7);
-    
-    d0: (${invMds[0][0]} * c0) + (${invMds[0][1]} * c1) + (${invMds[0][2]} * c2) + (${invMds[0][3]} * c3);
-    d1: (${invMds[1][0]} * c0) + (${invMds[1][1]} * c1) + (${invMds[1][2]} * c2) + (${invMds[1][3]} * c3);
-    d2: (${invMds[2][0]} * c0) + (${invMds[2][1]} * c1) + (${invMds[2][2]} * c2) + (${invMds[2][3]} * c3);
-    d3: (${invMds[3][0]} * c0) + (${invMds[3][1]} * c1) + (${invMds[3][2]} * c2) + (${invMds[3][3]} * c3);
-    
-    e0: d0^${alpha};
-    e1: d1^${alpha};
-    e2: d2^${alpha};
-    e3: d3^${alpha};
-`;
-
-// create the STARK for Rescue computation
 const rescStark = new Stark({
     field: field,
-    tExpressions: {
-        [script]: tFunctionScript,
-        n0      : 'd0',
-        n1      : 'd1',
-        n2      : 'd2',
-        n3      : 'd3'
-    },
-    tConstraints: {
-        [script]: tConstraintsScript,
-        q0      : `b0 - e0`,
-        q1      : `b1 - e1`,
-        q2      : `b2 - e2`,
-        q3      : `b3 - e3`
-    },
-    tConstraintDegree: 3,
+    tFunction: `
+        S: [$r0, $r1, $r2, $r3];
+        K1: [$k0, $k1, $k2, $k3];
+        K2: [$k4, $k5, $k6, $k7];
+
+        MDS: ${inline.matrix(mds)};
+
+        S: MDS # S^${alpha} + K1;
+        out: MDS # S^(${invAlpha}) + K2;
+    `,
+    tConstraints:`
+        S: [$r0, $r1, $r2, $r3];
+        N: [$n0, $n1, $n2, $n3];
+        K1: [$k0, $k1, $k2, $k3];
+        K2: [$k4, $k5, $k6, $k7];
+
+        MDS: ${inline.matrix(mds)};
+        INV_MDS: ${inline.matrix(invMds)};
+
+        T1: MDS # S^${alpha} + K1;
+        T2: (INV_MDS # (N - K2))^${alpha};
+
+        out: T1 - T2;
+    `,
+    tConstraintDegree   : 3,
     constants: [
         { values: roundConstants[0], pattern: 'repeat' },
         { values: roundConstants[1], pattern: 'repeat' },

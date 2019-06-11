@@ -30,7 +30,7 @@ export class LiteralNode implements AstNode {
     constructor(value: string) {
         this.value = BigInt(value);
         this.dimensions = [1, 1];
-        this.maxRegRef = this.maxConstRef = 0;
+        this.maxRegRef = this.maxConstRef = -1;
     }
 
     toCode() {
@@ -56,7 +56,7 @@ export class VariableNode implements AstNode {
     constructor(name: string, dimensions: Dimensions) {
         this.name = name;
         this.dimensions = dimensions;
-        this.maxRegRef = this.maxConstRef = 0;
+        this.maxRegRef = this.maxConstRef = -1;
         validateVariableName(name, dimensions);
     }
 
@@ -88,11 +88,11 @@ export class RegisterNode implements AstNode {
     }
 
     get maxRegRef(): number {
-        return (this.isReadonly ? 0 : this.index);
+        return (this.isReadonly ? -1 : this.index);
     }
 
     get maxConstRef(): number {
-        return (this.isReadonly ? this.index : 0);
+        return (this.isReadonly ? this.index : -1);
     }
 
     toCode(regRefBuilder: RegRefBuilder) {
@@ -155,7 +155,7 @@ export class VectorNode implements AstNode {
             throw new Error('Vectors must contain at least 2 elements');
         }
 
-        this.maxRegRef = this.maxConstRef = 0;
+        this.maxRegRef = this.maxConstRef = -1;
         for (let child of children) {
             if (!isScalar(child.dimensions)) {
                 throw new Error('All vector elements must be scalars');
@@ -210,7 +210,7 @@ export class MatrixNode implements AstNode {
         if (colCount <= 1) throw new Error('Matrix must contain at least 2 columns');
         this.dimensions = [rowCount, colCount];
         
-        this.maxRegRef = this.maxConstRef = 0;
+        this.maxRegRef = this.maxConstRef = -1;
         for (let i = 0; i < rowCount; i++) {
             let row = children[i];
             if (row.length !== colCount)  {
