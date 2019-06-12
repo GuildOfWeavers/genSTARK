@@ -8,8 +8,10 @@ const index_1 = require("../index");
 // This example shows how different types of constant registers can be used. The transition
 // function is very simple: it operates with 1 mutable register and 2 readonly registers. The full
 // execution trace is shown at the end of this file. 
+const steps = 2 ** 6, result = 292n;
 const demoStark = new index_1.Stark({
     field: new index_1.PrimeField(96769n),
+    steps: steps,
     tFunction: 'out: $r0 + 1 + $k0 + 2 * $k1',
     tConstraints: 'out: $n0 - ($r0 + 1 + $k0 + 2 * $k1)',
     tConstraintDegree: 1,
@@ -23,7 +25,6 @@ const demoStark = new index_1.Stark({
 });
 // TESTING
 // ================================================================================================
-const steps = 2 ** 6, result = 292n;
 // set up inputs and assertions
 const inputs = [1n];
 const assertions = [
@@ -31,10 +32,10 @@ const assertions = [
     { step: steps - 1, register: 0, value: result }
 ];
 // generate a proof
-const proof = demoStark.prove(assertions, steps, inputs);
+const proof = demoStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 // verify the proof
-demoStark.verify(assertions, proof, steps);
+demoStark.verify(assertions, proof);
 console.log('-'.repeat(20));
 // EXECUTION TRACE
 // ================================================================================================

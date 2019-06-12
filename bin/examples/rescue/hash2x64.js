@@ -53,6 +53,7 @@ const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 // ================================================================================================
 const rescueStark = new index_1.Stark({
     field: field,
+    steps: steps,
     tFunction: `
         S: [$r0, $r1];
         K1: [$k0, $k1];
@@ -94,10 +95,10 @@ const assertions = [
     { step: steps - 1, register: 0, value: 14354339131598895532n }
 ];
 // generate a proof
-const proof = rescueStark.prove(assertions, steps, inputs);
+const proof = rescueStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 // verify that the prover knows the value that hashes to 14354339131598895532
-rescueStark.verify(assertions, proof, steps);
+rescueStark.verify(assertions, proof);
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(rescueStark.sizeOf(proof) / 1024 * 100) / 100} KB`);
 // HELPER FUNCTIONS

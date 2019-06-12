@@ -56,6 +56,7 @@ const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 // ================================================================================================
 const rescueStark = new index_1.Stark({
     field: field,
+    steps: steps,
     tFunction: `
         S: [$r0, $r1, $r2, $r3];
         K1: [$k0, $k1, $k2, $k3];
@@ -101,10 +102,10 @@ const assertions = [
     { step: steps - 1, register: 1, value: 205025454306577433144586673939030012640n },
 ];
 // generate a proof
-const proof = rescueStark.prove(assertions, steps, inputs);
+const proof = rescueStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 // verify the proof
-rescueStark.verify(assertions, proof, steps);
+rescueStark.verify(assertions, proof);
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(rescueStark.sizeOf(proof) / 1024 * 100) / 100} KB`);
 // HELPER FUNCTIONS

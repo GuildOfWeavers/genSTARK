@@ -16,6 +16,9 @@ declare module '@guildofweavers/genstark' {
         /** field for all math operations in the computation */
         field: FiniteField;
 
+        /** number of steps in one complete iteration of the computation */
+        steps: number;
+
         /** An arithmetic script defining state transition function for the computation */
         tFunction: string;
 
@@ -49,18 +52,17 @@ declare module '@guildofweavers/genstark' {
         /**
          * Generate a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
-         * @param steps Number of steps in the computation
          * @param inputs Initial values for all mutable registers
          */
-        prove(assertions: Assertion[], steps: number, inputs: bigint[]): StarkProof;
+        prove(assertions: Assertion[], inputs: bigint[]): StarkProof;
 
         /**
          * Verifies a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
          * @param proof Proof of the computation
-         * @param steps Number of steps in the computation
+         * @param iterations Number of iterations of the computation; the default is 1
          */
-        verify(assertions: Assertion[], proof: StarkProof, steps: number): boolean;
+        verify(assertions: Assertion[], proof: StarkProof, iterations?: number): boolean;
 
         /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;

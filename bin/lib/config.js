@@ -24,6 +24,10 @@ function parseStarkConfig(config) {
     // field
     if (!config.field)
         throw new TypeError('Finite field was not provided');
+    // steps
+    const steps = config.steps;
+    if (!utils_1.isPowerOf2(steps))
+        throw new TypeError('Number of steps must be a power of 2');
     // constants
     const constants = [];
     if (config.constants) {
@@ -126,6 +130,7 @@ function parseStarkConfig(config) {
     }
     return {
         field: config.field,
+        iterationLength: steps,
         registerCount: registerCount,
         constraintCount: constraintCount,
         tFunction: tFunction,

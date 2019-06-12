@@ -17,6 +17,7 @@ import { StarkError } from './StarkError';
 export class Stark {
 
     readonly field              : FiniteField;
+    readonly iterationLength    : number;
     readonly registerCount      : number;
     readonly constraintCount    : number;
     readonly maxConstraintDegree: number;
@@ -39,6 +40,7 @@ export class Stark {
         const vConfig = parseStarkConfig(config);
 
         this.field = vConfig.field;
+        this.iterationLength = vConfig.iterationLength;
         this.registerCount = vConfig.registerCount;
         this.constraintCount = vConfig.constraintCount;
         this.maxConstraintDegree = vConfig.tConstraints.maxDegree;
@@ -58,17 +60,18 @@ export class Stark {
 
     // PROVER
     // --------------------------------------------------------------------------------------------
-    prove(assertions: Assertion[], steps: number, inputs: bigint[]): StarkProof {
+    prove(assertions: Assertion[], inputs: bigint[]): StarkProof {
 
         const label = this.logger.start('Starting STARK computation');
+        const steps = this.iterationLength; // TODO: make dependent on inputs
         const evaluationDomainSize = steps * this.extensionFactor;
         const constantCount = this.constants.length;
 
         // 0 ----- validate parameters
         if (assertions.length < 1) throw new TypeError('At least one assertion must be provided');
-        if (!isPowerOf2(steps)) throw new TypeError('Number of steps must be a power of 2');
+        // TODO: if (!isPowerOf2(iterations)) throw new TypeError('Number of iterations must be a power of 2');
         const maxSteps = MAX_DOMAIN_SIZE / this.extensionFactor;
-        if (steps > maxSteps) throw new TypeError(`Number of steps cannot exceed ${maxSteps}`);
+        if (steps > maxSteps) throw new TypeError(`Total number of steps cannot exceed ${maxSteps}`);
         if (!Array.isArray(inputs)) throw new TypeError(`Inputs parameter must be an array`);
         if (inputs.length !== this.registerCount) throw new TypeError(`Inputs array must have exactly ${this.registerCount} elements`);
         for (let i = 0; i < inputs.length; i++) {
@@ -248,18 +251,19 @@ export class Stark {
     
     // VERIFIER
     // --------------------------------------------------------------------------------------------
-    verify(assertions: Assertion[], proof: StarkProof, steps: number) {
+    verify(assertions: Assertion[], proof: StarkProof, iterations = 1) {
 
         const label = this.logger.start('Starting STARK verification');
+        const steps = this.iterationLength * iterations;
         const evaluationDomainSize = steps * this.extensionFactor;
         const constantCount = this.constants.length;
         const eRoot = proof.evaluations.root;
 
         // 0 ----- validate parameters
         if (assertions.length < 1) throw new TypeError('At least one assertion must be provided');
-        if (!isPowerOf2(steps)) throw new TypeError('Number of steps must be a power of 2');
+        if (!isPowerOf2(iterations)) throw new TypeError('Number of iterations must be a power of 2');
         const maxSteps = MAX_DOMAIN_SIZE / this.extensionFactor;
-        if (steps > maxSteps) throw new TypeError(`Number of steps cannot exceed ${maxSteps}`);
+        if (steps > maxSteps) throw new TypeError(`Total number of steps cannot exceed ${maxSteps}`);
 
         // 1 ----- set up evaluation context
         const G2 = this.field.getRootOfUnity(evaluationDomainSize);
