@@ -13,7 +13,7 @@ exports.OUTPUT_NAME = 'out';
 class Script {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(text, maxConstants) {
+    constructor(text, maxConstants, maxRegisters) {
         const statements = text.trim().split(';');
         this.variables = new Map();
         this.statements = new Array();
@@ -63,7 +63,8 @@ class Script {
         catch (error) {
             throw new Error(`Out statement is malformed: ${error.message}`);
         }
-        validateRegisterReferences(this.statements, this.outputWidth, maxConstants);
+        maxRegisters = maxRegisters || this.outputWidth;
+        validateRegisterReferences(this.statements, maxRegisters, maxConstants);
     }
     // PUBLIC ACCESSORS
     // --------------------------------------------------------------------------------------------

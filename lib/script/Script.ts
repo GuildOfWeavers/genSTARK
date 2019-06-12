@@ -19,7 +19,7 @@ export class Script {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(text: string, maxConstants: number) {
+    constructor(text: string, maxConstants: number, maxRegisters?: number) {
         const statements = text.trim().split(';');
         
         this.variables = new Map<string, Dimensions>();
@@ -75,7 +75,8 @@ export class Script {
             throw new Error(`Out statement is malformed: ${error.message}`);
         }
 
-        validateRegisterReferences(this.statements, this.outputWidth, maxConstants);
+        maxRegisters = maxRegisters || this.outputWidth;
+        validateRegisterReferences(this.statements, maxRegisters, maxConstants);
     }
 
     // PUBLIC ACCESSORS

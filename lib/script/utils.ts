@@ -28,11 +28,13 @@ export function validateVariableName(name: string, dimensions: Dimensions) {
 
     const errorMessage = `Variable name '${name}' is invalid`; 
 
-    // TODO: check for 'out' and JavaScript reserved words
-
     const match = name.match(variableNamePattern);
     if (!match || match[0].length !== name.length) {
         throw new Error(errorMessage);
+    }
+
+    if (name == 'out') {
+        throw new Error('Out statement can be used only at the end of the script');
     }
 
     if (isScalar(dimensions)) {

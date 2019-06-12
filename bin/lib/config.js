@@ -75,26 +75,40 @@ function parseStarkConfig(config) {
         }
     }
     // transition function
-    // TODO: improve error handling
     if (!config.tFunction)
         throw new TypeError('Transition function script was not provided');
-    const tFunctionScript = new script_1.Script(config.tFunction, constantCount);
-    const registerCount = tFunctionScript.outputWidth;
-    if (registerCount > MAX_REGISTER_COUNT) {
-        throw new TypeError(`Number of state registers cannot exceed ${MAX_REGISTER_COUNT}`);
+    if (typeof config.tFunction !== 'string')
+        throw new TypeError('Transition function script must be a string');
+    let tFunction, registerCount;
+    try {
+        const tFunctionScript = new script_1.Script(config.tFunction, constantCount);
+        registerCount = tFunctionScript.outputWidth;
+        if (registerCount > MAX_REGISTER_COUNT) {
+            throw new TypeError(`Number of state registers cannot exceed ${MAX_REGISTER_COUNT}`);
+        }
+        tFunction = buildTransitionFunction(tFunctionScript);
     }
-    const tFunction = buildTransitionFunction(tFunctionScript);
+    catch (error) {
+        throw new Error(`Failed to build transition function: ${error.message}`);
+    }
     // transition constraints
-    // TODO: improve error handling
     if (!config.tConstraints)
-        throw new TypeError('Transition constraints were not provided');
-    const tConstraintsScript = new script_1.Script(config.tConstraints, constantCount);
-    const constraintCount = tConstraintsScript.outputWidth;
-    if (constraintCount > MAX_CONSTRAINT_COUNT) {
-        throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
+        throw new TypeError('Transition constraints script was not provided');
+    if (typeof config.tConstraints !== 'string')
+        throw new TypeError('Transition constraints script must be a string');
+    let tBatchConstraintEvaluator, tConstraintEvaluator, constraintCount;
+    try {
+        const tConstraintsScript = new script_1.Script(config.tConstraints, constantCount, registerCount);
+        constraintCount = tConstraintsScript.outputWidth;
+        if (constraintCount > MAX_CONSTRAINT_COUNT) {
+            throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
+        }
+        tBatchConstraintEvaluator = buildBatchConstraintEvaluator(tConstraintsScript);
+        tConstraintEvaluator = buildConstraintEvaluator(tConstraintsScript);
     }
-    const tBatchConstraintEvaluator = buildBatchConstraintEvaluator(tConstraintsScript);
-    const tConstraintEvaluator = buildConstraintEvaluator(tConstraintsScript);
+    catch (error) {
+        throw new Error(`Failed to build transition constraints script: ${error.message}`);
+    }
     // execution trace spot checks
     const exeSpotCheckCount = config.exeSpotCheckCount || DEFAULT_EXE_SPOT_CHECK_COUNT;
     if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT || !Number.isInteger(exeSpotCheckCount)) {
@@ -150,7 +164,7 @@ function buildTransitionFunction(script) {
         assignments[i] = `$r[${i}][$i+1] = ${script.outputVariableName}[${i}]`;
     }
     const cBody = `throw new Error('Error in transition function at step ' + $i + ':' + error.message);`;
-    const lBody = `for (; $i < $steps - 1; $i++) {\n${scriptCode}\n${assignments.join(';\n')};\n }`;
+    const lBody = `for (; $i < $steps - 1; $i++) {\n${scriptCode}\n${assignments.join(';\n')};\n}`;
     const fBody = `let $i = 0;\ntry {\n${lBody}\n}\ncatch(error){\n${cBody}\n}`;
     return new Function('$r', '$k', '$steps', '$field', fBody);
 }
