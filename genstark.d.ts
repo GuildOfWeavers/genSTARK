@@ -16,11 +16,11 @@ declare module '@guildofweavers/genstark' {
         /** field for all math operations in the computation */
         field: FiniteField;
 
-        /** A set of transition expressions for all mutable registers */
-        tExpressions: { [register: string]: string };
+        /** An arithmetic script defining state transition function for the computation */
+        tFunction: string;
 
-        /** A list of transition constraints for the computation */
-        tConstraints: string[];
+        /** An arithmetic script defining transition constraint for the computation */
+        tConstraints: string;
 
         /** Maximum degree of transition constraints */
         tConstraintDegree: number;
@@ -119,6 +119,13 @@ declare module '@guildofweavers/genstark' {
         columnProof : BatchMerkleProof;
         polyProof   : BatchMerkleProof;
     }
+
+    // UTILITIES
+    // --------------------------------------------------------------------------------------------
+    export const inline: { 
+        vector(v: bigint[]): string;
+        matrix(m: bigint[][]): string;
+    };
 
     // INTERNAL
     // --------------------------------------------------------------------------------------------

@@ -23,11 +23,11 @@
   },
   "devDependencies": {
     "@types/node": "12.0.x",
-    "del": "4.0.x",
+    "del": "4.1.x",
     "gulp": "4.0.x"
   },
   "dependencies": {
-    "@guildofweavers/galois": "0.1.x",
+    "@guildofweavers/galois": "0.2.x",
     "@guildofweavers/merkle": "0.1.x"
   }
 }

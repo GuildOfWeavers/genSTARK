@@ -10,12 +10,8 @@ const index_1 = require("../index");
 // execution trace is shown at the end of this file. 
 const demoStark = new index_1.Stark({
     field: new index_1.PrimeField(96769n),
-    tExpressions: {
-        'n0': 'r0 + 1 + k0 + 2 * k1'
-    },
-    tConstraints: [
-        'n0 - (r0 + 1 + k0 + 2 * k1)'
-    ],
+    tFunction: 'out: $r0 + 1 + $k0 + 2 * $k1',
+    tConstraints: 'out: $n0 - ($r0 + 1 + $k0 + 2 * $k1)',
     tConstraintDegree: 1,
     constants: [{
             values: [1n, 2n, 3n, 4n],
