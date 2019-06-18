@@ -1,71 +1,35 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const script_1 = require("./script");
+// IMPORTS
+// ================================================================================================
+const air = require("@guildofweavers/air-script");
 const utils_1 = require("./utils");
 // MODULE VARIABLES
 // ================================================================================================
 exports.MAX_DOMAIN_SIZE = 2 ** 32;
-const MAX_REGISTER_COUNT = 64;
-const MAX_CONSTANT_COUNT = 64;
-const MAX_CONSTRAINT_COUNT = 1024;
-const MAX_CONSTRAINT_DEGREE = 16;
+const DEFAULT_OPTIONS = {
+    extensionFactor: 8,
+    exeSpotCheckCount: 80,
+    friSpotCheckCount: 40,
+    hashAlgorithm: 'sha256'
+};
 const MAX_EXTENSION_FACTOR = 32;
 const MAX_EXE_SPOT_CHECK_COUNT = 128;
 const MAX_FRI_SPOT_CHECK_COUNT = 64;
-const DEFAULT_EXE_SPOT_CHECK_COUNT = 80;
-const DEFAULT_FRI_SPOT_CHECK_COUNT = 40;
 const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
-const CONSTANT_PATTERNS = ['repeat', 'spread'];
 // PUBLIC FUNCTIONS
 // ================================================================================================
-function parseStarkConfig(config) {
-    if (!config)
-        throw new TypeError('STARK config was not provided');
-    // field
-    if (!config.field)
-        throw new TypeError('Finite field was not provided');
-    // steps
-    const steps = config.steps;
-    if (!utils_1.isPowerOf2(steps))
-        throw new TypeError('Number of steps must be a power of 2');
-    // constants
-    const constants = [];
-    if (config.constants) {
-        if (!Array.isArray(constants))
-            throw new TypeError(`Constant definitions must be in an array`);
-        if (config.constants.length > MAX_CONSTANT_COUNT) {
-            throw new TypeError(`Number of constant definitions cannot exceed ${MAX_CONSTANT_COUNT}`);
-        }
-        for (let i = 0; i < config.constants.length; i++) {
-            let constant = config.constants[i];
-            if (!constant)
-                throw new TypeError(`Constant definition at position ${i} is undefined`);
-            if (!CONSTANT_PATTERNS.includes(constant.pattern)) {
-                throw new TypeError(`Constant pattern ${constant.pattern} is invalid`);
-            }
-            if (!Array.isArray(constant.values))
-                throw new TypeError(`Values for constant definition ${i} are invalid`);
-            if (!utils_1.isPowerOf2(constant.values.length)) {
-                throw new TypeError(`Number of values for constant definition ${i} is not a power of 2`);
-            }
-            for (let j = 0; j < constant.values.length; j++) {
-                if (typeof constant.values[j] !== 'bigint') {
-                    throw new TypeError(`Value at position ${j} for constant definition ${i} is not a BigInt`);
-                }
-            }
-            constants.push(constant);
-        }
-    }
-    const constantCount = constants.length;
-    // transition constraints degree
-    const tConstraintDegree = config.tConstraintDegree;
-    if (tConstraintDegree < 1 || tConstraintDegree > MAX_CONSTRAINT_DEGREE || !Number.isInteger(tConstraintDegree)) {
-        throw new TypeError(`Transition constraint degree must be an integer between 1 and ${MAX_CONSTRAINT_DEGREE}`);
-    }
+function parseStarkConfig(script, options) {
+    if (typeof script !== 'string')
+        throw new TypeError('Script parameter must be a string');
+    if (!script.trim())
+        throw new TypeError('Script parameter cannot be an empty string');
+    const config = air.parseScript(script);
+    options = { ...DEFAULT_OPTIONS, ...options };
     // extension factor
-    let extensionFactor = config.extensionFactor;
+    let extensionFactor = options.extensionFactor;
     if (extensionFactor === undefined) {
-        extensionFactor = 2 ** Math.ceil(Math.log2(tConstraintDegree * 2));
+        extensionFactor = 2 ** Math.ceil(Math.log2(config.maxConstraintDegree * 2));
     }
     else {
         if (extensionFactor < 2 || extensionFactor > MAX_EXTENSION_FACTOR || !Number.isInteger(extensionFactor)) {
@@ -74,72 +38,35 @@ function parseStarkConfig(config) {
         if (!utils_1.isPowerOf2(extensionFactor)) {
             throw new TypeError(`Extension factor must be a power of 2`);
         }
-        if (extensionFactor < 2 * tConstraintDegree) {
+        if (extensionFactor < 2 * config.maxConstraintDegree) {
             throw new TypeError(`Extension factor must be at least 2x greater than the transition constraint degree`);
         }
     }
-    // transition function
-    if (!config.tFunction)
-        throw new TypeError('Transition function script was not provided');
-    if (typeof config.tFunction !== 'string')
-        throw new TypeError('Transition function script must be a string');
-    let tFunction, registerCount;
-    try {
-        const tFunctionScript = new script_1.Script(config.tFunction, constantCount);
-        registerCount = tFunctionScript.outputWidth;
-        if (registerCount > MAX_REGISTER_COUNT) {
-            throw new TypeError(`Number of state registers cannot exceed ${MAX_REGISTER_COUNT}`);
-        }
-        tFunction = buildTransitionFunction(tFunctionScript);
-    }
-    catch (error) {
-        throw new Error(`Failed to build transition function: ${error.message}`);
-    }
-    // transition constraints
-    if (!config.tConstraints)
-        throw new TypeError('Transition constraints script was not provided');
-    if (typeof config.tConstraints !== 'string')
-        throw new TypeError('Transition constraints script must be a string');
-    let tBatchConstraintEvaluator, tConstraintEvaluator, constraintCount;
-    try {
-        const tConstraintsScript = new script_1.Script(config.tConstraints, constantCount, registerCount);
-        constraintCount = tConstraintsScript.outputWidth;
-        if (constraintCount > MAX_CONSTRAINT_COUNT) {
-            throw new TypeError(`Number of transition constraints cannot exceed ${MAX_CONSTRAINT_COUNT}`);
-        }
-        tBatchConstraintEvaluator = buildBatchConstraintEvaluator(tConstraintsScript);
-        tConstraintEvaluator = buildConstraintEvaluator(tConstraintsScript);
-    }
-    catch (error) {
-        throw new Error(`Failed to build transition constraints script: ${error.message}`);
-    }
     // execution trace spot checks
-    const exeSpotCheckCount = config.exeSpotCheckCount || DEFAULT_EXE_SPOT_CHECK_COUNT;
+    const exeSpotCheckCount = options.exeSpotCheckCount;
     if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT || !Number.isInteger(exeSpotCheckCount)) {
         throw new TypeError(`Execution sample size must be an integer between 1 and ${MAX_EXE_SPOT_CHECK_COUNT}`);
     }
     // low degree evaluation spot checks
-    const friSpotCheckCount = config.friSpotCheckCount || DEFAULT_FRI_SPOT_CHECK_COUNT;
+    const friSpotCheckCount = options.friSpotCheckCount;
     if (friSpotCheckCount < 1 || friSpotCheckCount > MAX_FRI_SPOT_CHECK_COUNT || !Number.isInteger(friSpotCheckCount)) {
         throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_SPOT_CHECK_COUNT}`);
     }
     // hash function
-    const hashAlgorithm = config.hashAlgorithm || 'sha256';
+    const hashAlgorithm = options.hashAlgorithm;
     if (!HASH_ALGORITHMS.includes(hashAlgorithm)) {
         throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
     }
     return {
         field: config.field,
-        iterationLength: steps,
-        registerCount: registerCount,
-        constraintCount: constraintCount,
-        tFunction: tFunction,
-        tConstraints: {
-            evaluator: tConstraintEvaluator,
-            batchEvaluator: tBatchConstraintEvaluator,
-            maxDegree: tConstraintDegree
-        },
-        constants: constants,
+        roundLength: config.steps,
+        registerCount: config.mutableRegisterCount,
+        constraintCount: config.constraintCount,
+        maxConstraintDegree: config.maxConstraintDegree,
+        transitionFunction: config.transitionFunction,
+        constraintEvaluator: config.constraintEvaluator,
+        roundConstants: config.readonlyRegisters,
+        globalConstants: config.globalConstants,
         extensionFactor: extensionFactor,
         exeSpotCheckCount: exeSpotCheckCount,
         friSpotCheckCount: friSpotCheckCount,
@@ -147,64 +74,4 @@ function parseStarkConfig(config) {
     };
 }
 exports.parseStarkConfig = parseStarkConfig;
-// HELPER FUNCTIONS
-// ================================================================================================
-function buildTransitionFunction(script) {
-    const registerCount = script.outputWidth;
-    const assignments = new Array(registerCount);
-    const regRefBuilder = function (name, index) {
-        if (name === '$n') {
-            throw new Error('Transition function script cannot reference future register states');
-        }
-        else if (name === '$r') {
-            return `$r[${index}][$i]`;
-        }
-        else if (name === '$k') {
-            return `$k[${index}].getValue($i, true)`;
-        }
-        throw new Error(`Register reference '${name}${index}' is invalid`);
-    };
-    const scriptCode = script.toCode(regRefBuilder);
-    for (let i = 0; i < registerCount; i++) {
-        assignments[i] = `$r[${i}][$i+1] = ${script.outputVariableName}[${i}]`;
-    }
-    const cBody = `throw new Error('Error in transition function at step ' + $i + ':' + error.message);`;
-    const lBody = `for (; $i < $steps - 1; $i++) {\n${scriptCode}\n${assignments.join(';\n')};\n}`;
-    const fBody = `let $i = 0;\ntry {\n${lBody}\n}\ncatch(error){\n${cBody}\n}`;
-    return new Function('$r', '$k', '$steps', '$field', fBody);
-}
-function buildBatchConstraintEvaluator(script) {
-    const constraintCount = script.outputWidth;
-    const assignments = new Array(constraintCount);
-    const validators = new Array(constraintCount);
-    const regRefBuilder = function (name, index) {
-        if (name === '$n') {
-            return `$r[${index}][($i + $skip) % $steps]`;
-        }
-        else if (name === '$r') {
-            return `$r[${index}][$i]`;
-        }
-        else if (name === '$k') {
-            return `$k[${index}].getValue($i, false)`;
-        }
-        throw new Error(`Register reference '${name}${index}' is invalid`);
-    };
-    const scriptCode = script.toCode(regRefBuilder);
-    for (let i = 0; i < constraintCount; i++) {
-        assignments[i] = `$q[${i}][$i] = ${script.outputVariableName}[${i}]`;
-        validators[i] = `if ($q[${i}][$i] !== 0n) throw new Error('Constraint ' + ${i} + ' didn\\'t evaluate to 0 at step: ' + ($i/$skip));`;
-    }
-    const cBody = `if ($i < $nfSteps && $i % $skip === 0) {\n${validators.join(';\n')}\n}`;
-    const lBody = `${scriptCode}\n${assignments.join(';\n')};\n${cBody}`;
-    const fBody = `const $nfSteps = $steps - $skip;\nfor (let $i = 0; $i < $steps; $i++) {\n${lBody}\n}`;
-    return new Function('$q', '$r', '$k', '$steps', '$skip', '$field', fBody);
-}
-function buildConstraintEvaluator(script) {
-    const regRefBuilder = function (name, index) {
-        return `${name}[${index}]`;
-    };
-    const scriptCode = script.toCode(regRefBuilder);
-    const body = `${scriptCode}\nreturn ${script.outputVariableName};`;
-    return new Function('$r', '$n', '$k', '$field', body);
-}
 //# sourceMappingURL=config.js.map

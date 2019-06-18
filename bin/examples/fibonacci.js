@@ -13,19 +13,20 @@ const index_1 = require("../index");
 //const steps = 2**6, result = 1783540607n;         // ~50 ms to prove, ~12 KB proof size
 const steps = 2 ** 13, result = 203257732n; // ~1 second to prove, ~147 KB proof size
 //const steps = 2**17, result = 2391373091n;        // ~13 seconds to prove, ~290 KB proof size
-const fibStark = new index_1.Stark({
-    field: new index_1.PrimeField(2n ** 32n - 3n * 2n ** 25n + 1n),
-    steps: steps,
-    tFunction: `
+const fibStark = new index_1.Stark(`
+define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
+
+    transition 2 registers in 2^13 steps {
         a0: $r0 + $r1;
         out: [a0, a0 + $r1];
-    `,
-    tConstraints: `
+    }
+
+    enforce 2 constraints of degree 1 {
         a0: $r0 + $r1;
         out: [$n0 - a0, $n1 - (a0 + $r1)];
-    `,
-    tConstraintDegree: 1 // max degree of our constraints is 1
-});
+    }
+
+}`);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

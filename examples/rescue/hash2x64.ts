@@ -20,7 +20,7 @@
 
 // IMPORTS
 // ================================================================================================
-import { Stark, PrimeField, inline } from '../../index';
+import { Stark, PrimeField } from '../../index';
 import { Rescue } from './utils';
 
 // STARK PARAMETERS
@@ -34,10 +34,6 @@ const invAlpha = -6148914683720324437n;
 const mds = [
     [18446744051160973310n, 18446744051160973301n],
     [                   4n,                   13n]
-];
-const invMds = [
-    [ 2049638227906774814n,  6148914683720324439n],
-    [16397105823254198500n, 12297829367440648875n]
 ];
 
 // Key constant parameters
@@ -55,41 +51,49 @@ const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 
 // STARK DEFINITION
 // ================================================================================================
-const rescueStark = new Stark({
-    field: field,
-    steps: steps,
-    tFunction: `
+const rescueStark = new Stark(`
+define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
+
+    alpha: 3;
+    invAlpha: 0-6148914683720324437;
+
+    MDS: [
+        [18446744051160973310, 18446744051160973301],
+        [                   4,                   13]
+    ];
+
+    INV_MDS = [
+        [ 2049638227906774814n,  6148914683720324439n],
+        [16397105823254198500n, 12297829367440648875n]
+    ];
+
+    transition 2 register in 32 steps {
         S: [$r0, $r1];
         K1: [$k0, $k1];
         K2: [$k2, $k3];
+        S: MDS # S^alpha + K1;
+        out: MDS # S^(invAlpha) + K2;
+    }
 
-        MDS: ${inline.matrix(mds)};
-
-        S: MDS # S^${alpha} + K1;
-        out: MDS # S^(${invAlpha}) + K2;
-    `,
-    tConstraints: `
+    enforce 2 constraint of degree 3 {
         S: [$r0, $r1];
         N: [$n0, $n1];
         K1: [$k0, $k1];
         K2: [$k2, $k3];
 
-        MDS: ${inline.matrix(mds)};
-        INV_MDS: ${inline.matrix(invMds)};
-
-        T1: MDS # S^${alpha} + K1;
-        T2: (INV_MDS # (N - K2))^${alpha};
+        T1: MDS # S^alpha + K1;
+        T2: (INV_MDS # (N - K2))^alpha;
 
         out: T1 - T2;
-    `,
-    tConstraintDegree: 3,
-    constants: [
-        { values: roundConstants[0], pattern: 'repeat' },
-        { values: roundConstants[1], pattern: 'repeat' },
-        { values: roundConstants[2], pattern: 'repeat' },
-        { values: roundConstants[3], pattern: 'repeat' }
-    ]
-});
+    }
+
+    using 4 readonly registers {
+        $k0: repeat [${roundConstants[0].join(', ')}];
+        $k1: repeat [${roundConstants[1].join(', ')}];
+        $k2: repeat [${roundConstants[2].join(', ')}];
+        $k3: repeat [${roundConstants[3].join(', ')}];
+    }
+}`);
 
 // TESTING
 // ================================================================================================

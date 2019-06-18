@@ -16,17 +16,21 @@ for (let i = 0; i < 64; i++) {
 }
 
 // create the STARK for MiMC computation
-const mimcStark = new Stark({
-    field       : new PrimeField(2n ** 256n - 351n * 2n ** 32n + 1n),
-    steps       : steps,
-    tFunction   : 'out: $r0^3 + $k0',
-    tConstraints: 'out: $n0 - ($r0^3 + $k0)',
-    tConstraintDegree: 3,
-    constants: [{
-        values  : roundConstants,
-        pattern : 'repeat'
-    }]
-});
+const mimcStark = new Stark(`
+define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
+
+    transition 1 register in 2^13 steps {
+        out: $r0^3 + $k0;
+    }
+
+    enforce 1 constraint of degree 3 {
+        out: $n0 - ($r0^3 + $k0);
+    }
+
+    using 1 readonly register {
+        $k0: repeat [${roundConstants.join(', ')}];
+    }
+}`);
 
 // TESTING
 // ================================================================================================

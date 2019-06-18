@@ -1,9 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const merkle_1 = require("@guildofweavers/merkle");
 const components_1 = require("./components");
 const utils_1 = require("./utils");
 const registers_1 = require("./registers");
-const merkle_1 = require("@guildofweavers/merkle");
 const config_1 = require("./config");
 const Serializer_1 = require("./Serializer");
 const StarkError_1 = require("./StarkError");
@@ -12,20 +12,20 @@ const StarkError_1 = require("./StarkError");
 class Stark {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(config, logger) {
-        const vConfig = config_1.parseStarkConfig(config);
+    constructor(airScript, config, logger) {
+        const vConfig = config_1.parseStarkConfig(airScript, config);
         this.field = vConfig.field;
-        this.iterationLength = vConfig.iterationLength;
+        this.roundLength = vConfig.roundLength;
         this.registerCount = vConfig.registerCount;
         this.constraintCount = vConfig.constraintCount;
-        this.maxConstraintDegree = vConfig.tConstraints.maxDegree;
-        this.constants = vConfig.constants;
+        this.maxConstraintDegree = vConfig.maxConstraintDegree;
+        this.roundConstants = vConfig.roundConstants;
+        this.globalConstants = vConfig.globalConstants;
+        this.applyTransitions = vConfig.transitionFunction;
+        this.evaluateConstraints = vConfig.constraintEvaluator;
         this.extensionFactor = vConfig.extensionFactor;
         this.exeSpotCheckCount = vConfig.exeSpotCheckCount;
         this.friSpotCheckCount = vConfig.friSpotCheckCount;
-        this.applyTransitions = vConfig.tFunction;
-        this.applyConstraints = vConfig.tConstraints.batchEvaluator;
-        this.evaluateConstraints = vConfig.tConstraints.evaluator;
         this.hashAlgorithm = vConfig.hashAlgorithm;
         this.logger = logger || new utils_1.Logger();
     }
@@ -33,9 +33,9 @@ class Stark {
     // --------------------------------------------------------------------------------------------
     prove(assertions, inputs) {
         const label = this.logger.start('Starting STARK computation');
-        const steps = this.iterationLength; // TODO: make dependent on inputs
+        const steps = this.roundLength; // TODO: make dependent on inputs
         const evaluationDomainSize = steps * this.extensionFactor;
-        const constantCount = this.constants.length;
+        const constantCount = this.roundConstants.length;
         // 0 ----- validate parameters
         if (assertions.length < 1)
             throw new TypeError('At least one assertion must be provided');
@@ -67,7 +67,7 @@ class Stark {
         const evaluationDomain = this.field.getPowerCycle(G2);
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const zPoly = new components_1.ZeroPolynomial(context);
-        const cRegisters = buildReadonlyRegisters(this.constants, context, evaluationDomain);
+        const cRegisters = buildReadonlyRegisters(this.roundConstants, context, evaluationDomain);
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- generate execution trace
         // first, copy over inputs to the beginning of the execution trace
@@ -78,7 +78,23 @@ class Stark {
         }
         // then, apply transition function for all steps
         try {
-            this.applyTransitions(executionTrace, cRegisters, steps, this.field);
+            let r = inputs.slice();
+            let n = new Array(this.registerCount);
+            let k = new Array(cRegisters.length);
+            for (let i = 0; i < steps - 1; i++) {
+                // calculate values of readonly registers for the current step
+                for (let j = 0; j < constantCount; j++) {
+                    k[j] = cRegisters[j].getValue(i, true);
+                }
+                // apply transition function and copy results to the execution trace
+                this.applyTransitions(r, k, this.globalConstants, n);
+                for (let j = 0; j < this.registerCount; j++) {
+                    executionTrace[j][i + 1] = n[j];
+                }
+                // prepare for the next iteration
+                r = n;
+                n = new Array(this.registerCount);
+            }
         }
         catch (error) {
             throw new StarkError_1.StarkError('Failed to generate execution trace', error);
@@ -103,7 +119,23 @@ class Stark {
             qEvaluations[i] = new Array(evaluationDomainSize);
         }
         try {
-            this.applyConstraints(qEvaluations, pEvaluations, cRegisters, evaluationDomainSize, this.extensionFactor, this.field);
+            const r = new Array(this.registerCount);
+            const n = new Array(this.registerCount);
+            const k = new Array(cRegisters.length);
+            const q = new Array(this.constraintCount);
+            for (let i = 0; i < evaluationDomainSize; i++) {
+                for (let j = 0; j < this.registerCount; j++) {
+                    r[j] = pEvaluations[j][i];
+                    n[j] = pEvaluations[j][(i + this.extensionFactor) % evaluationDomainSize];
+                }
+                for (let j = 0; j < constantCount; j++) {
+                    k[j] = cRegisters[j].getValue(i, false);
+                }
+                this.evaluateConstraints(r, n, k, this.globalConstants, q);
+                for (let j = 0; j < this.registerCount; j++) {
+                    qEvaluations[j][i] = q[j];
+                }
+            }
         }
         catch (error) {
             throw new StarkError_1.StarkError('Failed to evaluate transition constraints', error);
@@ -205,9 +237,9 @@ class Stark {
     // --------------------------------------------------------------------------------------------
     verify(assertions, proof, iterations = 1) {
         const label = this.logger.start('Starting STARK verification');
-        const steps = this.iterationLength * iterations;
+        const steps = this.roundLength * iterations;
         const evaluationDomainSize = steps * this.extensionFactor;
-        const constantCount = this.constants.length;
+        const constantCount = this.roundConstants.length;
         const eRoot = proof.evaluations.root;
         // 0 ----- validate parameters
         if (assertions.length < 1)
@@ -230,7 +262,7 @@ class Stark {
         };
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const zPoly = new components_1.ZeroPolynomial(context);
-        const cRegisters = buildReadonlyRegisters(this.constants, context);
+        const cRegisters = buildReadonlyRegisters(this.roundConstants, context);
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
         const spotCheckCount = Math.min(this.exeSpotCheckCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
@@ -302,6 +334,7 @@ class Stark {
         const lCoefficients = this.field.prng(eRoot, lPolyCount);
         this.logger.log(label, `Verified low-degree proof`);
         // 7 ----- verify transition and boundary constraints
+        let qValues = new Array(this.constraintCount);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
             let x = this.field.exp(G2, BigInt(step));
@@ -316,7 +349,7 @@ class Stark {
             }
             // check transition 
             let npValues = pEvaluations.get((step + this.extensionFactor) % evaluationDomainSize);
-            let qValues = this.evaluateConstraints(pValues, npValues, cValues, this.field);
+            this.evaluateConstraints(pValues, npValues, cValues, this.globalConstants, qValues);
             for (let j = 0; j < this.constraintCount; j++) {
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValues[j] !== qCheck) {

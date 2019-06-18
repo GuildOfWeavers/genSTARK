@@ -1,13 +1,15 @@
 // IMPORTS
 // ================================================================================================
 import {
-    StarkConfig, FiniteField, Assertion, TransitionFunction, ConstraintEvaluator, BatchConstraintEvaluator, 
-    HashAlgorithm, StarkProof, BatchMerkleProof, EvaluationContext, ReadonlyRegister, Constant, Logger as ILogger
+    SecurityOptions, FiniteField, Assertion, HashAlgorithm, StarkProof, BatchMerkleProof, EvaluationContext,
+    ReadonlyRegister, Logger as ILogger
 } from '@guildofweavers/genstark';
+import { MerkleTree, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
+import { TransitionFunction, ConstraintEvaluator, ReadonlyRegisterSpecs } from '@guildofweavers/air-script';
+
 import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver } from './components';
 import { Logger, isPowerOf2, getPseudorandomIndexes, sizeOf, bigIntsToBuffers, buffersToBigInts } from './utils';
 import { RepeatedConstants, SpreadConstants } from './registers';
-import { MerkleTree, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
 import { parseStarkConfig, MAX_DOMAIN_SIZE } from './config';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
@@ -16,43 +18,43 @@ import { StarkError } from './StarkError';
 // ================================================================================================
 export class Stark {
 
-    readonly field              : FiniteField;
-    readonly iterationLength    : number;
-    readonly registerCount      : number;
-    readonly constraintCount    : number;
-    readonly maxConstraintDegree: number;
-    readonly constants          : Constant[];
+    readonly field                  : FiniteField;
+    readonly roundLength            : number;
+    readonly registerCount          : number;
+    readonly constraintCount        : number;
+    readonly maxConstraintDegree    : number;
+    readonly roundConstants         : ReadonlyRegisterSpecs[];
+    readonly globalConstants        : any;
 
-    readonly extensionFactor    : number;
-    readonly exeSpotCheckCount  : number;
-    readonly friSpotCheckCount  : number;
+    readonly extensionFactor        : number;
+    readonly exeSpotCheckCount      : number;
+    readonly friSpotCheckCount      : number;
 
-    readonly applyTransitions   : TransitionFunction;
-    readonly applyConstraints   : BatchConstraintEvaluator;
-    readonly evaluateConstraints: ConstraintEvaluator;
+    readonly applyTransitions       : TransitionFunction;
+    readonly evaluateConstraints    : ConstraintEvaluator;
 
-    readonly hashAlgorithm      : HashAlgorithm;
-    readonly logger             : ILogger;
+    readonly hashAlgorithm          : HashAlgorithm;
+    readonly logger                 : ILogger;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(config: StarkConfig, logger?: ILogger) {
-        const vConfig = parseStarkConfig(config);
+    constructor(airScript: string, config?: SecurityOptions, logger?: ILogger) {
+        const vConfig = parseStarkConfig(airScript, config);
 
         this.field = vConfig.field;
-        this.iterationLength = vConfig.iterationLength;
+        this.roundLength = vConfig.roundLength;
         this.registerCount = vConfig.registerCount;
         this.constraintCount = vConfig.constraintCount;
-        this.maxConstraintDegree = vConfig.tConstraints.maxDegree;
-        this.constants = vConfig.constants;
+        this.maxConstraintDegree = vConfig.maxConstraintDegree;
+        this.roundConstants = vConfig.roundConstants;
+        this.globalConstants = vConfig.globalConstants;
+
+        this.applyTransitions = vConfig.transitionFunction;
+        this.evaluateConstraints = vConfig.constraintEvaluator;
 
         this.extensionFactor = vConfig.extensionFactor;
         this.exeSpotCheckCount = vConfig.exeSpotCheckCount;
         this.friSpotCheckCount = vConfig.friSpotCheckCount;
-
-        this.applyTransitions = vConfig.tFunction;
-        this.applyConstraints = vConfig.tConstraints.batchEvaluator;
-        this.evaluateConstraints = vConfig.tConstraints.evaluator;
 
         this.hashAlgorithm = vConfig.hashAlgorithm;
         this.logger = logger || new Logger();
@@ -63,9 +65,9 @@ export class Stark {
     prove(assertions: Assertion[], inputs: bigint[]): StarkProof {
 
         const label = this.logger.start('Starting STARK computation');
-        const steps = this.iterationLength; // TODO: make dependent on inputs
+        const steps = this.roundLength; // TODO: make dependent on inputs
         const evaluationDomainSize = steps * this.extensionFactor;
-        const constantCount = this.constants.length;
+        const constantCount = this.roundConstants.length;
 
         // 0 ----- validate parameters
         if (assertions.length < 1) throw new TypeError('At least one assertion must be provided');
@@ -97,7 +99,7 @@ export class Stark {
 
         const bPoly = new BoundaryConstraints(assertions, context);
         const zPoly = new ZeroPolynomial(context);
-        const cRegisters = buildReadonlyRegisters(this.constants, context, evaluationDomain);
+        const cRegisters = buildReadonlyRegisters(this.roundConstants, context, evaluationDomain);
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- generate execution trace
@@ -110,7 +112,25 @@ export class Stark {
 
         // then, apply transition function for all steps
         try {
-            this.applyTransitions(executionTrace, cRegisters, steps, this.field);
+            let r = inputs.slice();
+            let n = new Array<bigint>(this.registerCount);
+            let k = new Array<bigint>(cRegisters.length);
+            for (let i = 0; i < steps - 1; i++) {
+                // calculate values of readonly registers for the current step
+                for (let j = 0; j < constantCount; j++) {
+                    k[j] = cRegisters[j].getValue(i, true);
+                }
+
+                // apply transition function and copy results to the execution trace
+                this.applyTransitions(r, k, this.globalConstants, n);
+                for (let j = 0; j < this.registerCount; j++) {
+                    executionTrace[j][i + 1] = n[j];
+                }
+
+                // prepare for the next iteration
+                r = n;
+                n = new Array<bigint>(this.registerCount);
+            }
         }
         catch (error) {
             throw new StarkError('Failed to generate execution trace', error);
@@ -137,8 +157,28 @@ export class Stark {
         for (let i = 0; i < this.constraintCount; i++) {
             qEvaluations[i] = new Array<bigint>(evaluationDomainSize);
         }
+
         try {
-            this.applyConstraints(qEvaluations, pEvaluations, cRegisters, evaluationDomainSize, this.extensionFactor, this.field);
+            const r = new Array<bigint>(this.registerCount);
+            const n = new Array<bigint>(this.registerCount);
+            const k = new Array<bigint>(cRegisters.length);
+            const q = new Array<bigint>(this.constraintCount);
+            for (let i = 0; i < evaluationDomainSize; i++) {
+                for (let j = 0; j < this.registerCount; j++) {
+                    r[j] = pEvaluations[j][i];
+                    n[j] = pEvaluations[j][(i + this.extensionFactor) % evaluationDomainSize];
+                }
+
+                for (let j = 0; j < constantCount; j++) {
+                    k[j] = cRegisters[j].getValue(i, false);
+                }
+
+                this.evaluateConstraints(r, n, k, this.globalConstants, q);
+
+                for (let j = 0; j < this.registerCount; j++) {
+                    qEvaluations[j][i] = q[j];
+                }
+            }
         }
         catch (error) {
             throw new StarkError('Failed to evaluate transition constraints', error);
@@ -254,9 +294,9 @@ export class Stark {
     verify(assertions: Assertion[], proof: StarkProof, iterations = 1) {
 
         const label = this.logger.start('Starting STARK verification');
-        const steps = this.iterationLength * iterations;
+        const steps = this.roundLength * iterations;
         const evaluationDomainSize = steps * this.extensionFactor;
-        const constantCount = this.constants.length;
+        const constantCount = this.roundConstants.length;
         const eRoot = proof.evaluations.root;
 
         // 0 ----- validate parameters
@@ -280,7 +320,7 @@ export class Stark {
 
         const bPoly = new BoundaryConstraints(assertions, context);
         const zPoly = new ZeroPolynomial(context);
-        const cRegisters = buildReadonlyRegisters(this.constants, context);
+        const cRegisters = buildReadonlyRegisters(this.roundConstants, context);
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- compute positions for evaluation spot-checks
@@ -363,6 +403,7 @@ export class Stark {
         this.logger.log(label, `Verified low-degree proof`);
 
         // 7 ----- verify transition and boundary constraints
+        let qValues = new Array<bigint>(this.constraintCount);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
             let x = this.field.exp(G2, BigInt(step));
@@ -380,7 +421,7 @@ export class Stark {
 
             // check transition 
             let npValues = pEvaluations.get((step + this.extensionFactor) % evaluationDomainSize)!;
-            let qValues = this.evaluateConstraints(pValues, npValues, cValues, this.field);
+            this.evaluateConstraints(pValues, npValues, cValues, this.globalConstants, qValues);
             for (let j = 0; j < this.constraintCount; j++) {
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValues[j] !== qCheck) {
@@ -471,7 +512,7 @@ export class Stark {
 
 // HELPER FUNCTIONS
 // ================================================================================================
-function buildReadonlyRegisters(constants: Constant[] | undefined, context: EvaluationContext, domain?: bigint[]) {
+function buildReadonlyRegisters(constants: ReadonlyRegisterSpecs[] | undefined, context: EvaluationContext, domain?: bigint[]) {
     const registers = new Array<ReadonlyRegister>(constants ? constants.length : 0);
     for (let i = 0; i < registers.length; i++) {
         let c = constants![i];

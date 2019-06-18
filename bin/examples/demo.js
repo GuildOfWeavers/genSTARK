@@ -9,20 +9,22 @@ const index_1 = require("../index");
 // function is very simple: it operates with 1 mutable register and 2 readonly registers. The full
 // execution trace is shown at the end of this file. 
 const steps = 2 ** 6, result = 292n;
-const demoStark = new index_1.Stark({
-    field: new index_1.PrimeField(96769n),
-    steps: steps,
-    tFunction: 'out: $r0 + 1 + $k0 + 2 * $k1',
-    tConstraints: 'out: $n0 - ($r0 + 1 + $k0 + 2 * $k1)',
-    tConstraintDegree: 1,
-    constants: [{
-            values: [1n, 2n, 3n, 4n],
-            pattern: 'repeat'
-        }, {
-            values: [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n],
-            pattern: 'spread'
-        }]
-});
+const demoStark = new index_1.Stark(`
+define Demo over prime field (96769) {
+
+    transition 1 register in 2^6 steps {
+        out: $r0 + 1 + $k0 + 2 * $k1;
+    }
+
+    enforce 1 constraint of degree 1 {
+        out: out: $n0 - ($r0 + 1 + $k0 + 2 * $k1);
+    }
+
+    using 2 readonly registers {
+        $k0: repeat [1, 2, 3, 4];
+        $k1: spread [1, 2, 3, 4, 5, 6, 7, 8]
+    }
+}`);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
