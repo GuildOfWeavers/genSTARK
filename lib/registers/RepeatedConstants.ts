@@ -1,13 +1,13 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, Polynom, EvaluationContext, ReadonlyRegister } from "@guildofweavers/genstark";
+import { FiniteField, Polynom, EvaluationContext, ComputedRegister } from "@guildofweavers/genstark";
 
 // CLASS DEFINITION
 // ================================================================================================
-export class RepeatedConstants implements ReadonlyRegister {
+export class RepeatedConstants implements ComputedRegister {
 
     readonly field          : FiniteField;
-    readonly periods         : bigint;
+    readonly periods        : bigint;
     readonly poly           : Polynom;
     readonly extensionFactor: number;
 

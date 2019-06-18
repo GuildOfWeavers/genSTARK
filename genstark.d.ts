@@ -122,7 +122,7 @@ declare module '@guildofweavers/genstark' {
         hashAlgorithm   : HashAlgorithm;
     }
 
-    export interface ReadonlyRegister {
+    export interface ComputedRegister {
         getValue(step: number, skip: boolean): bigint;
         getValueAt(x: bigint): bigint;
     }

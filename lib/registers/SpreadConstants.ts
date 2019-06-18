@@ -1,10 +1,10 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, Polynom, EvaluationContext, ReadonlyRegister } from "@guildofweavers/genstark";
+import { FiniteField, Polynom, EvaluationContext, ComputedRegister } from "@guildofweavers/genstark";
 
 // CLASS DEFINITION
 // ================================================================================================
-export class SpreadConstants implements ReadonlyRegister {
+export class SpreadConstants implements ComputedRegister {
 
     readonly field          : FiniteField;
     readonly maskPeriods    : bigint;
