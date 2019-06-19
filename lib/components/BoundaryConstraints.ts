@@ -13,19 +13,12 @@ export class BoundaryConstraints {
     // --------------------------------------------------------------------------------------------
     constructor(assertions: Assertion[], context: EvaluationContext) {
         const field = this.field = context.field;
-        const extensionFactor = context.extensionFactor;
+        const extensionFactor = context.domainSize / context.totalSteps;
 
         // combine constraints for each register
         const rData = new Map<number,{ xs: bigint[]; ys: bigint[]; zPoly: Polynom; }>();
         for (let c of assertions) {
-            if (c.register < 0 || c.register >= context.registerCount) {
-                throw new Error(`Invalid boundary constraint: register ${c.register} is outside of register bank`);
-            }
-
-            if (c.step < 0 || c.step >= context.steps) {
-                throw new Error(`Invalid boundary constraint: step ${c.step} is outside of execution trace`);
-            }
-
+            
             let x = field.exp(context.rootOfUnity, BigInt(c.step * extensionFactor))
             let data = rData.get(c.register);
             if (data) {

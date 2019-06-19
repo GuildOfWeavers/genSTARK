@@ -18,17 +18,17 @@ export class SpreadConstants implements ComputedRegister {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     constructor(values: bigint[], context: EvaluationContext, domain?: bigint[]) {
-        if (values.length > context.steps) {
+        if (values.length > context.totalSteps) {
             throw new Error('Number of steps must be greater than the constant cycle');
         }
         
-        if (context.steps % values.length !== 0) {
+        if (context.totalSteps % values.length !== 0) {
             throw new Error('Constant cycle must evenly divide the number of steps');
         }
 
         const field = this.field = context.field;
-        const steps = context.steps;
-        this.extensionFactor = context.extensionFactor;
+        const steps = context.totalSteps;
+        this.extensionFactor = context.domainSize / context.totalSteps;
 
         // create mask polynomial
         const maskPeriods = steps / values.length;
@@ -38,7 +38,7 @@ export class SpreadConstants implements ComputedRegister {
         for (let i = 1; i < mask.length; i++) {
             mask[i] = 0n;
         }
-        const mg = field.exp(context.rootOfUnity, BigInt(this.extensionFactor) * this.maskPeriods);
+        const mg = field.exp(context.rootOfUnity, BigInt(this.extensionFactor * values.length));
         const mRoots = field.getPowerCycle(mg);
         this.maskPoly = field.interpolateRoots(mRoots, mask);
 
