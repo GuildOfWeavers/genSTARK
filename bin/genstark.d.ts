@@ -77,6 +77,21 @@ declare module '@guildofweavers/genstark' {
         }
     }
 
+    export interface StarkProof2 {
+        values      : Buffer[];
+        evProof: {
+            root    : Buffer;
+            nodes   : Buffer[][];
+            depth   : number;
+        };
+        lcProof: {
+            root    : Buffer;
+            nodes   : Buffer[][];
+            depth   : number;
+        };
+        ldProof     : LowDegreeProof;
+    }
+
     // CONSTRAINTS
     // --------------------------------------------------------------------------------------------
     export interface Assertion {
