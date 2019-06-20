@@ -61,7 +61,7 @@ export class LinearCombination {
             let pbValues = [...pValues, ...bValues];
             let pbValues2 = new Array<bigint>(pbValues.length);
             for (let j = 0; j < pbValues2.length; j++) {
-                pbValues2[j] = pbValues[j] * power;
+                pbValues2[j] = this.field.mul(pbValues[j], power);
             }
             lcValues = [...pbValues2, ...pbValues, ...dValues];
         }
@@ -69,7 +69,7 @@ export class LinearCombination {
             let power = this.field.exp(x, BigInt(this.steps - 1));
             let dValues2 = new Array<bigint>(dValues.length);
             for (let j = 0; j < dValues2.length; j++) {
-                dValues2[j] = dValues[j] * power;
+                dValues2[j] = this.field.mul(dValues[j], power);
             }
             lcValues = [...pValues, ...bValues, ...dValues2]
         }

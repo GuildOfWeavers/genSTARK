@@ -29,7 +29,6 @@ class Stark {
         this.config = air_script_1.parseScript(source);
         this.field = this.config.field;
         this.traceBuilder = new components_1.ExecutionTraceBuilder(this.config);
-        this.constraintEvaluator = new components_1.TransitionConstraintEvaluator(this.config);
         const vOptions = validateSecurityOptions(options, this.config.maxConstraintDegree);
         this.extensionFactor = vOptions.extensionFactor;
         this.exeSpotCheckCount = vOptions.exeSpotCheckCount;
@@ -70,7 +69,8 @@ class Stark {
         const pEvaluations = pPoly.evaluate(evaluationDomain);
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
-        const qEvaluations = this.constraintEvaluator.evaluateAll(context, pEvaluations, iRegisters, kRegisters);
+        const constraintEvaluator = new components_1.TransitionConstraintEvaluator(this.config, context);
+        const qEvaluations = constraintEvaluator.evaluateAll(pEvaluations, iRegisters, kRegisters);
         this.logger.log(label, 'Computed Q(x) polynomials');
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
         const zPoly = new components_1.ZeroPolynomial(context);
@@ -217,7 +217,7 @@ class Stark {
                 throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`, error);
             }
         }
-        const lCombination = new components_1.LinearCombination(context, this.config.maxConstraintDegree, proof.degree.root);
+        const lCombination = new components_1.LinearCombination(context, this.config.maxConstraintDegree, proof.evaluations.root);
         const lEvaluations = new Map();
         const lEvaluationValues = utils_1.buffersToBigInts(proof.degree.lcProof.values);
         for (let i = 0; i < proof.degree.lcProof.values.length; i++) {
@@ -235,12 +235,14 @@ class Stark {
         }
         this.logger.log(label, `Verified low-degree proof`);
         // 7 ----- verify transition and boundary constraints
+        const constraintEvaluator = new components_1.TransitionConstraintEvaluator(this.config, context);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
             let x = this.field.exp(G2, BigInt(step));
             let pValues = pEvaluations.get(step);
             let bValues = bEvaluations.get(step);
             let dValues = dEvaluations.get(step);
+            let iValues = iEvaluations.get(step);
             let zValue = zPoly.evaluateAt(x);
             // build an array of constant values for the current step
             let kValues = new Array(context.constantCount);
@@ -249,7 +251,7 @@ class Stark {
             }
             // check transition 
             let npValues = pEvaluations.get((step + this.extensionFactor) % evaluationDomainSize);
-            let qValues = this.constraintEvaluator.evaluateOne(pValues, npValues, kValues, []);
+            let qValues = constraintEvaluator.evaluateOne(pValues, npValues, kValues, iValues, step);
             for (let j = 0; j < constraintCount; j++) {
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValues[j] !== qCheck) {

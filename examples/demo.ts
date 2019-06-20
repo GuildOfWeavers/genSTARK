@@ -38,7 +38,7 @@ const proof = demoStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 
 // verify the proof
-demoStark.verify(assertions, proof);
+demoStark.verify(assertions, proof, 4);
 console.log('-'.repeat(20));
 
 // EXECUTION TRACE

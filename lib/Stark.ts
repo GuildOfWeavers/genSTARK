@@ -36,7 +36,6 @@ export class Stark {
     readonly config                 : StarkConfig;
 
     readonly traceBuilder           : ExecutionTraceBuilder;
-    readonly constraintEvaluator    : TransitionConstraintEvaluator;
 
     readonly extensionFactor        : number;
     readonly exeSpotCheckCount      : number;
@@ -55,7 +54,6 @@ export class Stark {
         this.field = this.config.field;
 
         this.traceBuilder = new ExecutionTraceBuilder(this.config);
-        this.constraintEvaluator = new TransitionConstraintEvaluator(this.config);
 
         const vOptions = validateSecurityOptions(options, this.config.maxConstraintDegree);
 
@@ -104,7 +102,8 @@ export class Stark {
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
 
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
-        const qEvaluations = this.constraintEvaluator.evaluateAll(context, pEvaluations, iRegisters, kRegisters);
+        const constraintEvaluator = new TransitionConstraintEvaluator(this.config, context);
+        const qEvaluations = constraintEvaluator.evaluateAll(pEvaluations, iRegisters, kRegisters);
         this.logger.log(label, 'Computed Q(x) polynomials');
 
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
@@ -273,7 +272,7 @@ export class Stark {
             }
         }
 
-        const lCombination = new LinearCombination(context, this.config.maxConstraintDegree, proof.degree.root);
+        const lCombination = new LinearCombination(context, this.config.maxConstraintDegree, proof.evaluations.root);
         const lEvaluations = new Map<number, bigint>();
         const lEvaluationValues = buffersToBigInts(proof.degree.lcProof.values);
         for (let i = 0; i < proof.degree.lcProof.values.length; i++) {
@@ -294,6 +293,7 @@ export class Stark {
         this.logger.log(label, `Verified low-degree proof`);
 
         // 7 ----- verify transition and boundary constraints
+        const constraintEvaluator = new TransitionConstraintEvaluator(this.config, context);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
             let x = this.field.exp(G2, BigInt(step));
@@ -301,6 +301,7 @@ export class Stark {
             let pValues = pEvaluations.get(step)!;
             let bValues = bEvaluations.get(step)!;
             let dValues = dEvaluations.get(step)!;
+            let iValues = iEvaluations.get(step)!;
             let zValue = zPoly.evaluateAt(x);
 
             // build an array of constant values for the current step
@@ -311,7 +312,7 @@ export class Stark {
 
             // check transition 
             let npValues = pEvaluations.get((step + this.extensionFactor) % evaluationDomainSize)!;
-            let qValues = this.constraintEvaluator.evaluateOne(pValues, npValues, kValues, [] as any);
+            let qValues = constraintEvaluator.evaluateOne(pValues, npValues, kValues, iValues, step);
             for (let j = 0; j < constraintCount; j++) {
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValues[j] !== qCheck) {

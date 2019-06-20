@@ -13,44 +13,46 @@ export class TransitionConstraintEvaluator {
     readonly constraintCount        : number;
     readonly evaluateConstraints    : ConstraintEvaluator;
     readonly globalConstants        : any;
+    readonly iMask                  : ComputedRegister;
+    readonly domainSize             : number;
+    readonly extensionFactor        : number;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(config: StarkConfig) {
+    constructor(config: StarkConfig, context: EvaluationContext) {
         this.field = config.field;
         this.constraintCount = config.constraintCount;
         this.evaluateConstraints = config.constraintEvaluator;
         this.globalConstants = config.globalConstants;
+
+        this.domainSize = context.domainSize;
+        this.extensionFactor = this.domainSize / context.totalSteps;
+
+        // build input mask
+        const iMaskValues = new Array<bigint>(context.roundSteps).fill(0n);
+        iMaskValues[0] = 1n;
+        this.iMask = new RepeatedConstants(iMaskValues, context, true);
     }
 
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    evaluateAll(context: EvaluationContext, pEvaluations: bigint[][], iRegisters: ComputedRegister[], kRegisters: ComputedRegister[]) {
-
-        const domainSize = context.domainSize;
-        const iterationLength = context.roundSteps;
-        const extensionFactor = domainSize / context.totalSteps;
+    evaluateAll(pEvaluations: bigint[][], iRegisters: ComputedRegister[], kRegisters: ComputedRegister[]) {
         
         // initialize arrays for each constraint
         const evaluations = new Array<bigint[]>(this.constraintCount);
         for (let i = 0; i < this.constraintCount; i++) {
-            evaluations[i] = new Array<bigint>(domainSize);
+            evaluations[i] = new Array<bigint>(this.domainSize);
         }
 
-        // build input mask
-        const iMaskValues = new Array<bigint>(iterationLength).fill(0n);
-        iMaskValues[0] = 1n;
-        const iMask = new RepeatedConstants(iMaskValues, context, true);
-
-        const nfSteps = domainSize - extensionFactor;
+        const nfSteps = this.domainSize - this.extensionFactor;
         const rValues = new Array<bigint>(iRegisters.length);
         const nValues = new Array<bigint>(iRegisters.length);
         const kValues = new Array<bigint>(kRegisters.length);
         const qValues = new Array<bigint>(this.constraintCount);
 
         try {
-            for (let step = 0; step < domainSize; step++) {
-                let c1 = iMask.getValue(step, false);
+            for (let step = 0; step < this.domainSize; step++) {
+                let c1 = this.iMask.getValue(step, false);
                 let c2 = this.field.sub(this.field.one, c1);
     
                 // calculate values for mutable registers for current and next steps
@@ -59,7 +61,7 @@ export class TransitionConstraintEvaluator {
                     let rValue = this.field.mul(pEvaluations[register][step], c2);
                     rValues[register] = this.field.add(rValue, iValue);
     
-                    let nextStepIndex = (step + extensionFactor) % domainSize;
+                    let nextStepIndex = (step + this.extensionFactor) % this.domainSize;
                     nValues[register] = pEvaluations[register][nextStepIndex];
                 }
     
@@ -73,11 +75,11 @@ export class TransitionConstraintEvaluator {
     
                 // copy evaluations to the result, and also check that constraints evaluate to 0
                 // at multiples of the extensions factor
-                if (step % extensionFactor === 0 && step < nfSteps) {
+                if (step % this.extensionFactor === 0 && step < nfSteps) {
                     for (let constraint = 0; constraint < this.constraintCount; constraint++) {
                         let qValue = qValues[constraint];
                         if (qValue !== 0n) {
-                            throw new Error(`Constraint ${constraint} didn't evaluate to 0 at step: ${step/extensionFactor}`);
+                            throw new Error(`Constraint ${constraint} didn't evaluate to 0 at step: ${step/this.extensionFactor}`);
                         }
                         evaluations[constraint][step] = qValue;
                     }
@@ -96,7 +98,17 @@ export class TransitionConstraintEvaluator {
         return evaluations;
     }
 
-    evaluateOne(rValues: bigint[], nValues: bigint[], kValues: bigint[], iValues: bigint) {
+    evaluateOne(rValues: bigint[], nValues: bigint[], kValues: bigint[], iValues: bigint[], step: number) {
+        let c1 = this.iMask.getValue(step, false);
+        let c2 = this.field.sub(this.field.one, c1);
+
+        rValues = rValues.slice();
+        for (let register = 0; register < rValues.length; register++) {
+            let iValue = this.field.mul(iValues[register], c1);
+            let rValue = this.field.mul(rValues[register], c2);
+            rValues[register] = this.field.add(rValue, iValue);
+        }
+
         const out = new Array<bigint>(this.constraintCount);
         this.evaluateConstraints(rValues, nValues, kValues, this.globalConstants, out);
         return out;
