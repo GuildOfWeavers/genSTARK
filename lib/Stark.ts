@@ -133,7 +133,7 @@ export class Stark {
         const mergedEvaluations = new Array<Buffer>(evaluationDomainSize);
         const hashedEvaluations = new Array<Buffer>(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = serializer.mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], bPoly.count, i);
+            let v = serializer.mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], iRegisters, bPoly.count, i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
@@ -224,6 +224,7 @@ export class Stark {
         const pEvaluations = new Map<number, bigint[]>();
         const bEvaluations = new Map<number, bigint[]>();
         const dEvaluations = new Map<number, bigint[]>();
+        const iEvaluations = new Map<number, bigint[]>();
         const hashedEvaluations = new Array<Buffer>(augmentedPositions.length);
         const hash = getHashFunction(this.hashAlgorithm);
         const serializer = new Serializer(this.field, registerCount, constraintCount);
@@ -231,11 +232,12 @@ export class Stark {
         for (let i = 0; i < proof.evaluations.values.length; i++) {
             let mergedEvaluations = proof.evaluations.values[i];
             let position = augmentedPositions[i];
-            let [p, b, d] = serializer.parseEvaluations(mergedEvaluations, bPoly.count);
+            let [p, b, d, ie] = serializer.parseEvaluations(mergedEvaluations, bPoly.count);
             
             pEvaluations.set(position, p);
             bEvaluations.set(position, b);
             dEvaluations.set(position, d);
+            iEvaluations.set(position, ie);
 
             hashedEvaluations[i] = hash(mergedEvaluations);
         }
@@ -289,7 +291,6 @@ export class Stark {
             throw new StarkError('Verification of low degree failed', error);
         }
 
-        
         this.logger.log(label, `Verified low-degree proof`);
 
         // 7 ----- verify transition and boundary constraints
@@ -456,8 +457,8 @@ function buildReadonlyRegisters(specs: ReadonlyRegisterSpecs[] | undefined, cont
     return registers;
 }
 
-function buildInputRegisters(inputs: bigint[][], context: EvaluationContext, domain: bigint[]): ComputedRegister[] {
-    const iRegisters = new Array<ComputedRegister>(context.registerCount);
+function buildInputRegisters(inputs: bigint[][], context: EvaluationContext, domain: bigint[]): InputRegister[] {
+    const iRegisters = new Array<InputRegister>(context.registerCount);
     for (let i = 0; i < inputs.length; i++) {
         iRegisters[i] = new InputRegister(inputs[i], context, domain);
     }

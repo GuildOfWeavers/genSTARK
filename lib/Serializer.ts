@@ -3,6 +3,7 @@
 import { FiniteField, StarkProof, FriComponent, HashAlgorithm } from "@guildofweavers/genstark";
 import { getHashDigestSize } from '@guildofweavers/merkle';
 import * as utils from './utils';
+import { InputRegister } from "./registers";
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -23,8 +24,8 @@ export class Serializer {
 
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeEvaluations([pEvaluations, bEvaluations, dEvaluations]: bigint[][][], bCount: number, position: number): Buffer {
-        const elementCount = this.registerCount + bCount + this.constraintCount;
+    mergeEvaluations([pEvaluations, bEvaluations, dEvaluations]: bigint[][][], iRegisters: InputRegister[], bCount: number, position: number): Buffer {
+        const elementCount = this.registerCount * 2 + bCount + this.constraintCount;
         const buffer = Buffer.allocUnsafe(elementCount * this.fieldElementSize);
 
         let offset = 0;
@@ -44,10 +45,15 @@ export class Serializer {
             buffer.write(hex, offset, this.fieldElementSize, 'hex');
         }
 
+        for (let i = 0; i < this.registerCount; i++, offset += this.fieldElementSize) {
+            let hex = iRegisters[i].values[position].toString(16).padStart(this.fieldElementSize * 2, '0');
+            buffer.write(hex, offset, this.fieldElementSize, 'hex');
+        }
+
         return buffer;    
     }
 
-    parseEvaluations(buffer: Buffer, bCount: number): [bigint[], bigint[], bigint[]] {
+    parseEvaluations(buffer: Buffer, bCount: number): [bigint[], bigint[], bigint[], bigint[]] {
         
         let offset = 0;
 
@@ -66,14 +72,19 @@ export class Serializer {
             dEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
         }
     
-        return [pEvaluations, bEvaluations, dEvaluations];
+        const iEvaluations = new Array<bigint>(this.registerCount);
+        for (let i = 0; i < this.registerCount; i++, offset += this.fieldElementSize) {
+            iEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
+        }
+
+        return [pEvaluations, bEvaluations, dEvaluations, iEvaluations];
     }
 
     // PROOF SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
     serializeProof(proof: StarkProof, hashAlgorithm: HashAlgorithm): Buffer {
         const nodeSize = getHashDigestSize(hashAlgorithm);
-        const valueCount = this.registerCount + this.constraintCount + proof.evaluations.bpc;
+        const valueCount = this.registerCount * 2 + this.constraintCount + proof.evaluations.bpc;
         const valueSize = valueCount * this.fieldElementSize;
 
         const size = utils.sizeOf(proof, valueSize, hashAlgorithm);
@@ -112,7 +123,7 @@ export class Serializer {
         offset += buffer.copy(eRoot, 0, offset, offset + nodeSize);
         const bpc = buffer.readUInt8(offset); offset += 1;
         const eDepth = buffer.readUInt8(offset); offset += 1;
-        const valueCount = this.registerCount + this.constraintCount + bpc;
+        const valueCount = this.registerCount * 2 + this.constraintCount + bpc;
         const valueSize = valueCount * this.fieldElementSize;
         const eValueInfo = utils.readArray(buffer, offset, valueSize); offset = eValueInfo.offset;
         const eNodeInfo = utils.readMatrix(buffer, offset, nodeSize); offset = eNodeInfo.offset;

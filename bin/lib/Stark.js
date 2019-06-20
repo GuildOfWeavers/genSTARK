@@ -94,7 +94,7 @@ class Stark {
         const mergedEvaluations = new Array(evaluationDomainSize);
         const hashedEvaluations = new Array(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = serializer.mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], bPoly.count, i);
+            let v = serializer.mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], iRegisters, bPoly.count, i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
@@ -174,16 +174,18 @@ class Stark {
         const pEvaluations = new Map();
         const bEvaluations = new Map();
         const dEvaluations = new Map();
+        const iEvaluations = new Map();
         const hashedEvaluations = new Array(augmentedPositions.length);
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
         const serializer = new Serializer_1.Serializer(this.field, registerCount, constraintCount);
         for (let i = 0; i < proof.evaluations.values.length; i++) {
             let mergedEvaluations = proof.evaluations.values[i];
             let position = augmentedPositions[i];
-            let [p, b, d] = serializer.parseEvaluations(mergedEvaluations, bPoly.count);
+            let [p, b, d, ie] = serializer.parseEvaluations(mergedEvaluations, bPoly.count);
             pEvaluations.set(position, p);
             bEvaluations.set(position, b);
             dEvaluations.set(position, d);
+            iEvaluations.set(position, ie);
             hashedEvaluations[i] = hash(mergedEvaluations);
         }
         this.logger.log(label, `Decoded evaluation spot checks`);
