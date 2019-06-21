@@ -14,14 +14,15 @@ export class InputRegister implements ComputedRegister {
     constructor(values: bigint[], context: EvaluationContext, domain: bigint[]) {
         
         const field = context.field;
-        const steps = context.totalSteps;
-        const iterationLength = steps / values.length;
+        const iterationLength = context.domainSize / values.length;
         this.extensionFactor = context.domainSize / context.totalSteps;
 
         // create the polynomial
-        const g = field.exp(context.rootOfUnity, BigInt(this.extensionFactor * iterationLength));
-        const xs = field.getPowerCycle(g);
-        const poly = field.interpolate(xs, values); // FUTURE: interpolate roots?
+        const xs = new Array<bigint>(values.length);
+        for (let i = 0; i < xs.length; i++) {
+            xs[i] = domain[i * iterationLength];
+        }
+        const poly = field.interpolate(xs, values);
 
         // evaluate the polynomial on the entire domain
         this.values = field.evalPolyAtRoots(poly, domain);

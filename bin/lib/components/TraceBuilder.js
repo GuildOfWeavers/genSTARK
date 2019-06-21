@@ -24,7 +24,7 @@ class ExecutionTraceBuilder {
             // initialize execution trace with the first row of inputs
             for (let register = 0; register < trace.length; register++) {
                 trace[register] = new Array(steps);
-                trace[register][0] = rValues[register] = iRegisters[register].getValue(0, false);
+                trace[register][0] = rValues[register] = iRegisters[register].getValue(0, true);
             }
             // compute transition for every step
             for (let step = 0; step < steps - 1; step++) {
@@ -35,13 +35,14 @@ class ExecutionTraceBuilder {
                 // populate nValues with the next computation state
                 this.applyTransition(rValues, kValues, this.globalConstants, nValues);
                 // copy nValues to execution trace and update rValues for the next iteration
+                let nextStep = step + 1;
                 for (let register = 0; register < nValues.length; register++) {
-                    if ((step + 1) % iterationLength === 0) {
-                        trace[register][step + 1] = nValues[register];
-                        rValues[register] = iRegisters[register].getValue(step, false);
+                    if (nextStep % iterationLength === 0) {
+                        trace[register][nextStep] = nValues[register];
+                        rValues[register] = iRegisters[register].getValue(nextStep, true);
                     }
                     else {
-                        trace[register][step + 1] = rValues[register] = nValues[register];
+                        trace[register][nextStep] = rValues[register] = nValues[register];
                     }
                 }
             }
