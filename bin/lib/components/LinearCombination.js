@@ -5,12 +5,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 class LinearCombination {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(context, constraintDegree, seed) {
+    constructor(context, seed) {
         // the logic is as follows:
         // deg(Q(x)) = steps * deg(constraints) = deg(D(x)) + deg(Z(x))
         // thus, deg(D(x)) = deg(Q(x)) - steps;
         // and, linear combination degree is max(deg(D(x)), steps)
-        this.degree = context.totalSteps * Math.max(constraintDegree - 1, 1);
+        this.degree = context.totalSteps * Math.max(context.constraintDegree - 1, 1);
         this.field = context.field;
         this.steps = context.totalSteps;
         this.rootOfUnity = context.rootOfUnity;

@@ -6,27 +6,29 @@ const StarkError_1 = require("../StarkError");
 class ExecutionTraceBuilder {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(config) {
+    constructor(config, context) {
         this.field = config.field;
+        this.steps = context.totalSteps;
+        this.iterationLength = context.roundSteps;
         this.registerCount = config.mutableRegisterCount;
         this.applyTransition = config.transitionFunction;
         this.globalConstants = config.globalConstants;
     }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    compute(context, inputs, kRegisters) {
-        const steps = context.totalSteps;
-        const iterationLength = context.roundSteps;
+    compute(inputs, kRegisters) {
+        const steps = this.steps;
+        const iterationLength = this.iterationLength;
         const trace = new Array(this.registerCount);
-        const rValues = new Array(this.registerCount);
-        const nValues = new Array(this.registerCount);
-        const kValues = new Array(kRegisters.length);
         try {
             // initialize execution trace with the first row of inputs
+            const rValues = inputs[0];
             for (let register = 0; register < trace.length; register++) {
                 trace[register] = new Array(steps);
-                trace[register][0] = rValues[register] = inputs[register][0];
+                trace[register][0] = rValues[register];
             }
+            const nValues = new Array(this.registerCount);
+            const kValues = new Array(kRegisters.length);
             // compute transition for every step
             for (let step = 0; step < steps - 1; step++) {
                 // calculate values of readonly registers for the current step
@@ -39,7 +41,7 @@ class ExecutionTraceBuilder {
                 let nextStep = step + 1;
                 for (let register = 0; register < nValues.length; register++) {
                     if (nextStep % iterationLength === 0) {
-                        trace[register][nextStep] = rValues[register] = inputs[register][nextStep / iterationLength];
+                        trace[register][nextStep] = rValues[register] = inputs[nextStep / iterationLength][register];
                     }
                     else {
                         trace[register][nextStep] = rValues[register] = nValues[register];

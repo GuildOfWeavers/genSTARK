@@ -15,12 +15,12 @@ export class LinearCombination {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(context: EvaluationContext, constraintDegree: number, seed: Buffer) {
+    constructor(context: EvaluationContext, seed: Buffer) {
         // the logic is as follows:
         // deg(Q(x)) = steps * deg(constraints) = deg(D(x)) + deg(Z(x))
         // thus, deg(D(x)) = deg(Q(x)) - steps;
         // and, linear combination degree is max(deg(D(x)), steps)
-        this.degree = context.totalSteps * Math.max(constraintDegree - 1, 1);
+        this.degree = context.totalSteps * Math.max(context.constraintDegree - 1, 1);
         this.field = context.field;
         this.steps = context.totalSteps;
         this.rootOfUnity = context.rootOfUnity;

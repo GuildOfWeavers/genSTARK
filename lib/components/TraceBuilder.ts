@@ -9,14 +9,18 @@ import { StarkError } from "../StarkError";
 export class ExecutionTraceBuilder {
 
     readonly field              : FiniteField;
+    readonly steps              : number;
+    readonly iterationLength    : number;
     readonly registerCount      : number;
     readonly applyTransition    : TransitionFunction;
     readonly globalConstants    : any;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(config: StarkConfig) {
+    constructor(config: StarkConfig, context: EvaluationContext) {
         this.field = config.field;
+        this.steps = context.totalSteps;
+        this.iterationLength = context.roundSteps;
         this.registerCount = config.mutableRegisterCount;
         this.applyTransition = config.transitionFunction;
         this.globalConstants = config.globalConstants;
@@ -24,22 +28,22 @@ export class ExecutionTraceBuilder {
 
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    compute(context: EvaluationContext, inputs: bigint[][], kRegisters: ComputedRegister[]) {
+    compute(inputs: bigint[][], kRegisters: ComputedRegister[]) {
 
-        const steps = context.totalSteps;
-        const iterationLength = context.roundSteps;
-
+        const steps = this.steps;
+        const iterationLength = this.iterationLength;
         const trace = new Array<bigint[]>(this.registerCount);
-        const rValues = new Array<bigint>(this.registerCount);
-        const nValues = new Array<bigint>(this.registerCount);
-        const kValues = new Array<bigint>(kRegisters.length);
 
         try {
             // initialize execution trace with the first row of inputs
+            const rValues = inputs[0];
             for (let register = 0; register < trace.length; register++) {
                 trace[register] = new Array<bigint>(steps);
-                trace[register][0] = rValues[register] = inputs[register][0];
+                trace[register][0] = rValues[register];
             }
+
+            const nValues = new Array<bigint>(this.registerCount);
+            const kValues = new Array<bigint>(kRegisters.length);
 
             // compute transition for every step
             for (let step = 0; step < steps - 1; step++) {
@@ -56,7 +60,7 @@ export class ExecutionTraceBuilder {
                 let nextStep = step + 1;
                 for (let register = 0; register < nValues.length; register++) {
                     if (nextStep % iterationLength === 0) {
-                        trace[register][nextStep] = rValues[register] = inputs[register][nextStep / iterationLength];
+                        trace[register][nextStep] = rValues[register] = inputs[nextStep / iterationLength][register];
                     }
                     else {
                         trace[register][nextStep] = rValues[register] = nValues[register];

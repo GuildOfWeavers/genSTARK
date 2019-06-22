@@ -14,10 +14,12 @@ class TransitionConstraintEvaluator {
         this.globalConstants = config.globalConstants;
         this.domainSize = context.domainSize;
         this.extensionFactor = this.domainSize / context.totalSteps;
-        // build input mask
-        const iMaskValues = new Array(context.roundSteps).fill(1n);
-        iMaskValues[iMaskValues.length - 1] = 0n;
-        this.iMask = new registers_1.RepeatedConstants(iMaskValues, context, true);
+        // if multiple inputs have been provided, build input injection mask
+        if (context.totalSteps !== context.roundSteps) {
+            const iMaskValues = new Array(context.roundSteps).fill(this.field.one);
+            iMaskValues[iMaskValues.length - 1] = this.field.zero;
+            this.inputInjectionMask = new registers_1.RepeatedConstants(iMaskValues, context, true);
+        }
     }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
@@ -34,7 +36,9 @@ class TransitionConstraintEvaluator {
         const qValues = new Array(this.constraintCount);
         try {
             for (let step = 0; step < this.domainSize; step++) {
-                let cValue = this.iMask.getValue(step, false);
+                let inputInjectionFlag = this.inputInjectionMask
+                    ? this.inputInjectionMask.getValue(step, false)
+                    : undefined;
                 // set values for mutable registers for current and next steps
                 for (let register = 0; register < pEvaluations.length; register++) {
                     rValues[register] = pEvaluations[register][step];
@@ -51,7 +55,10 @@ class TransitionConstraintEvaluator {
                 // at multiples of the extensions factor
                 if (step % this.extensionFactor === 0 && step < nfSteps) {
                     for (let constraint = 0; constraint < this.constraintCount; constraint++) {
-                        let qValue = this.field.mul(qValues[constraint], cValue);
+                        let qValue = qValues[constraint];
+                        if (inputInjectionFlag !== undefined) {
+                            qValue = this.field.mul(qValue, inputInjectionFlag);
+                        }
                         if (qValue !== 0n) {
                             throw new Error(`Constraint ${constraint} didn't evaluate to 0 at step: ${step / this.extensionFactor}`);
                         }
@@ -60,7 +67,11 @@ class TransitionConstraintEvaluator {
                 }
                 else {
                     for (let constraint = 0; constraint < this.constraintCount; constraint++) {
-                        evaluations[constraint][step] = this.field.mul(qValues[constraint], cValue);
+                        let qValue = qValues[constraint];
+                        if (inputInjectionFlag !== undefined) {
+                            qValue = this.field.mul(qValue, inputInjectionFlag);
+                        }
+                        evaluations[constraint][step] = qValue;
                     }
                 }
             }
@@ -71,11 +82,15 @@ class TransitionConstraintEvaluator {
         return evaluations;
     }
     evaluateOne(rValues, nValues, kValues, step) {
-        let cValue = this.iMask.getValue(step, false);
+        let inputInjectionFlag = this.inputInjectionMask
+            ? this.inputInjectionMask.getValue(step, false)
+            : undefined;
         const out = new Array(this.constraintCount);
         this.evaluateConstraints(rValues, nValues, kValues, this.globalConstants, out);
-        for (let constraint = 0; constraint < this.constraintCount; constraint++) {
-            out[constraint] = this.field.mul(out[constraint], cValue);
+        if (inputInjectionFlag !== undefined) {
+            for (let constraint = 0; constraint < this.constraintCount; constraint++) {
+                out[constraint] = this.field.mul(out[constraint], inputInjectionFlag);
+            }
         }
         return out;
     }

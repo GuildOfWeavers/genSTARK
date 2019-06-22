@@ -128,14 +128,15 @@ declare module '@guildofweavers/genstark' {
     // INTERNAL
     // --------------------------------------------------------------------------------------------
     export interface EvaluationContext {
-        readonly field          : FiniteField;
-        readonly roundSteps     : number;
-        readonly totalSteps     : number;
-        readonly domainSize     : number;
-        readonly rootOfUnity    : bigint;
-        readonly registerCount  : number;
-        readonly constantCount  : number;
-        readonly hashAlgorithm  : HashAlgorithm;
+        readonly field              : FiniteField;
+        readonly constraintDegree   : number;
+        readonly roundSteps         : number;
+        readonly totalSteps         : number;
+        readonly domainSize         : number;
+        readonly rootOfUnity        : bigint;
+        readonly registerCount      : number;
+        readonly constantCount      : number;
+        readonly hashAlgorithm      : HashAlgorithm;
     }
 
     export interface ComputedRegister {

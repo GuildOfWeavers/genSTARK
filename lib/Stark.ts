@@ -35,8 +35,6 @@ export class Stark {
     readonly field                  : FiniteField;
     readonly config                 : StarkConfig;
 
-    readonly traceBuilder           : ExecutionTraceBuilder;
-
     readonly extensionFactor        : number;
     readonly exeSpotCheckCount      : number;
     readonly friSpotCheckCount      : number;
@@ -52,8 +50,6 @@ export class Stark {
         if (!source.trim()) throw new TypeError('Source script cannot be an empty string');
         this.config = parseScript(source);
         this.field = this.config.field;
-
-        this.traceBuilder = new ExecutionTraceBuilder(this.config);
 
         const vOptions = validateSecurityOptions(options, this.config.maxConstraintDegree);
 
@@ -81,7 +77,7 @@ export class Stark {
 
         // 1 ----- set up evaluation context
         const normalizedInputs = normalizeInputs(inputs, registerCount);
-        const iterations = normalizedInputs[0].length;
+        const iterations = normalizedInputs.length;
 
         const context = this.createContext(iterations);
         const evaluationDomain = this.field.getPowerCycle(context.rootOfUnity);
@@ -91,8 +87,9 @@ export class Stark {
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- generate execution trace and make sure it is correct
-        const executionTrace = this.traceBuilder.compute(context, normalizedInputs, kRegisters);
-        this.traceBuilder.validateAssertions(executionTrace, assertions);
+        const traceBuilder = new ExecutionTraceBuilder(this.config, context);
+        const executionTrace = traceBuilder.compute(normalizedInputs, kRegisters);
+        traceBuilder.validateAssertions(executionTrace, assertions);
         this.logger.log(label, 'Generated execution trace');
 
         // 3 ----- compute P(x) polynomials and low-degree extend them
@@ -152,7 +149,7 @@ export class Stark {
         this.logger.log(label, `Computed ${spotCheckCount} evaluation spot checks`);
 
         // 10 ---- compute random linear combination of evaluations
-        const lCombination = new LinearCombination(context, this.config.maxConstraintDegree, eTree.root);
+        const lCombination = new LinearCombination(context, eTree.root);
         const lEvaluations = lCombination.computeMany(pEvaluations, bEvaluations, dEvaluations);;
         this.logger.log(label, 'Computed random linear combination of evaluations');
 
@@ -269,7 +266,7 @@ export class Stark {
             }
         }
 
-        const lCombination = new LinearCombination(context, this.config.maxConstraintDegree, proof.evaluations.root);
+        const lCombination = new LinearCombination(context, proof.evaluations.root);
         const lEvaluations = new Map<number, bigint>();
         const lEvaluationValues = buffersToBigInts(proof.degree.lcProof.values);
         for (let i = 0; i < proof.degree.lcProof.values.length; i++) {
@@ -370,15 +367,18 @@ export class Stark {
         const steps = this.config.steps * iterations;
         const domainSize = steps * this.extensionFactor;
         const rootOfUnity = this.field.getRootOfUnity(domainSize);
+        const maxConstraintDegree = this.config.maxConstraintDegree;
+
         return {
-            field           : this.field,
-            roundSteps      : this.config.steps,
-            totalSteps      : steps,
-            domainSize      : domainSize,
-            rootOfUnity     : rootOfUnity,
-            registerCount   : this.config.mutableRegisterCount,
-            constantCount   : this.config.readonlyRegisters.length,
-            hashAlgorithm   : this.hashAlgorithm
+            field               : this.field,
+            constraintDegree    : iterations === 1 ? maxConstraintDegree : maxConstraintDegree + 1,
+            roundSteps          : this.config.steps,
+            totalSteps          : steps,
+            domainSize          : domainSize,
+            rootOfUnity         : rootOfUnity,
+            registerCount       : this.config.mutableRegisterCount,
+            constantCount       : this.config.readonlyRegisters.length,
+            hashAlgorithm       : this.hashAlgorithm
         };
     }
 
@@ -398,21 +398,25 @@ export class Stark {
 function validateSecurityOptions(options: Partial<SecurityOptions> | undefined, maxConstraintDegree: number): SecurityOptions {
 
     // extension factor
+    const minExtensionFactor = 2**Math.ceil(Math.log2((maxConstraintDegree + 1) * 2));
     let extensionFactor = options ? options.extensionFactor : undefined;
     if (extensionFactor === undefined) {
-        extensionFactor = 2**Math.ceil(Math.log2(maxConstraintDegree * 2));
+        extensionFactor = minExtensionFactor;
+        if (extensionFactor > MAX_EXTENSION_FACTOR) {
+            throw new TypeError(`Transition constraints degree must be smaller than or equal to ${MAX_EXTENSION_FACTOR / 2 - 1}`);
+        }
     }
     else {
-        if (extensionFactor < 2 || extensionFactor > MAX_EXTENSION_FACTOR || !Number.isInteger(extensionFactor)) {
-            throw new TypeError(`Extension factor must be an integer between 2 and ${MAX_EXTENSION_FACTOR}`);
+        if (extensionFactor > MAX_EXTENSION_FACTOR || !Number.isInteger(extensionFactor)) {
+            throw new TypeError(`Extension factor must be an integer smaller than or equal to ${MAX_EXTENSION_FACTOR}`);
         }
     
         if (!isPowerOf2(extensionFactor)) {
             throw new TypeError(`Extension factor must be a power of 2`);
         }
 
-        if (extensionFactor < 2 * maxConstraintDegree) {
-            throw new TypeError(`Extension factor must be at least 2x greater than the transition constraint degree`);
+        if (extensionFactor < minExtensionFactor) {
+            throw new TypeError(`Extension factor must be at ${minExtensionFactor}`);
         }
     }
 
@@ -457,25 +461,20 @@ function buildReadonlyRegisters(specs: ReadonlyRegisterSpecs[] | undefined, cont
 function normalizeInputs(inputs: bigint[] | bigint[][], registerCount: number): bigint[][] {
     if (!Array.isArray(inputs)) throw new TypeError(`Inputs parameter must be an array`);
 
-    // initialize normalized inputs array
-    const normalized = new Array<bigint[]>(registerCount);
-    for (let register = 0; register < normalized.length; register++) {
-        normalized[register] = new Array<bigint>();
-    }
-
     if (typeof inputs[0] === 'bigint') {
-        copyInputRow(inputs as bigint[], normalized, registerCount, 0);
+        validateInputRow(inputs as bigint[], registerCount, 0);
+        inputs = [inputs as bigint[]];
     }
     else {
         for (let i = 0; i < inputs.length; i++) {
-            copyInputRow(inputs[i] as bigint[], normalized, registerCount, i);
+            validateInputRow(inputs[i] as bigint[], registerCount, i);
         }
     }
 
-    return normalized;
+    return inputs as bigint[][];
 }
 
-function copyInputRow(row: bigint[], target: bigint[][], registerCount: number, rowNumber: number) {
+function validateInputRow(row: bigint[], registerCount: number, rowNumber: number) {
     if (!Array.isArray(row)) {
         throw new TypeError(`Input row ${rowNumber} is not an array`);
     }
@@ -485,10 +484,8 @@ function copyInputRow(row: bigint[], target: bigint[][], registerCount: number, 
     }
 
     for (let i = 0; i < registerCount; i++) {
-        let value = row[i];
-        if (typeof value !== 'bigint') {
+        if (typeof row[i] !== 'bigint') {
             throw new TypeError(`Input ${rowNumber} for register $r${i} is not a BigInt`)
         };
-        target[i].push(value);
     }
 }

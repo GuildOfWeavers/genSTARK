@@ -9,25 +9,35 @@ import { Stark, PrimeField } from '../index';
 // execution trace is shown at the end of this file. 
 
 //const steps = 2**6, result = 292n;
-const steps = 2**5, result = 15n;
+const steps = 2**5, result = 21358n;
 
 const demoStark = new Stark(`
 define Demo over prime field (96769) {
 
     transition 1 register in 8 steps {
-        out: $r0 + 2;
+        out: $r0^3 + 2;
     }
 
-    enforce 1 constraint of degree 1 {
-        out: $n0 - ($r0 + 2);
+    enforce 1 constraint of degree 3 {
+        out: $n0 - ($r0^3 + 2);
     }
 }`);
 
 // TESTING
 // ================================================================================================
+function test(input: bigint) {
+    const field = new PrimeField(96769n);
+    const result = [input];
+    for (let i = 0; i < 7; i++) {
+        result.push(field.add(field.exp(result[i], 3n), 2n));
+    }
+    console.log(result);
+}
+test(1n); test(2n); test(3n); test(4n);
+
 
 // set up inputs and assertions
-const inputs = [[1n], [1n], [1n], [1n]];
+const inputs = [[1n], [2n], [3n], [4n]];
 const assertions = [
     { step: 0, register: 0, value: 1n },
     { step: steps-1, register: 0, value: result }
