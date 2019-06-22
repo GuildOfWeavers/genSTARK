@@ -8,23 +8,24 @@ class ExecutionTraceBuilder {
     // --------------------------------------------------------------------------------------------
     constructor(config) {
         this.field = config.field;
+        this.registerCount = config.mutableRegisterCount;
         this.applyTransition = config.transitionFunction;
         this.globalConstants = config.globalConstants;
     }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    compute(context, iRegisters, kRegisters) {
+    compute(context, inputs, kRegisters) {
         const steps = context.totalSteps;
         const iterationLength = context.roundSteps;
-        const trace = new Array(iRegisters.length);
-        const rValues = new Array(iRegisters.length);
-        const nValues = new Array(iRegisters.length);
+        const trace = new Array(this.registerCount);
+        const rValues = new Array(this.registerCount);
+        const nValues = new Array(this.registerCount);
         const kValues = new Array(kRegisters.length);
         try {
             // initialize execution trace with the first row of inputs
             for (let register = 0; register < trace.length; register++) {
                 trace[register] = new Array(steps);
-                trace[register][0] = rValues[register] = iRegisters[register].getValue(0, true);
+                trace[register][0] = rValues[register] = inputs[register][0];
             }
             // compute transition for every step
             for (let step = 0; step < steps - 1; step++) {
@@ -38,8 +39,7 @@ class ExecutionTraceBuilder {
                 let nextStep = step + 1;
                 for (let register = 0; register < nValues.length; register++) {
                     if (nextStep % iterationLength === 0) {
-                        trace[register][nextStep] = nValues[register];
-                        rValues[register] = iRegisters[register].getValue(nextStep, true);
+                        trace[register][nextStep] = rValues[register] = inputs[register][nextStep / iterationLength];
                     }
                     else {
                         trace[register][nextStep] = rValues[register] = nValues[register];

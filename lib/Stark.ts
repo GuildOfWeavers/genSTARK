@@ -11,7 +11,7 @@ import {
     BoundaryConstraints, LowDegreeProver, LinearCombination
 } from './components';
 import { Logger, isPowerOf2, getPseudorandomIndexes, sizeOf, bigIntsToBuffers, buffersToBigInts } from './utils';
-import { RepeatedConstants, SpreadConstants, InputRegister } from './registers';
+import { RepeatedConstants, SpreadConstants } from './registers';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -87,12 +87,11 @@ export class Stark {
         const evaluationDomain = this.field.getPowerCycle(context.rootOfUnity);
         const evaluationDomainSize = evaluationDomain.length;
 
-        const iRegisters = buildInputRegisters(normalizedInputs, context, evaluationDomain);
         const kRegisters = buildReadonlyRegisters(this.config.readonlyRegisters, context, evaluationDomain);                
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- generate execution trace and make sure it is correct
-        const executionTrace = this.traceBuilder.compute(context, iRegisters, kRegisters);
+        const executionTrace = this.traceBuilder.compute(context, normalizedInputs, kRegisters);
         this.traceBuilder.validateAssertions(executionTrace, assertions);
         this.logger.log(label, 'Generated execution trace');
 
@@ -103,7 +102,7 @@ export class Stark {
 
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
         const constraintEvaluator = new TransitionConstraintEvaluator(this.config, context);
-        const qEvaluations = constraintEvaluator.evaluateAll(pEvaluations, iRegisters, kRegisters);
+        const qEvaluations = constraintEvaluator.evaluateAll(pEvaluations, kRegisters);
         this.logger.log(label, 'Computed Q(x) polynomials');
 
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
@@ -132,7 +131,7 @@ export class Stark {
         const mergedEvaluations = new Array<Buffer>(evaluationDomainSize);
         const hashedEvaluations = new Array<Buffer>(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = serializer.mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], iRegisters, bPoly.count, i);
+            let v = serializer.mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], bPoly.count, i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
@@ -223,7 +222,6 @@ export class Stark {
         const pEvaluations = new Map<number, bigint[]>();
         const bEvaluations = new Map<number, bigint[]>();
         const dEvaluations = new Map<number, bigint[]>();
-        const iEvaluations = new Map<number, bigint[]>();
         const hashedEvaluations = new Array<Buffer>(augmentedPositions.length);
         const hash = getHashFunction(this.hashAlgorithm);
         const serializer = new Serializer(this.field, registerCount, constraintCount);
@@ -231,12 +229,11 @@ export class Stark {
         for (let i = 0; i < proof.evaluations.values.length; i++) {
             let mergedEvaluations = proof.evaluations.values[i];
             let position = augmentedPositions[i];
-            let [p, b, d, ie] = serializer.parseEvaluations(mergedEvaluations, bPoly.count);
+            let [p, b, d] = serializer.parseEvaluations(mergedEvaluations, bPoly.count);
             
             pEvaluations.set(position, p);
             bEvaluations.set(position, b);
             dEvaluations.set(position, d);
-            iEvaluations.set(position, ie);
 
             hashedEvaluations[i] = hash(mergedEvaluations);
         }
@@ -301,7 +298,6 @@ export class Stark {
             let pValues = pEvaluations.get(step)!;
             let bValues = bEvaluations.get(step)!;
             let dValues = dEvaluations.get(step)!;
-            let iValues = iEvaluations.get(step)!;
             let zValue = zPoly.evaluateAt(x);
 
             // build an array of constant values for the current step
@@ -312,7 +308,7 @@ export class Stark {
 
             // check transition 
             let npValues = pEvaluations.get((step + this.extensionFactor) % evaluationDomainSize)!;
-            let qValues = constraintEvaluator.evaluateOne(pValues, npValues, kValues, iValues, step);
+            let qValues = constraintEvaluator.evaluateOne(pValues, npValues, kValues, step);
             for (let j = 0; j < constraintCount; j++) {
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValues[j] !== qCheck) {
@@ -456,14 +452,6 @@ function buildReadonlyRegisters(specs: ReadonlyRegisterSpecs[] | undefined, cont
         }
     }
     return registers;
-}
-
-function buildInputRegisters(inputs: bigint[][], context: EvaluationContext, domain: bigint[]): InputRegister[] {
-    const iRegisters = new Array<InputRegister>(context.registerCount);
-    for (let i = 0; i < inputs.length; i++) {
-        iRegisters[i] = new InputRegister(inputs[i], context, domain);
-    }
-    return iRegisters;
 }
 
 function normalizeInputs(inputs: bigint[] | bigint[][], registerCount: number): bigint[][] {

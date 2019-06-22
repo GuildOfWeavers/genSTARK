@@ -14,8 +14,8 @@ class Serializer {
     }
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], iRegisters, bCount, position) {
-        const elementCount = this.registerCount * 2 + bCount + this.constraintCount;
+    mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], bCount, position) {
+        const elementCount = this.registerCount + bCount + this.constraintCount;
         const buffer = Buffer.allocUnsafe(elementCount * this.fieldElementSize);
         let offset = 0;
         for (let i = 0; i < this.registerCount; i++, offset += this.fieldElementSize) {
@@ -28,10 +28,6 @@ class Serializer {
         }
         for (let i = 0; i < this.constraintCount; i++, offset += this.fieldElementSize) {
             let hex = dEvaluations[i][position].toString(16).padStart(this.fieldElementSize * 2, '0');
-            buffer.write(hex, offset, this.fieldElementSize, 'hex');
-        }
-        for (let i = 0; i < this.registerCount; i++, offset += this.fieldElementSize) {
-            let hex = iRegisters[i].values[position].toString(16).padStart(this.fieldElementSize * 2, '0');
             buffer.write(hex, offset, this.fieldElementSize, 'hex');
         }
         return buffer;
@@ -50,17 +46,13 @@ class Serializer {
         for (let i = 0; i < this.constraintCount; i++, offset += this.fieldElementSize) {
             dEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
         }
-        const iEvaluations = new Array(this.registerCount);
-        for (let i = 0; i < this.registerCount; i++, offset += this.fieldElementSize) {
-            iEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
-        }
-        return [pEvaluations, bEvaluations, dEvaluations, iEvaluations];
+        return [pEvaluations, bEvaluations, dEvaluations];
     }
     // PROOF SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
     serializeProof(proof, hashAlgorithm) {
         const nodeSize = merkle_1.getHashDigestSize(hashAlgorithm);
-        const valueCount = this.registerCount * 2 + this.constraintCount + proof.evaluations.bpc;
+        const valueCount = this.registerCount + this.constraintCount + proof.evaluations.bpc;
         const valueSize = valueCount * this.fieldElementSize;
         const size = utils.sizeOf(proof, valueSize, hashAlgorithm);
         const buffer = Buffer.allocUnsafe(size.total);
@@ -95,7 +87,7 @@ class Serializer {
         offset += 1;
         const eDepth = buffer.readUInt8(offset);
         offset += 1;
-        const valueCount = this.registerCount * 2 + this.constraintCount + bpc;
+        const valueCount = this.registerCount + this.constraintCount + bpc;
         const valueSize = valueCount * this.fieldElementSize;
         const eValueInfo = utils.readArray(buffer, offset, valueSize);
         offset = eValueInfo.offset;
