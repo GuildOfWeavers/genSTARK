@@ -18,7 +18,7 @@ for (let i = 0; i < 64; i++) {
 const mimcStark = new index_1.Stark(`
 define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
 
-    transition 1 register in 2^13 steps {
+    transition 1 register in ${steps} steps {
         out: $r0^3 + $k0;
     }
 

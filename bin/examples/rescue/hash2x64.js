@@ -51,16 +51,16 @@ const rescueStark = new index_1.Stark(`
 define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
 
     alpha: 3;
-    invAlpha: 0-6148914683720324437;
+    inv_alpha: 0-6148914683720324437;
 
     MDS: [
         [18446744051160973310, 18446744051160973301],
         [                   4,                   13]
     ];
 
-    INV_MDS = [
-        [ 2049638227906774814n,  6148914683720324439n],
-        [16397105823254198500n, 12297829367440648875n]
+    INV_MDS: [
+        [ 2049638227906774814,  6148914683720324439],
+        [16397105823254198500, 12297829367440648875]
     ];
 
     transition 2 register in 32 steps {
@@ -68,7 +68,7 @@ define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
         K1: [$k0, $k1];
         K2: [$k2, $k3];
         S: MDS # S^alpha + K1;
-        out: MDS # S^(invAlpha) + K2;
+        out: MDS # S^(inv_alpha) + K2;
     }
 
     enforce 2 constraint of degree 3 {
