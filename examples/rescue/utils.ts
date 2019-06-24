@@ -75,6 +75,42 @@ export class Rescue {
         return { hash: output, trace };
     }
 
+    modifiedSponge(inputs: bigint[], unrolledKeys: bigint[][]) {
+        const trace = new Array<bigint[]>();
+    
+        // copy inputs to state
+        let state = new Array(this.registers).fill(0n);
+        for (let i = 0; i < inputs.length; i++) {
+            state[i] = inputs[i];
+        }
+        trace.push([...state]);
+        
+        for (let r = 0, k = 2; r < this.rounds - 1; r++, k += 2) {
+    
+            // round r, step 1
+            for (let i = 0; i < this.registers; i++) {
+                state[i] = this.field.exp(state[i], this.alpha);
+            }
+            state = this.vadd(this.mmul(this.mds, state), unrolledKeys[k]);
+            trace.push([...state]);
+
+            // round r, step 2
+            for (let i = 0; i < this.registers; i++) {
+                state[i] = this.field.exp(state[i], this.invAlpha);
+            }
+            state = this.vadd(this.mmul(this.mds, state), unrolledKeys[k+1]);
+            trace.push([...state]);
+        }
+    
+        // build and return output
+        const output = new Array<bigint>(inputs.length);
+        for (let i = 0; i < output.length; i++) {
+            output[i] = state[i];
+        }
+    
+        return { hash: output, trace };
+    }
+
     // CONSTANT PROCESSORS
     // --------------------------------------------------------------------------------------------
     unrollConstants() {

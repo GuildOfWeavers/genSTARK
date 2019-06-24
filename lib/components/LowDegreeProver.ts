@@ -18,7 +18,7 @@ export class LowDegreeProver {
     // --------------------------------------------------------------------------------------------
     constructor(spotCheckCount: number, context: EvaluationContext) {
         this.field = context.field;
-        this.skipMultiplesOf = context.extensionFactor;
+        this.skipMultiplesOf = context.domainSize / context.totalSteps;
         this.hashAlgorithm = context.hashAlgorithm;
         this.spotCheckCount = spotCheckCount;
     }

@@ -12,55 +12,52 @@ declare module '@guildofweavers/genstark' {
 
     // STARK
     // --------------------------------------------------------------------------------------------
-    export interface StarkConfig {
-        /** field for all math operations in the computation */
-        field: FiniteField;
+    export interface SecurityOptions {
 
-        /** An arithmetic script defining state transition function for the computation */
-        tFunction: string;
-
-        /** An arithmetic script defining transition constraint for the computation */
-        tConstraints: string;
-
-        /** Maximum degree of transition constraints */
-        tConstraintDegree: number;
-
-        /** A list of constant definitions for all readonly registers */
-        constants?: Constant[];
-
-        /** Execution trace extension factor */
-        extensionFactor?: number;
+        /** Execution trace extension factor; defaults to the smallest power of 2 greater than 2x of max constraint degree */
+        extensionFactor: number;
 
         /** Number of spot checks for the execution trace; defaults to 80 */
-        exeSpotCheckCount?  : number;
+        exeSpotCheckCount: number;
 
         /** Number of spot checks for low degree proof; defaults to 40 */
-        friSpotCheckCount?  : number;
+        friSpotCheckCount: number;
 
         /** Hash algorithm for Merkle trees; defaults to sha256 */
-        hashAlgorithm?: HashAlgorithm;
+        hashAlgorithm: HashAlgorithm;
     }
 
     export class Stark {
 
-        /** Create a STARK based on the provided config parameters */
-        constructor(config: StarkConfig, logger?: Logger);
+        /**
+         * Creates a STARK instance based on the provided parameters
+         * @param source AirScript source for the STARK
+         * @param options Security options for the STARK instance
+         * @param logger Optional logger; defaults to console logging; set to null to disable
+         */
+        constructor(source: string, options?: Partial<SecurityOptions>, logger?: Logger);
 
         /**
          * Generate a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
-         * @param steps Number of steps in the computation
-         * @param inputs Initial values for all mutable registers
+         * @param inputs An array of input values to be injected into the execution trace at position 0
          */
-        prove(assertions: Assertion[], steps: number, inputs: bigint[]): StarkProof;
+        prove(assertions: Assertion[], inputs: bigint[]): StarkProof;
+
+        /**
+         * Generate a proof of computation for this STARK
+         * @param assertions Boundary constraints for the computation
+         * @param inputs An array with input sets to be injected into the execution trace
+         */
+        prove(assertions: Assertion[], inputs: bigint[][]): StarkProof;
 
         /**
          * Verifies a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
          * @param proof Proof of the computation
-         * @param steps Number of steps in the computation
+         * @param rounds Number of input rounds of the computation; the default is 1
          */
-        verify(assertions: Assertion[], proof: StarkProof, steps: number): boolean;
+        verify(assertions: Assertion[], proof: StarkProof, rounds?: number): boolean;
 
         /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;
@@ -85,13 +82,6 @@ declare module '@guildofweavers/genstark' {
             lcProof : BatchMerkleProof;
             ldProof : LowDegreeProof;
         }
-    }
-
-    export type ConstantPattern = 'repeat' | 'spread';
-
-    export interface Constant {
-        values  : bigint[];
-        pattern : ConstantPattern;
     }
 
     // CONSTRAINTS
@@ -130,28 +120,18 @@ declare module '@guildofweavers/genstark' {
     // INTERNAL
     // --------------------------------------------------------------------------------------------
     export interface EvaluationContext {
-        field           : FiniteField;
-        steps           : number;
-        extensionFactor : number;
-        rootOfUnity     : bigint;
-        registerCount   : number;
-        constantCount   : number;
-        hashAlgorithm   : HashAlgorithm;
+        readonly field              : FiniteField;
+        readonly constraintDegree   : number;
+        readonly roundSteps         : number;
+        readonly totalSteps         : number;
+        readonly domainSize         : number;
+        readonly rootOfUnity        : bigint;
+        readonly registerCount      : number;
+        readonly constantCount      : number;
+        readonly hashAlgorithm      : HashAlgorithm;
     }
 
-    export interface TransitionFunction {
-        (r: bigint[][], k: ReadonlyRegister[], steps: number, field: FiniteField): void;
-    }
-
-    export interface BatchConstraintEvaluator {
-        (q: bigint[][], r: bigint[][], k: ReadonlyRegister[], steps: number, skip: number, field: FiniteField): void;
-    }
-
-    export interface ConstraintEvaluator {
-        (r: bigint[], n: bigint[], k: bigint[], field: FiniteField): bigint[];
-    }
-
-    export interface ReadonlyRegister {
+    export interface ComputedRegister {
         getValue(step: number, skip: boolean): bigint;
         getValueAt(x: bigint): bigint;
     }

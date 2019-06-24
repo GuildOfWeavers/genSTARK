@@ -1,7 +1,8 @@
 // IMPORTS
 // ================================================================================================
+import { Assertion } from '@guildofweavers/genstark';
 import { Stark, PrimeField } from '../../index';
-import { Rescue } from './utils';
+import { Rescue } from '../rescue/utils';
 
 // STARK PARAMETERS
 // ================================================================================================
@@ -31,12 +32,12 @@ const constants  = [
 // create rescue instance, and use it to calculate key constants for every round of computation
 const rescue = new Rescue(field, alpha, invAlpha, 4, steps, mds, constants);
 const keyStates = rescue.unrollConstants();
-const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
+const { roundConstants } = rescue.groupConstants(keyStates);
 
 // STARK DEFINITION
 // ================================================================================================
 const rescueStark = new Stark(`
-define Rescue4x128 over prime field (2^128 - 9 * 2^32 + 1) {
+define Rescue over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;
     inv_alpha: 0-113427455640312821154458202464371168597;
@@ -91,51 +92,24 @@ define Rescue4x128 over prime field (2^128 - 9 * 2^32 + 1) {
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const inputs = buildInputs([42n, 43n]);
-const assertions = [
-    { step: steps-1, register: 0, value: 302524937772545017647250309501879538110n },
-    { step: steps-1, register: 1, value: 205025454306577433144586673939030012640n },
-];
+const rounds = 16;
+const inputs: bigint[][] = [];
+const assertions: Assertion[] = [];
+
+for (let i = 0; i < rounds; i++) {
+    inputs.push([BigInt(i), BigInt(i)**2n, 0n, 0n]);
+    let result = rescue.modifiedSponge(inputs[i], keyStates).hash;
+
+    let step = (i + 1) * 32 - 1;
+    assertions.push({ step, register: 0, value: result[0] });
+    assertions.push({ step, register: 1, value: result[1] });
+}
 
 // generate a proof
 const proof = rescueStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 
 // verify the proof
-rescueStark.verify(assertions, proof);
+rescueStark.verify(assertions, proof, rounds);
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(rescueStark.sizeOf(proof) / 1024 * 100) / 100} KB`);
-
-// HELPER FUNCTIONS
-// ================================================================================================
-function buildInputs(values: bigint[]) {
-    const r = [
-        field.add(values[0], initialConstants[0]),
-        field.add(values[1], initialConstants[1]),
-        initialConstants[2],
-        initialConstants[3]
-    ];
-
-    // first step of round 1
-    const a = [
-        field.exp(r[0], invAlpha),
-        field.exp(r[1], invAlpha),
-        field.exp(r[2], invAlpha),
-        field.exp(r[3], invAlpha)
-    ];
-
-    for (let i = 0; i < 4; i++) {
-        let sum = 0n;
-        for (let j = 0; j < 4; j++) {
-            sum = field.add(sum, field.mul(mds[i][j], a[j]));
-        }
-        r[i] = sum;
-    }
-
-    r[0] = field.add(r[0], initialConstants[4]);
-    r[1] = field.add(r[1], initialConstants[5]);
-    r[2] = field.add(r[2], initialConstants[6]);
-    r[3] = field.add(r[3], initialConstants[7]);
-
-    return r;
-}

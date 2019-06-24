@@ -27,6 +27,7 @@
     "gulp": "4.0.x"
   },
   "dependencies": {
+    "@guildofweavers/air-script": "0.1.x",
     "@guildofweavers/galois": "0.2.x",
     "@guildofweavers/merkle": "0.1.x"
   }

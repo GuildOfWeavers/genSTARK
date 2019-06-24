@@ -1,0 +1,2 @@
+# Fibonacci STARK
+Example STARK in this directory shows how to create a STARK to verify computation of Fibonacci numbers. Because a Fibonacci number depends on 2 values preceding it, we set up the STARK with 2 mutable registers holding 2 consecutive Fibonacci numbers. So, in effect, a single step in the computation advances the Fibonacci sequence by 2 values.

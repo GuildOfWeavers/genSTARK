@@ -14,10 +14,11 @@ export class ZeroPolynomial {
     // --------------------------------------------------------------------------------------------
     constructor(context: EvaluationContext) {
         this.field = context.field;
-        this.steps = BigInt(context.steps);
+        this.steps = BigInt(context.totalSteps);
 
         const rootOfUnity = context.rootOfUnity;
-        const position = (this.steps - 1n) * BigInt(context.extensionFactor);
+        const extensionFactor = context.domainSize / context.totalSteps;
+        const position = (this.steps - 1n) * BigInt(extensionFactor);
         
         this.xAtLastStep = this.field.exp(rootOfUnity, position);
     }

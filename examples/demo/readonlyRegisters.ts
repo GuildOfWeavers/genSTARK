@@ -1,41 +1,45 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 // IMPORTS
 // ================================================================================================
-const index_1 = require("../index");
+import { Stark } from '../../index';
+
 // STARK DEFINITION
 // ================================================================================================
-// This example shows how different types of constant registers can be used. The transition
-// function is very simple: it operates with 1 mutable register and 2 readonly registers. The full
-// execution trace is shown at the end of this file. 
-const demoStark = new index_1.Stark({
-    field: new index_1.PrimeField(96769n),
-    tFunction: 'out: $r0 + 1 + $k0 + 2 * $k1',
-    tConstraints: 'out: $n0 - ($r0 + 1 + $k0 + 2 * $k1)',
-    tConstraintDegree: 1,
-    constants: [{
-            values: [1n, 2n, 3n, 4n],
-            pattern: 'repeat'
-        }, {
-            values: [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n],
-            pattern: 'spread'
-        }]
-});
+const steps = 2**6, result = 292n;
+
+const demoStark = new Stark(`
+define Demo over prime field (96769) {
+
+    transition 1 register in ${steps} steps {
+        out: $r0 + 1 + $k0 + 2 * $k1;
+    }
+
+    enforce 1 constraint of degree 1 {
+        out: $n0 - ($r0 + 1 + $k0 + 2 * $k1);
+    }
+
+    using 2 readonly registers {
+        $k0: repeat [1, 2, 3, 4];
+        $k1: spread [1, 2, 3, 4, 5, 6, 7, 8];
+    }
+}`);
+
 // TESTING
 // ================================================================================================
-const steps = 2 ** 6, result = 292n;
 // set up inputs and assertions
 const inputs = [1n];
 const assertions = [
     { step: 0, register: 0, value: 1n },
-    { step: steps - 1, register: 0, value: result }
+    { step: steps-1, register: 0, value: result }
 ];
+
 // generate a proof
-const proof = demoStark.prove(assertions, steps, inputs);
+const proof = demoStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
+
 // verify the proof
-demoStark.verify(assertions, proof, steps);
+demoStark.verify(assertions, proof);
 console.log('-'.repeat(20));
+
 // EXECUTION TRACE
 // ================================================================================================
 // K0 is the first (repeating) constant, K1 is the second (stretched) constant, 
@@ -106,4 +110,3 @@ console.log('-'.repeat(20));
 //  61		2	0	285
 //  62		3	0	288
 //  63		4	0	292
-//# sourceMappingURL=demo.js.map

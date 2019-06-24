@@ -1,13 +1,13 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, Polynom, EvaluationContext, ReadonlyRegister } from "@guildofweavers/genstark";
+import { FiniteField, Polynom, EvaluationContext, ComputedRegister } from "@guildofweavers/genstark";
 
 // CLASS DEFINITION
 // ================================================================================================
-export class RepeatedConstants implements ReadonlyRegister {
+export class RepeatedConstants implements ComputedRegister {
 
     readonly field          : FiniteField;
-    readonly periods         : bigint;
+    readonly periods        : bigint;
     readonly poly           : Polynom;
     readonly extensionFactor: number;
 
@@ -16,17 +16,17 @@ export class RepeatedConstants implements ReadonlyRegister {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
     constructor(values: bigint[], context: EvaluationContext, evaluatePoly: boolean) {
-        if (values.length > context.steps) {
+        if (values.length > context.totalSteps) {
             throw new Error('Number of steps must be greater than the constant cycle');
         }
         
-        if (context.steps % values.length !== 0) {
+        if (context.totalSteps % values.length !== 0) {
             throw new Error('Constant cycle must evenly divide the number of steps');
         }
         
         this.field = context.field;
-        this.periods = BigInt(context.steps / values.length);
-        this.extensionFactor = context.extensionFactor;
+        this.periods = BigInt(context.totalSteps / values.length);
+        this.extensionFactor = context.domainSize / context.totalSteps;
 
         const g = this.field.exp(context.rootOfUnity, BigInt(this.extensionFactor) * this.periods);
         const roots = this.field.getPowerCycle(g);

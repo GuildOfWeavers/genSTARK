@@ -3,30 +3,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // IMPORTS
 // ================================================================================================
 const assert = require("assert");
-const index_1 = require("../index");
+const index_1 = require("../../index");
 // STARK DEFINITION
 // ================================================================================================
-// This example shows how to create a STARK to verify computation of Fibonacci numbers. Because a
-// Fibonacci number depends on 2 values preceding it, we set up the STARK with 2 mutable registers
-// holding 2 consecutive Fibonacci numbers. So, in effect, a single step in the computation
-// advances the Fibonacci sequence by 2 values.
-const fibStark = new index_1.Stark({
-    field: new index_1.PrimeField(2n ** 32n - 3n * 2n ** 25n + 1n),
-    tFunction: `
+//const steps = 2**6, result = 1783540607n;         // ~60 ms to prove, ~20 KB proof size
+const steps = 2 ** 13, result = 203257732n; // ~1.7 second to prove, ~180 KB proof size
+//const steps = 2**17, result = 2391373091n;        // ~24 seconds to prove, ~342 KB proof size
+const fibStark = new index_1.Stark(`
+define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
+
+    transition 2 registers in ${steps} steps {
         a0: $r0 + $r1;
         out: [a0, a0 + $r1];
-    `,
-    tConstraints: `
+    }
+
+    enforce 2 constraints of degree 1 {
         a0: $r0 + $r1;
         out: [$n0 - a0, $n1 - (a0 + $r1)];
-    `,
-    tConstraintDegree: 1 // max degree of our constraints is 1
-});
+    }
+
+}`);
 // TESTING
 // ================================================================================================
-//const steps = 2**6, result = 1783540607n;         // ~50 ms to prove, ~12 KB proof size
-const steps = 2 ** 13, result = 203257732n; // ~1 second to prove, ~147 KB proof size
-//const steps = 2**17, result = 2391373091n;        // ~13 seconds to prove, ~290 KB proof size
 // set up inputs and assertions
 const inputs = [1n, 1n]; // step 0 and 1 in Fibonacci sequence are 1
 const assertions = [
@@ -34,8 +32,8 @@ const assertions = [
     { step: 0, register: 1, value: 1n },
     { step: steps - 1, register: 1, value: result } // value at the last step is equal to result
 ];
-// prove that the assertions hold if we execute Fibonacci computation for the given number of steps
-let proof = fibStark.prove(assertions, steps, inputs);
+// prove that the assertions hold if we execute Fibonacci computation
+let proof = fibStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 // serialize the proof
 let start = Date.now();
@@ -49,6 +47,6 @@ proof = fibStark.parse(buf);
 console.log(`Proof parsed in ${Date.now() - start} ms`);
 console.log('-'.repeat(20));
 // verify the proof
-fibStark.verify(assertions, proof, steps);
+fibStark.verify(assertions, proof);
 console.log('-'.repeat(20));
 //# sourceMappingURL=fibonacci.js.map

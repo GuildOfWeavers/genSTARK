@@ -1,130 +1,95 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const merkle_1 = require("@guildofweavers/merkle");
+const air_script_1 = require("@guildofweavers/air-script");
 const components_1 = require("./components");
 const utils_1 = require("./utils");
 const registers_1 = require("./registers");
-const merkle_1 = require("@guildofweavers/merkle");
-const config_1 = require("./config");
 const Serializer_1 = require("./Serializer");
 const StarkError_1 = require("./StarkError");
+// MODULE VARIABLES
+// ================================================================================================
+const MAX_DOMAIN_SIZE = 2 ** 32;
+const DEFAULT_EXE_SPOT_CHECKS = 80;
+const DEFAULT_FRI_SPOT_CHECKS = 40;
+const MAX_EXTENSION_FACTOR = 32;
+const MAX_EXE_SPOT_CHECK_COUNT = 128;
+const MAX_FRI_SPOT_CHECK_COUNT = 64;
+const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
 // CLASS DEFINITION
 // ================================================================================================
 class Stark {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(config, logger) {
-        const vConfig = config_1.parseStarkConfig(config);
-        this.field = vConfig.field;
-        this.registerCount = vConfig.registerCount;
-        this.constraintCount = vConfig.constraintCount;
-        this.maxConstraintDegree = vConfig.tConstraints.maxDegree;
-        this.constants = vConfig.constants;
-        this.extensionFactor = vConfig.extensionFactor;
-        this.exeSpotCheckCount = vConfig.exeSpotCheckCount;
-        this.friSpotCheckCount = vConfig.friSpotCheckCount;
-        this.applyTransitions = vConfig.tFunction;
-        this.applyConstraints = vConfig.tConstraints.batchEvaluator;
-        this.evaluateConstraints = vConfig.tConstraints.evaluator;
-        this.hashAlgorithm = vConfig.hashAlgorithm;
+    constructor(source, options, logger) {
+        if (typeof source !== 'string')
+            throw new TypeError('Source script must be a string');
+        if (!source.trim())
+            throw new TypeError('Source script cannot be an empty string');
+        this.config = air_script_1.parseScript(source);
+        this.field = this.config.field;
+        const vOptions = validateSecurityOptions(options, this.config.maxConstraintDegree);
+        this.extensionFactor = vOptions.extensionFactor;
+        this.exeSpotCheckCount = vOptions.exeSpotCheckCount;
+        this.friSpotCheckCount = vOptions.friSpotCheckCount;
+        this.hashAlgorithm = vOptions.hashAlgorithm;
         this.logger = logger || new utils_1.Logger();
     }
     // PROVER
     // --------------------------------------------------------------------------------------------
-    prove(assertions, steps, inputs) {
+    prove(assertions, inputs) {
         const label = this.logger.start('Starting STARK computation');
-        const evaluationDomainSize = steps * this.extensionFactor;
-        const constantCount = this.constants.length;
+        const registerCount = this.config.mutableRegisterCount;
+        const constraintCount = this.config.constraintCount;
         // 0 ----- validate parameters
-        if (assertions.length < 1)
+        if (!Array.isArray(assertions))
+            throw new TypeError('Assertions parameter must be an array');
+        if (assertions.length === 0)
             throw new TypeError('At least one assertion must be provided');
-        if (!utils_1.isPowerOf2(steps))
-            throw new TypeError('Number of steps must be a power of 2');
-        const maxSteps = config_1.MAX_DOMAIN_SIZE / this.extensionFactor;
-        if (steps > maxSteps)
-            throw new TypeError(`Number of steps cannot exceed ${maxSteps}`);
         if (!Array.isArray(inputs))
-            throw new TypeError(`Inputs parameter must be an array`);
-        if (inputs.length !== this.registerCount)
-            throw new TypeError(`Inputs array must have exactly ${this.registerCount} elements`);
-        for (let i = 0; i < inputs.length; i++) {
-            if (typeof inputs[i] !== 'bigint')
-                throw new TypeError(`Input for register r${i} is not a BigInt`);
-        }
+            throw new TypeError('Inputs parameter must be an array');
+        if (inputs.length === 0)
+            throw new TypeError('At least one input must be provided');
         // 1 ----- set up evaluation context
-        const G2 = this.field.getRootOfUnity(evaluationDomainSize);
-        const G1 = this.field.exp(G2, BigInt(this.extensionFactor));
-        const context = {
-            field: this.field,
-            steps: steps,
-            extensionFactor: this.extensionFactor,
-            rootOfUnity: G2,
-            registerCount: this.registerCount,
-            constantCount: constantCount,
-            hashAlgorithm: this.hashAlgorithm
-        };
-        const executionDomain = this.field.getPowerCycle(G1);
-        const evaluationDomain = this.field.getPowerCycle(G2);
-        const bPoly = new components_1.BoundaryConstraints(assertions, context);
-        const zPoly = new components_1.ZeroPolynomial(context);
-        const cRegisters = buildReadonlyRegisters(this.constants, context, evaluationDomain);
+        const normalizedInputs = normalizeInputs(inputs, registerCount);
+        const iterations = normalizedInputs.length;
+        const context = this.createContext(iterations);
+        const evaluationDomain = this.field.getPowerCycle(context.rootOfUnity);
+        const evaluationDomainSize = evaluationDomain.length;
+        const kRegisters = buildReadonlyRegisters(this.config.readonlyRegisters, context, evaluationDomain);
         this.logger.log(label, 'Set up evaluation context');
-        // 2 ----- generate execution trace
-        // first, copy over inputs to the beginning of the execution trace
-        const executionTrace = new Array(this.registerCount);
-        for (let register = 0; register < this.registerCount; register++) {
-            executionTrace[register] = new Array(executionDomain.length);
-            executionTrace[register][0] = inputs[register];
-        }
-        // then, apply transition function for all steps
-        try {
-            this.applyTransitions(executionTrace, cRegisters, steps, this.field);
-        }
-        catch (error) {
-            throw new StarkError_1.StarkError('Failed to generate execution trace', error);
-        }
-        // finally, make sure assertions don't contradict execution trace
-        for (let c of assertions) {
-            if (executionTrace[c.register][c.step] !== c.value) {
-                throw new StarkError_1.StarkError(`Assertion at step ${c.step}, register ${c.register} conflicts with execution trace`);
-            }
-        }
+        // 2 ----- generate execution trace and make sure it is correct
+        const traceBuilder = new components_1.ExecutionTraceBuilder(this.config, context);
+        const executionTrace = traceBuilder.compute(normalizedInputs, kRegisters);
+        traceBuilder.validateAssertions(executionTrace, assertions);
         this.logger.log(label, 'Generated execution trace');
-        // 3 ----- compute P(x) polynomials, and low-degree extend them
-        const pEvaluations = new Array(this.registerCount);
-        for (let register = 0; register < pEvaluations.length; register++) {
-            let p = this.field.interpolateRoots(executionDomain, executionTrace[register]);
-            pEvaluations[register] = this.field.evalPolyAtRoots(p, evaluationDomain);
-        }
+        // 3 ----- compute P(x) polynomials and low-degree extend them
+        const pPoly = new components_1.TracePolynomial(context, executionTrace);
+        const pEvaluations = pPoly.evaluate(evaluationDomain);
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
-        const qEvaluations = new Array(this.constraintCount);
-        for (let i = 0; i < this.constraintCount; i++) {
-            qEvaluations[i] = new Array(evaluationDomainSize);
-        }
-        try {
-            this.applyConstraints(qEvaluations, pEvaluations, cRegisters, evaluationDomainSize, this.extensionFactor, this.field);
-        }
-        catch (error) {
-            throw new StarkError_1.StarkError('Failed to evaluate transition constraints', error);
-        }
+        const constraintEvaluator = new components_1.TransitionConstraintEvaluator(this.config, context);
+        const qEvaluations = constraintEvaluator.evaluateAll(pEvaluations, kRegisters);
         this.logger.log(label, 'Computed Q(x) polynomials');
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
+        const zPoly = new components_1.ZeroPolynomial(context);
         const zEvaluations = zPoly.evaluateAll(evaluationDomain);
         this.logger.log(label, 'Computed Z(x) polynomial');
         // 6 ----- compute D(x) = Q(x) / Z(x)
         // first, invert numerators of Z(x)
         const zNumInverses = this.field.invMany(zEvaluations.numerators);
         this.logger.log(label, 'Inverted Z(x) numerators');
-        // then, compute multiply all values together to compute D(x)
+        // then, multiply all values together to compute D(x)
         const zDenominators = zEvaluations.denominators;
         const dEvaluations = this.field.mulMany(qEvaluations, zDenominators, zNumInverses);
         this.logger.log(label, 'Computed D(x) polynomials');
         // 7 ----- compute boundary constraints B(x)
+        const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const bEvaluations = bPoly.evaluateAll(pEvaluations, evaluationDomain);
         this.logger.log(label, 'Computed B(x) polynomials');
         // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
-        const serializer = new Serializer_1.Serializer(this.field, this.registerCount, this.constraintCount);
+        const serializer = new Serializer_1.Serializer(this.field, registerCount, constraintCount);
         const mergedEvaluations = new Array(evaluationDomainSize);
         const hashedEvaluations = new Array(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
@@ -146,28 +111,9 @@ class Stark {
         const eProof = eTree.proveBatch(augmentedPositions);
         this.logger.log(label, `Computed ${spotCheckCount} evaluation spot checks`);
         // 10 ---- compute random linear combination of evaluations
-        // first, increase the power of polynomials to match the power of liner combination
-        const lCombinationDegree = this.getLinearCombinationDegree(evaluationDomainSize);
-        let allEvaluations;
-        if (lCombinationDegree > steps) {
-            // increase degrees of P(x) and B(x) polynomials
-            const pbIncrementalDegree = BigInt(lCombinationDegree - steps);
-            const pbPowerSeed = this.field.exp(G2, pbIncrementalDegree);
-            const powers = this.field.getPowerSeries(pbPowerSeed, evaluationDomainSize);
-            const pbEvaluations = [...pEvaluations, ...bEvaluations];
-            const pbEvaluations2 = this.field.mulMany(pbEvaluations, powers);
-            allEvaluations = [...pbEvaluations2, ...pbEvaluations, ...dEvaluations];
-        }
-        else {
-            // increase degree of D(x) polynomial
-            const dPowerSeed = this.field.exp(G2, BigInt(steps - 1));
-            const powers = this.field.getPowerSeries(dPowerSeed, evaluationDomainSize);
-            const dEvaluations2 = this.field.mulMany(dEvaluations, powers);
-            allEvaluations = [...pEvaluations, ...bEvaluations, ...dEvaluations2];
-        }
-        // then compute a linear combination of all polynomials
-        const lCoefficients = this.field.prng(eTree.root, allEvaluations.length);
-        const lEvaluations = this.field.combineMany(allEvaluations, lCoefficients);
+        const lCombination = new components_1.LinearCombination(context, eTree.root);
+        const lEvaluations = lCombination.computeMany(pEvaluations, bEvaluations, dEvaluations);
+        ;
         this.logger.log(label, 'Computed random linear combination of evaluations');
         // 11 ----- Compute low-degree proof
         const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
@@ -177,7 +123,7 @@ class Stark {
         let ldProof;
         try {
             const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
-            ldProof = ldProver.prove(lTree, lEvaluations, evaluationDomain, lCombinationDegree);
+            ldProof = ldProver.prove(lTree, lEvaluations, evaluationDomain, lCombination.degree);
         }
         catch (error) {
             throw new StarkError_1.StarkError('Low degree proof failed', error);
@@ -202,33 +148,21 @@ class Stark {
     }
     // VERIFIER
     // --------------------------------------------------------------------------------------------
-    verify(assertions, proof, steps) {
+    verify(assertions, proof, iterations = 1) {
         const label = this.logger.start('Starting STARK verification');
-        const evaluationDomainSize = steps * this.extensionFactor;
-        const constantCount = this.constants.length;
+        const registerCount = this.config.mutableRegisterCount;
+        const constraintCount = this.config.constraintCount;
         const eRoot = proof.evaluations.root;
         // 0 ----- validate parameters
         if (assertions.length < 1)
             throw new TypeError('At least one assertion must be provided');
-        if (!utils_1.isPowerOf2(steps))
-            throw new TypeError('Number of steps must be a power of 2');
-        const maxSteps = config_1.MAX_DOMAIN_SIZE / this.extensionFactor;
-        if (steps > maxSteps)
-            throw new TypeError(`Number of steps cannot exceed ${maxSteps}`);
         // 1 ----- set up evaluation context
-        const G2 = this.field.getRootOfUnity(evaluationDomainSize);
-        const context = {
-            field: this.field,
-            steps: steps,
-            extensionFactor: this.extensionFactor,
-            rootOfUnity: G2,
-            registerCount: this.registerCount,
-            constantCount: constantCount,
-            hashAlgorithm: this.hashAlgorithm
-        };
+        const context = this.createContext(iterations);
+        const evaluationDomainSize = context.totalSteps * this.extensionFactor;
+        const G2 = context.rootOfUnity;
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const zPoly = new components_1.ZeroPolynomial(context);
-        const cRegisters = buildReadonlyRegisters(this.constants, context);
+        const kRegisters = buildReadonlyRegisters(this.config.readonlyRegisters, context);
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
         const spotCheckCount = Math.min(this.exeSpotCheckCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
@@ -241,7 +175,7 @@ class Stark {
         const dEvaluations = new Map();
         const hashedEvaluations = new Array(augmentedPositions.length);
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
-        const serializer = new Serializer_1.Serializer(this.field, this.registerCount, this.constraintCount);
+        const serializer = new Serializer_1.Serializer(this.field, registerCount, constraintCount);
         for (let i = 0; i < proof.evaluations.values.length; i++) {
             let mergedEvaluations = proof.evaluations.values[i];
             let position = augmentedPositions[i];
@@ -280,6 +214,7 @@ class Stark {
                 throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`, error);
             }
         }
+        const lCombination = new components_1.LinearCombination(context, proof.evaluations.root);
         const lEvaluations = new Map();
         const lEvaluationValues = utils_1.buffersToBigInts(proof.degree.lcProof.values);
         for (let i = 0; i < proof.degree.lcProof.values.length; i++) {
@@ -288,18 +223,16 @@ class Stark {
         }
         this.logger.log(label, `Verified liner combination proof`);
         // 6 ----- verify low-degree proof
-        const lCombinationDegree = this.getLinearCombinationDegree(evaluationDomainSize);
         try {
             const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
-            ldProver.verify(proof.degree.root, lCombinationDegree, G2, proof.degree.ldProof);
+            ldProver.verify(proof.degree.root, lCombination.degree, G2, proof.degree.ldProof);
         }
         catch (error) {
             throw new StarkError_1.StarkError('Verification of low degree failed', error);
         }
-        const lPolyCount = this.constraintCount + 2 * (this.registerCount + bPoly.count);
-        const lCoefficients = this.field.prng(eRoot, lPolyCount);
         this.logger.log(label, `Verified low-degree proof`);
         // 7 ----- verify transition and boundary constraints
+        const constraintEvaluator = new components_1.TransitionConstraintEvaluator(this.config, context);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
             let x = this.field.exp(G2, BigInt(step));
@@ -308,14 +241,14 @@ class Stark {
             let dValues = dEvaluations.get(step);
             let zValue = zPoly.evaluateAt(x);
             // build an array of constant values for the current step
-            let cValues = new Array(constantCount);
-            for (let j = 0; j < constantCount; j++) {
-                cValues[j] = cRegisters[j].getValueAt(x);
+            let kValues = new Array(context.constantCount);
+            for (let j = 0; j < kValues.length; j++) {
+                kValues[j] = kRegisters[j].getValueAt(x);
             }
             // check transition 
             let npValues = pEvaluations.get((step + this.extensionFactor) % evaluationDomainSize);
-            let qValues = this.evaluateConstraints(pValues, npValues, cValues, this.field);
-            for (let j = 0; j < this.constraintCount; j++) {
+            let qValues = constraintEvaluator.evaluateOne(pValues, npValues, kValues, step);
+            for (let j = 0; j < constraintCount; j++) {
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValues[j] !== qCheck) {
                     throw new StarkError_1.StarkError(`Transition constraint at position ${step} was not satisfied`);
@@ -329,25 +262,7 @@ class Stark {
                 }
             }
             // check correctness of liner 
-            let lcValues;
-            if (lCombinationDegree > steps) {
-                let power = this.field.exp(x, BigInt(lCombinationDegree - steps));
-                let pbValues = [...pValues, ...bValues];
-                let pbValues2 = new Array(pbValues.length);
-                for (let j = 0; j < pbValues2.length; j++) {
-                    pbValues2[j] = pbValues[j] * power;
-                }
-                lcValues = [...pbValues2, ...pbValues, ...dValues];
-            }
-            else {
-                let power = this.field.exp(x, BigInt(steps - 1));
-                let dValues2 = new Array(dValues.length);
-                for (let j = 0; j < dValues2.length; j++) {
-                    dValues2[j] = dValues[j] * power;
-                }
-                lcValues = [...pValues, ...bValues, ...dValues2];
-            }
-            let lCheck = this.field.combine(lcValues, lCoefficients);
+            let lCheck = lCombination.computeOne(x, pValues, bValues, dValues);
             if (lEvaluations.get(step) !== lCheck) {
                 throw new StarkError_1.StarkError(`Linear combination at position ${step} is inconsistent`);
             }
@@ -359,21 +274,47 @@ class Stark {
     // UTILITIES
     // --------------------------------------------------------------------------------------------
     sizeOf(proof) {
-        const valueCount = this.registerCount + this.constraintCount + proof.evaluations.bpc;
+        const registerCount = this.config.mutableRegisterCount;
+        const constraintCount = this.config.constraintCount;
+        const valueCount = registerCount + constraintCount + proof.evaluations.bpc;
         const valueSize = valueCount * this.field.elementSize;
         const size = utils_1.sizeOf(proof, valueSize, this.hashAlgorithm);
         return size.total;
     }
     serialize(proof) {
-        const serializer = new Serializer_1.Serializer(this.field, this.registerCount, this.constraintCount);
+        const registerCount = this.config.mutableRegisterCount;
+        const constraintCount = this.config.constraintCount;
+        const serializer = new Serializer_1.Serializer(this.field, registerCount, constraintCount);
         return serializer.serializeProof(proof, this.hashAlgorithm);
     }
     parse(buffer) {
-        const serializer = new Serializer_1.Serializer(this.field, this.registerCount, this.constraintCount);
+        const registerCount = this.config.mutableRegisterCount;
+        const constraintCount = this.config.constraintCount;
+        const serializer = new Serializer_1.Serializer(this.field, registerCount, constraintCount);
         return serializer.parseProof(buffer, this.hashAlgorithm);
     }
     // HELPER METHODS
     // --------------------------------------------------------------------------------------------
+    createContext(iterations) {
+        // TODO: if (!isPowerOf2(iterations)) throw new TypeError('Number of iterations must be a power of 2');
+        // TODO: const maxSteps = MAX_DOMAIN_SIZE / this.extensionFactor;
+        // TODO: if (steps > maxSteps) throw new TypeError(`Total number of steps cannot exceed ${maxSteps}`);
+        const steps = this.config.steps * iterations;
+        const domainSize = steps * this.extensionFactor;
+        const rootOfUnity = this.field.getRootOfUnity(domainSize);
+        const maxConstraintDegree = this.config.maxConstraintDegree;
+        return {
+            field: this.field,
+            constraintDegree: iterations === 1 ? maxConstraintDegree : maxConstraintDegree + 1,
+            roundSteps: this.config.steps,
+            totalSteps: steps,
+            domainSize: domainSize,
+            rootOfUnity: rootOfUnity,
+            registerCount: this.config.mutableRegisterCount,
+            constantCount: this.config.readonlyRegisters.length,
+            hashAlgorithm: this.hashAlgorithm
+        };
+    }
     getAugmentedPositions(positions, evaluationDomainSize) {
         const skip = this.extensionFactor;
         const augmentedPositionSet = new Set();
@@ -383,23 +324,52 @@ class Stark {
         }
         return Array.from(augmentedPositionSet);
     }
-    getLinearCombinationDegree(evaluationDomainSize) {
-        const steps = evaluationDomainSize / this.extensionFactor;
-        // the logic is as follows:
-        // deg(Q(x)) = steps * deg(constraints) = deg(D(x)) + deg(Z(x))
-        // thus, deg(D(x)) = deg(Q(x)) - steps;
-        // and, linear combination degree is max(deg(D(x)), steps)
-        const degree = steps * Math.max(this.maxConstraintDegree - 1, 1);
-        return degree;
-    }
 }
 exports.Stark = Stark;
 // HELPER FUNCTIONS
 // ================================================================================================
-function buildReadonlyRegisters(constants, context, domain) {
-    const registers = new Array(constants ? constants.length : 0);
+function validateSecurityOptions(options, maxConstraintDegree) {
+    // extension factor
+    const minExtensionFactor = 2 ** Math.ceil(Math.log2((maxConstraintDegree + 1) * 2));
+    let extensionFactor = options ? options.extensionFactor : undefined;
+    if (extensionFactor === undefined) {
+        extensionFactor = minExtensionFactor;
+        if (extensionFactor > MAX_EXTENSION_FACTOR) {
+            throw new TypeError(`Transition constraints degree must be smaller than or equal to ${MAX_EXTENSION_FACTOR / 2 - 1}`);
+        }
+    }
+    else {
+        if (extensionFactor > MAX_EXTENSION_FACTOR || !Number.isInteger(extensionFactor)) {
+            throw new TypeError(`Extension factor must be an integer smaller than or equal to ${MAX_EXTENSION_FACTOR}`);
+        }
+        if (!utils_1.isPowerOf2(extensionFactor)) {
+            throw new TypeError(`Extension factor must be a power of 2`);
+        }
+        if (extensionFactor < minExtensionFactor) {
+            throw new TypeError(`Extension factor must be at ${minExtensionFactor}`);
+        }
+    }
+    // execution trace spot checks
+    const exeSpotCheckCount = (options ? options.exeSpotCheckCount : undefined) || DEFAULT_EXE_SPOT_CHECKS;
+    if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT || !Number.isInteger(exeSpotCheckCount)) {
+        throw new TypeError(`Execution sample size must be an integer between 1 and ${MAX_EXE_SPOT_CHECK_COUNT}`);
+    }
+    // low degree evaluation spot checks
+    const friSpotCheckCount = (options ? options.friSpotCheckCount : undefined) || DEFAULT_FRI_SPOT_CHECKS;
+    if (friSpotCheckCount < 1 || friSpotCheckCount > MAX_FRI_SPOT_CHECK_COUNT || !Number.isInteger(friSpotCheckCount)) {
+        throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_SPOT_CHECK_COUNT}`);
+    }
+    // hash function
+    const hashAlgorithm = (options ? options.hashAlgorithm : undefined) || 'sha256';
+    if (!HASH_ALGORITHMS.includes(hashAlgorithm)) {
+        throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
+    }
+    return { extensionFactor, exeSpotCheckCount, friSpotCheckCount, hashAlgorithm };
+}
+function buildReadonlyRegisters(specs, context, domain) {
+    const registers = new Array(specs ? specs.length : 0);
     for (let i = 0; i < registers.length; i++) {
-        let c = constants[i];
+        let c = specs[i];
         if (c.pattern === 'repeat') {
             registers[i] = new registers_1.RepeatedConstants(c.values, context, domain !== undefined);
         }
@@ -411,5 +381,33 @@ function buildReadonlyRegisters(constants, context, domain) {
         }
     }
     return registers;
+}
+function normalizeInputs(inputs, registerCount) {
+    if (!Array.isArray(inputs))
+        throw new TypeError(`Inputs parameter must be an array`);
+    if (typeof inputs[0] === 'bigint') {
+        validateInputRow(inputs, registerCount, 0);
+        inputs = [inputs];
+    }
+    else {
+        for (let i = 0; i < inputs.length; i++) {
+            validateInputRow(inputs[i], registerCount, i);
+        }
+    }
+    return inputs;
+}
+function validateInputRow(row, registerCount, rowNumber) {
+    if (!Array.isArray(row)) {
+        throw new TypeError(`Input row ${rowNumber} is not an array`);
+    }
+    if (row.length !== registerCount) {
+        throw new TypeError(`Input row must have exactly ${registerCount} elements`);
+    }
+    for (let i = 0; i < registerCount; i++) {
+        if (typeof row[i] !== 'bigint') {
+            throw new TypeError(`Input ${rowNumber} for register $r${i} is not a BigInt`);
+        }
+        ;
+    }
 }
 //# sourceMappingURL=Stark.js.map

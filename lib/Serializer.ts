@@ -23,7 +23,7 @@ export class Serializer {
 
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeEvaluations([pEvaluations, bEvaluations, dEvaluations]: bigint[][][], bCount: number, position: number): Buffer {
+    mergeEvaluations([pEvaluations, bEvaluations, dEvaluations]: bigint[][][],  bCount: number, position: number): Buffer {
         const elementCount = this.registerCount + bCount + this.constraintCount;
         const buffer = Buffer.allocUnsafe(elementCount * this.fieldElementSize);
 
@@ -65,7 +65,7 @@ export class Serializer {
         for (let i = 0; i < this.constraintCount; i++, offset += this.fieldElementSize) {
             dEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
         }
-    
+
         return [pEvaluations, bEvaluations, dEvaluations];
     }
 
