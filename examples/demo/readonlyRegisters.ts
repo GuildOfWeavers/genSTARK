@@ -1,16 +1,17 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
 // IMPORTS
 // ================================================================================================
-const index_1 = require("../index");
+import { Stark, PrimeField } from '../../index';
+
 // STARK DEFINITION
 // ================================================================================================
 // This example shows how different types of constant registers can be used. The transition
 // function is very simple: it operates with 1 mutable register and 2 readonly registers. The full
 // execution trace is shown at the end of this file. 
+
 //const steps = 2**6, result = 292n;
-const steps = 2 ** 5, result = 21358n;
-const demoStark = new index_1.Stark(`
+const steps = 2**5, result = 21358n;
+
+const demoStark = new Stark(`
 define Demo over prime field (96769) {
 
     transition 1 register in 8 steps {
@@ -21,32 +22,35 @@ define Demo over prime field (96769) {
         out: $n0 - ($r0^3 + 2);
     }
 }`);
+
 // TESTING
 // ================================================================================================
-function test(input) {
-    const field = new index_1.PrimeField(96769n);
+function test(input: bigint) {
+    const field = new PrimeField(96769n);
     const result = [input];
     for (let i = 0; i < 7; i++) {
         result.push(field.add(field.exp(result[i], 3n), 2n));
     }
     console.log(result);
 }
-test(1n);
-test(2n);
-test(3n);
-test(4n);
+test(1n); test(2n); test(3n); test(4n);
+
+
 // set up inputs and assertions
 const inputs = [[1n], [2n], [3n], [4n]];
 const assertions = [
     { step: 0, register: 0, value: 1n },
-    { step: steps - 1, register: 0, value: result }
+    { step: steps-1, register: 0, value: result }
 ];
+
 // generate a proof
 const proof = demoStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
+
 // verify the proof
 demoStark.verify(assertions, proof, 4);
 console.log('-'.repeat(20));
+
 // EXECUTION TRACE
 // ================================================================================================
 // K0 is the first (repeating) constant, K1 is the second (stretched) constant, 
@@ -117,4 +121,3 @@ console.log('-'.repeat(20));
 //  61		2	0	285
 //  62		3	0	288
 //  63		4	0	292
-//# sourceMappingURL=demo.js.map

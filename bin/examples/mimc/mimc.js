@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // IMPORTS
 // ================================================================================================
 const assert = require("assert");
-const index_1 = require("../index");
+const index_1 = require("../../index");
 // STARK DEFINITION
 // ================================================================================================
 //const steps = 2**6, result = 115147868172009559599970888602262339785331471694954098733392001040646413813295n;

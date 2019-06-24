@@ -40,17 +40,24 @@ declare module '@guildofweavers/genstark' {
         /**
          * Generate a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
-         * @param inputs Initial values for all mutable registers
+         * @param inputs An array of input values to be injected into the execution trace at position 0
          */
         prove(assertions: Assertion[], inputs: bigint[]): StarkProof;
+
+        /**
+         * Generate a proof of computation for this STARK
+         * @param assertions Boundary constraints for the computation
+         * @param inputs An array with input sets to be injected into the execution trace
+         */
+        prove(assertions: Assertion[], inputs: bigint[][]): StarkProof;
 
         /**
          * Verifies a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
          * @param proof Proof of the computation
-         * @param iterations Number of iterations of the computation; the default is 1
+         * @param rounds Number of input rounds of the computation; the default is 1
          */
-        verify(assertions: Assertion[], proof: StarkProof, iterations?: number): boolean;
+        verify(assertions: Assertion[], proof: StarkProof, rounds?: number): boolean;
 
         /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;
@@ -75,21 +82,6 @@ declare module '@guildofweavers/genstark' {
             lcProof : BatchMerkleProof;
             ldProof : LowDegreeProof;
         }
-    }
-
-    export interface StarkProof2 {
-        values      : Buffer[];
-        evProof: {
-            root    : Buffer;
-            nodes   : Buffer[][];
-            depth   : number;
-        };
-        lcProof: {
-            root    : Buffer;
-            nodes   : Buffer[][];
-            depth   : number;
-        };
-        ldProof     : LowDegreeProof;
     }
 
     // CONSTRAINTS

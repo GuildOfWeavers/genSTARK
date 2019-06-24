@@ -53,7 +53,7 @@ const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
 const rescueStark = new Stark(`
-define Rescue2x64 over prime field (2^128 - 9 * 2^32 + 1) {
+define Rescue4x128 over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;
     inv_alpha: 0-113427455640312821154458202464371168597;
