@@ -16,11 +16,11 @@ $ npm install @guildofweavers/genstark --save
 Here is a trivial example of how to use this library. In this example, the computation is just adding 2 to the current value at each step. That is: x<sub>n+1</sub> = x<sub>n</sub> + 2.
 
 ```TypeScript
-import { Stark, PrimeField } from '@guildofweavers/genstark';
+import { Stark } from '@guildofweavers/genstark';
 
 // define a STARK for this computation
 const fooStark = new Stark(`
-define Foo over prime field(2^32 - 3 * 2^25 + 1) {
+define Foo over prime field (2^32 - 3 * 2^25 + 1) {
 
     // define transition function
     transition 1 register in 64 steps {
@@ -105,7 +105,7 @@ The meaning of the constructor parameters is as follows:
 | logger?            | An optional logger. The default logger prints output to the console, but it can be replaced with anything that complies with the Logger interface. |
 
 ### Security options
-Security option parameter should have the following form:
+Security options parameter should have the following form:
 
 | Property           | Description |
 | ------------------ | ----------- |
@@ -127,7 +127,7 @@ The meaning of the parameters is as follows:
 | inputs     | An array of `BigInt`'s containing initial values for all mutable registers. This can also be a 2-dimensional array when multiple sets of inputs (see [input injection](#Input-injection) below). |
 
 ### Input Injection
-When you need to generate a proof of computation for a single set of inputs, you pass these inputs as a simple array to the `prove()` method. This will inject the inputs into the execution trace at position 0. For many use cases, this is sufficient - but what if you need to generate a proof of the same computation for multiple inputs? That's where input injection comes in.
+When you need to generate a proof of computation for a single set of inputs, you pass a simple array to the `prove()` method. This will inject the values from the array into the execution trace at position 0. For many use cases this is sufficient - but what if you need to generate a proof of the same computation for multiple sets of inputs? That's where input injection comes in.
 
 With input injection, you can provide multiple sets of inputs to the `prove()` method, and generate a single proof that the computation was executed correctly for all provided inputs. Here is how it works:
 
@@ -137,14 +137,14 @@ let a = [...];        // first set of inputs
 let b = [...];        // second set of inputs
 let inputs = [a, b];  
 ```
-You can then pass this input object into the `prove()` method, and here is what will happen:
+You can then pass this `inputs` object into the `prove()` method, and here is what will happen:
 
 * Input array `a` will get injected into the execution trace at position 0;
 * Input array `b` will get injected into the execution trace at position 32;
 
 So, essentially, you'll have an execution trace that is a combination of execution traces of independently running the computation first with inputs `a` and then with inputs `b`.
 
-You'll also need to set up your assertions to check the output of both executions like so:
+You'll also need to set up your [assertions](#Assertions) to check the output of both executions like so:
 ```TypeScript
 let assertions = [
     { step: 31, register: 0, value: x },
@@ -157,7 +157,7 @@ For a concrete example, check out a [multiRoundInputs](/examples/demo) demo STAR
 
 There are a couple of things to note about input injection:
 
-1. The number of input sets must be a power of 2 (e.g. 2, 4, 8, etc.). If you need generate a proof for a different number of input sets, you can just pad them (e.g. if you have 15 input sets, just add a dummy 16th set).
+1. The number of input sets must be a power of 2 (e.g. 2, 4, 8, etc.). If you need to generate a proof for a different number of input sets, you can just pad them (e.g. if you have 15 input sets, just add a dummy 16th set).
 2. When you use multiple input sets, the degree of the calculation is increased by 1. This is handled automatically, so - you don't need to do anything differently, but still a good thing to be aware of.
 
 ## Verifying proofs

@@ -1,43 +1,32 @@
 // IMPORTS
 // ================================================================================================
-import { Stark, PrimeField } from '../../index';
+import { Stark } from '../../index';
 
 // STARK DEFINITION
 // ================================================================================================
-// This example shows how different types of constant registers can be used. The transition
-// function is very simple: it operates with 1 mutable register and 2 readonly registers. The full
-// execution trace is shown at the end of this file. 
-
-//const steps = 2**6, result = 292n;
-const steps = 2**5, result = 21358n;
+const steps = 2**6, result = 292n;
 
 const demoStark = new Stark(`
 define Demo over prime field (96769) {
 
-    transition 1 register in 8 steps {
-        out: $r0^3 + 2;
+    transition 1 register in ${steps} steps {
+        out: $r0 + 1 + $k0 + 2 * $k1;
     }
 
-    enforce 1 constraint of degree 3 {
-        out: $n0 - ($r0^3 + 2);
+    enforce 1 constraint of degree 1 {
+        out: $n0 - ($r0 + 1 + $k0 + 2 * $k1);
+    }
+
+    using 2 readonly registers {
+        $k0: repeat [1, 2, 3, 4];
+        $k1: spread [1, 2, 3, 4, 5, 6, 7, 8];
     }
 }`);
 
 // TESTING
 // ================================================================================================
-function test(input: bigint) {
-    const field = new PrimeField(96769n);
-    const result = [input];
-    for (let i = 0; i < 7; i++) {
-        result.push(field.add(field.exp(result[i], 3n), 2n));
-    }
-    console.log(result);
-}
-test(1n); test(2n); test(3n); test(4n);
-
-
 // set up inputs and assertions
-const inputs = [[1n], [2n], [3n], [4n]];
+const inputs = [1n];
 const assertions = [
     { step: 0, register: 0, value: 1n },
     { step: steps-1, register: 0, value: result }
@@ -48,7 +37,7 @@ const proof = demoStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 
 // verify the proof
-demoStark.verify(assertions, proof, 4);
+demoStark.verify(assertions, proof);
 console.log('-'.repeat(20));
 
 // EXECUTION TRACE

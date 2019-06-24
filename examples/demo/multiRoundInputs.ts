@@ -34,7 +34,6 @@ const rescue = new Rescue(field, alpha, invAlpha, 4, steps, mds, constants);
 const keyStates = rescue.unrollConstants();
 const { roundConstants } = rescue.groupConstants(keyStates);
 
-
 // STARK DEFINITION
 // ================================================================================================
 const rescueStark = new Stark(`

@@ -1,19 +1,13 @@
 // IMPORTS
 // ================================================================================================
 import * as assert from 'assert';
-import { Stark, PrimeField } from '../../index';
+import { Stark } from '../../index';
 
 // STARK DEFINITION
 // ================================================================================================
-// This example shows how to create a STARK to verify computation of Fibonacci numbers. Because a
-// Fibonacci number depends on 2 values preceding it, we set up the STARK with 2 mutable registers
-// holding 2 consecutive Fibonacci numbers. So, in effect, a single step in the computation
-// advances the Fibonacci sequence by 2 values.
-
 //const steps = 2**6, result = 1783540607n;         // ~60 ms to prove, ~20 KB proof size
 const steps = 2**13, result = 203257732n;           // ~1.7 second to prove, ~180 KB proof size
 //const steps = 2**17, result = 2391373091n;        // ~24 seconds to prove, ~342 KB proof size
-
 
 const fibStark = new Stark(`
 define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
