@@ -10,8 +10,8 @@ class LowDegreeProver {
     // --------------------------------------------------------------------------------------------
     constructor(spotCheckCount, context) {
         this.field = context.field;
-        this.skipMultiplesOf = context.domainSize / context.totalSteps;
-        this.hashAlgorithm = context.hashAlgorithm;
+        this.skipMultiplesOf = context.extensionFactor;
+        this.hashAlgorithm = 'sha256'; // TODO: context.hashAlgorithm;
         this.spotCheckCount = spotCheckCount;
     }
     // PUBLIC METHODS

@@ -1,6 +1,7 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, HashAlgorithm, LowDegreeProof, FriComponent, EvaluationContext } from "@guildofweavers/genstark";
+import { HashAlgorithm, LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
+import { EvaluationContext, FiniteField } from '@guildofweavers/air-script';
 import { MerkleTree, getHashDigestSize } from '@guildofweavers/merkle';
 import { getPseudorandomIndexes, bigIntsToBuffers, buffersToBigInts } from "../utils";
 import { StarkError } from '../StarkError';
@@ -18,8 +19,8 @@ export class LowDegreeProver {
     // --------------------------------------------------------------------------------------------
     constructor(spotCheckCount: number, context: EvaluationContext) {
         this.field = context.field;
-        this.skipMultiplesOf = context.domainSize / context.totalSteps;
-        this.hashAlgorithm = context.hashAlgorithm;
+        this.skipMultiplesOf = context.extensionFactor;
+        this.hashAlgorithm = 'sha256'; // TODO: context.hashAlgorithm;
         this.spotCheckCount = spotCheckCount;
     }
 

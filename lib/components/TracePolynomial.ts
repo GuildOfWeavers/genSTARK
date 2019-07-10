@@ -1,7 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField } from "@guildofweavers/galois";
-import { EvaluationContext } from "@guildofweavers/genstark";
+import { EvaluationContext, FiniteField } from '@guildofweavers/air-script';
 
 // CLASS DEFINITION
 // ================================================================================================

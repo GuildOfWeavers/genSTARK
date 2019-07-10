@@ -7,9 +7,9 @@ class ZeroPolynomial {
     // --------------------------------------------------------------------------------------------
     constructor(context) {
         this.field = context.field;
-        this.steps = BigInt(context.totalSteps);
+        this.steps = BigInt(context.traceLength);
         const rootOfUnity = context.rootOfUnity;
-        const extensionFactor = context.domainSize / context.totalSteps;
+        const extensionFactor = context.extensionFactor;
         const position = (this.steps - 1n) * BigInt(extensionFactor);
         this.xAtLastStep = this.field.exp(rootOfUnity, position);
     }

@@ -7,7 +7,7 @@ class BoundaryConstraints {
     // --------------------------------------------------------------------------------------------
     constructor(assertions, context) {
         const field = this.field = context.field;
-        const extensionFactor = context.domainSize / context.totalSteps;
+        const extensionFactor = context.extensionFactor;
         // combine constraints for each register
         const rData = new Map();
         for (let c of assertions) {

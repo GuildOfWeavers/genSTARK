@@ -10,11 +10,11 @@ class LinearCombination {
         // deg(Q(x)) = steps * deg(constraints) = deg(D(x)) + deg(Z(x))
         // thus, deg(D(x)) = deg(Q(x)) - steps;
         // and, linear combination degree is max(deg(D(x)), steps)
-        this.degree = context.totalSteps * Math.max(context.constraintDegree - 1, 1);
+        this.degree = context.traceLength; // * Math.max(context. - 1, 1); TODO: get constraint degree
         this.field = context.field;
-        this.steps = context.totalSteps;
+        this.steps = context.traceLength;
         this.rootOfUnity = context.rootOfUnity;
-        this.domainSize = context.domainSize;
+        this.domainSize = context.traceLength * context.extensionFactor;
         this.coefficients = this.field.prng(seed, 256); // TODO: calculate intelligently
     }
     // PUBLIC METHODS
