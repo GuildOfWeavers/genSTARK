@@ -1,6 +1,13 @@
 // IMPORTS
 // ================================================================================================
-import { EvaluationContext, FiniteField } from '@guildofweavers/air-script';
+import { FiniteField } from '@guildofweavers/air-script';
+
+// INTERFACES
+// ================================================================================================
+interface DomainParams {
+    executionDomain : bigint[];
+    evaluationDomain: bigint[];
+}
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -11,24 +18,16 @@ export class TracePolynomial {
     
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(context: EvaluationContext, executionTrace: bigint[][]) {
-        this.field = context.field;
+    constructor(field: FiniteField, executionTrace: bigint[][]) {
+        this.field = field;
         this.executionTrace = executionTrace;
     }
 
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    evaluate(evaluationDomain: bigint[]) {
+    evaluate({ executionDomain, evaluationDomain }: DomainParams) {
 
         const registerCount = this.executionTrace.length;
-        const executionSteps = this.executionTrace[0].length;
-        const extensionFactor = evaluationDomain.length / executionSteps;
-
-        // compute execution domain
-        const executionDomain = new Array<bigint>(executionSteps);
-        for (let step = 0; step < executionDomain.length; step++) {
-            executionDomain[step] = evaluationDomain[step * extensionFactor];
-        }
 
         // for each register in the execution trace, compute a polynomial and low-degree extend it
         const result = new Array<bigint[]>(registerCount);

@@ -29,9 +29,10 @@ class Stark {
         this.field = this.air.field;
         const vOptions = validateSecurityOptions(options, this.air.maxConstraintDegree);
         this.extensionFactor = vOptions.extensionFactor;
-        this.exeSpotCheckCount = vOptions.exeSpotCheckCount;
-        this.friSpotCheckCount = vOptions.friSpotCheckCount;
+        this.exeQueryCount = vOptions.exeSpotCheckCount;
         this.hashAlgorithm = vOptions.hashAlgorithm;
+        this.ldProver = new components_1.LowDegreeProver(vOptions.friSpotCheckCount, this.hashAlgorithm, this.air);
+        this.serializer = new Serializer_1.Serializer(this.air);
         this.logger = logger || new utils_1.Logger();
     }
     // PROVER
@@ -49,23 +50,22 @@ class Stark {
             throw new TypeError('At least one input must be provided');
         // 1 ----- set up evaluation context
         const context = this.air.createContext([], []); // TODO: pass inputs
-        const evaluationDomain = this.field.getPowerCycle(context.rootOfUnity);
-        const evaluationDomainSize = evaluationDomain.length;
+        const evaluationDomainSize = context.evaluationDomain.length;
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- generate execution trace and make sure it is correct
         const executionTrace = this.air.generateExecutionTrace([], context); // TODO: pass inputs, catch exception
         validateAssertions(executionTrace, assertions);
         this.logger.log(label, 'Generated execution trace');
         // 3 ----- compute P(x) polynomials and low-degree extend them
-        const pPoly = new components_1.TracePolynomial(context, executionTrace);
-        const pEvaluations = pPoly.evaluate(evaluationDomain);
+        const pPoly = new components_1.TracePolynomial(this.air.field, executionTrace);
+        const pEvaluations = pPoly.evaluate(context);
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
         const qEvaluations = this.air.evaluateExtendedTrace(pEvaluations, context); // TODO: catch exception
         this.logger.log(label, 'Computed Q(x) polynomials');
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
         const zPoly = new components_1.ZeroPolynomial(context);
-        const zEvaluations = zPoly.evaluateAll(evaluationDomain);
+        const zEvaluations = zPoly.evaluateAll(context.evaluationDomain);
         this.logger.log(label, 'Computed Z(x) polynomial');
         // 6 ----- compute D(x) = Q(x) / Z(x)
         // first, invert numerators of Z(x)
@@ -77,17 +77,14 @@ class Stark {
         this.logger.log(label, 'Computed D(x) polynomials');
         // 7 ----- compute boundary constraints B(x)
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
-        const bEvaluations = bPoly.evaluateAll(pEvaluations, evaluationDomain);
+        const bEvaluations = bPoly.evaluateAll(pEvaluations, context.evaluationDomain);
         this.logger.log(label, 'Computed B(x) polynomials');
         // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
-        const registerCount = context.stateWidth; // TODO: improve
-        const constraintCount = context.constraints.length; // TODO: improve
-        const serializer = new Serializer_1.Serializer(this.field, registerCount, constraintCount);
         const mergedEvaluations = new Array(evaluationDomainSize);
         const hashedEvaluations = new Array(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = serializer.mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], bPoly.count, i);
+            let v = this.serializer.mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], bPoly.count, i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
@@ -95,7 +92,7 @@ class Stark {
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hashAlgorithm);
         this.logger.log(label, 'Built evaluation merkle tree');
         // 9 ----- spot check evaluation tree at pseudo-random positions
-        const spotCheckCount = Math.min(this.exeSpotCheckCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
+        const spotCheckCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
         const positions = utils_1.getPseudorandomIndexes(eTree.root, spotCheckCount, evaluationDomainSize, this.extensionFactor);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = new Array(augmentedPositions.length);
@@ -116,8 +113,7 @@ class Stark {
         const lcProof = lTree.proveBatch(positions);
         let ldProof;
         try {
-            const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
-            ldProof = ldProver.prove(lTree, lEvaluations, evaluationDomain, lCombination.degree);
+            ldProof = this.ldProver.prove(lTree, lEvaluations, context.evaluationDomain, lCombination.degree);
         }
         catch (error) {
             throw new StarkError_1.StarkError('Low degree proof failed', error);
@@ -156,7 +152,7 @@ class Stark {
         const zPoly = new components_1.ZeroPolynomial(context);
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
-        const spotCheckCount = Math.min(this.exeSpotCheckCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
+        const spotCheckCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
         const positions = utils_1.getPseudorandomIndexes(eRoot, spotCheckCount, evaluationDomainSize, this.extensionFactor);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         this.logger.log(label, `Computed positions for evaluation spot checks`);
@@ -166,13 +162,10 @@ class Stark {
         const dEvaluations = new Map();
         const hashedEvaluations = new Array(augmentedPositions.length);
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
-        const registerCount = context.stateWidth; // TODO: improve
-        const constraintCount = context.constraints.length; // TODO: improve
-        const serializer = new Serializer_1.Serializer(this.field, registerCount, constraintCount);
         for (let i = 0; i < proof.evaluations.values.length; i++) {
             let mergedEvaluations = proof.evaluations.values[i];
             let position = augmentedPositions[i];
-            let [p, b, d] = serializer.parseEvaluations(mergedEvaluations, bPoly.count);
+            let [p, b, d] = this.serializer.parseEvaluations(mergedEvaluations, bPoly.count);
             pEvaluations.set(position, p);
             bEvaluations.set(position, b);
             dEvaluations.set(position, d);
@@ -217,8 +210,7 @@ class Stark {
         this.logger.log(label, `Verified liner combination proof`);
         // 6 ----- verify low-degree proof
         try {
-            const ldProver = new components_1.LowDegreeProver(this.friSpotCheckCount, context);
-            ldProver.verify(proof.degree.root, lCombination.degree, G2, proof.degree.ldProof);
+            this.ldProver.verify(proof.degree.root, lCombination.degree, G2, proof.degree.ldProof);
         }
         catch (error) {
             throw new StarkError_1.StarkError('Verification of low degree failed', error);
@@ -235,7 +227,7 @@ class Stark {
             // check transition 
             let npValues = pEvaluations.get((step + this.extensionFactor) % evaluationDomainSize);
             let qValues = this.air.evaluateConstraintsAt(x, pValues, npValues, [], context); // TODO: pass secret inputs
-            for (let j = 0; j < constraintCount; j++) {
+            for (let j = 0; j < qValues.length; j++) {
                 let qCheck = this.field.mul(zValue, dValues[j]);
                 if (qValues[j] !== qCheck) {
                     throw new StarkError_1.StarkError(`Transition constraint at position ${step} was not satisfied`);
@@ -261,24 +253,17 @@ class Stark {
     // UTILITIES
     // --------------------------------------------------------------------------------------------
     sizeOf(proof) {
-        const registerCount = this.air.stateWidth;
-        const constraintCount = 1; // TODO: this.config.constraintCount;
-        const valueCount = registerCount + constraintCount + proof.evaluations.bpc;
+        // TODO: include secret input count, refactor
+        const valueCount = this.air.stateWidth + this.air.constraintCount + proof.evaluations.bpc;
         const valueSize = valueCount * this.field.elementSize;
         const size = utils_1.sizeOf(proof, valueSize, this.hashAlgorithm);
         return size.total;
     }
     serialize(proof) {
-        const registerCount = this.air.stateWidth;
-        const constraintCount = 1; // TODO: this.config.constraintCount;
-        const serializer = new Serializer_1.Serializer(this.field, registerCount, constraintCount);
-        return serializer.serializeProof(proof, this.hashAlgorithm);
+        return this.serializer.serializeProof(proof, this.hashAlgorithm);
     }
     parse(buffer) {
-        const registerCount = this.air.stateWidth;
-        const constraintCount = 1; // TODO: this.config.constraintCount;
-        const serializer = new Serializer_1.Serializer(this.field, registerCount, constraintCount);
-        return serializer.parseProof(buffer, this.hashAlgorithm);
+        return this.serializer.parseProof(buffer, this.hashAlgorithm);
     }
     // HELPER METHODS
     // --------------------------------------------------------------------------------------------

@@ -7,10 +7,10 @@ const utils = require("./utils");
 class Serializer {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(field, registerCount, constraintCount) {
-        this.fieldElementSize = field.elementSize;
-        this.registerCount = registerCount;
-        this.constraintCount = constraintCount;
+    constructor(config) {
+        this.fieldElementSize = config.field.elementSize;
+        this.registerCount = config.stateWidth;
+        this.constraintCount = config.constraintCount;
     }
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------

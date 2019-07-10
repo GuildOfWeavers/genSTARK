@@ -8,11 +8,11 @@ const StarkError_1 = require("../StarkError");
 class LowDegreeProver {
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(spotCheckCount, context) {
+    constructor(queryCount, hasAlgorithm, context) {
+        this.hashAlgorithm = hasAlgorithm;
+        this.queryCount = queryCount;
         this.field = context.field;
         this.skipMultiplesOf = context.extensionFactor;
-        this.hashAlgorithm = 'sha256'; // TODO: context.hashAlgorithm;
-        this.spotCheckCount = spotCheckCount;
     }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ class LowDegreeProver {
             let { columnRoot, columnProof, polyProof } = proof.components[depth];
             // calculate the pseudo-randomly sampled y indices
             let columnLength = Math.floor(rouDegree / 4);
-            let positions = utils_1.getPseudorandomIndexes(columnRoot, this.spotCheckCount, columnLength, this.skipMultiplesOf);
+            let positions = utils_1.getPseudorandomIndexes(columnRoot, this.queryCount, columnLength, this.skipMultiplesOf);
             // verify Merkle proof for the column
             if (!merkle_1.MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
                 throw new StarkError_1.StarkError(`Verification of column Merkle proof failed at depth ${depth}`);
@@ -140,7 +140,7 @@ class LowDegreeProver {
         const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
         const cTree = merkle_1.MerkleTree.create(utils_1.bigIntsToBuffers(column, hashDigestSize), this.hashAlgorithm);
         // compute spot check positions in the column and corresponding positions in the original values
-        const positions = utils_1.getPseudorandomIndexes(cTree.root, this.spotCheckCount, column.length, this.skipMultiplesOf);
+        const positions = utils_1.getPseudorandomIndexes(cTree.root, this.queryCount, column.length, this.skipMultiplesOf);
         const polyPositions = new Array(positions.length * 4);
         for (let i = 0; i < positions.length; i++) {
             polyPositions[i * 4 + 0] = positions[i];

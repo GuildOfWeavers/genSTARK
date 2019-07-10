@@ -1,8 +1,18 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, StarkProof, FriComponent, HashAlgorithm } from "@guildofweavers/genstark";
+import { StarkProof, FriComponent, HashAlgorithm } from "@guildofweavers/genstark";
+import { FiniteField } from '@guildofweavers/air-script';
 import { getHashDigestSize } from '@guildofweavers/merkle';
 import * as utils from './utils';
+
+// INTERFACES
+// ================================================================================================
+interface SerializerConfig {
+    readonly field              : FiniteField;
+    readonly stateWidth         : number;
+    readonly secretInputCount   : number;
+    readonly constraintCount    : number;
+}
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -15,10 +25,10 @@ export class Serializer {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(field: FiniteField, registerCount: number, constraintCount: number) {
-        this.fieldElementSize = field.elementSize;
-        this.registerCount = registerCount;
-        this.constraintCount = constraintCount;
+    constructor(config: SerializerConfig) {
+        this.fieldElementSize = config.field.elementSize;
+        this.registerCount = config.stateWidth;
+        this.constraintCount = config.constraintCount;
     }
 
     // EVALUATION SERIALIZER/PARSER
