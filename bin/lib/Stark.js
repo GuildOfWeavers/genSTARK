@@ -116,8 +116,8 @@ class Stark {
         this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
         // 10 ---- compute random linear combination of evaluations
         // TODO: include sEvaluations into linear combination
-        const lCombination = new components_1.LinearCombination(context, eTree.root, this.air.maxConstraintDegree);
-        const lEvaluations = lCombination.computeMany(pEvaluations, bEvaluations, dEvaluations);
+        const lCombination = new components_1.LinearCombination(context, eTree.root, this.air.constraintCount, this.air.maxConstraintDegree);
+        const lEvaluations = lCombination.computeMany(pEvaluations, sEvaluations, bEvaluations, dEvaluations);
         ;
         this.logger.log(label, 'Computed random linear combination of evaluations');
         // 11 ----- Compute low-degree proof
@@ -127,7 +127,7 @@ class Stark {
         const lcProof = lTree.proveBatch(positions);
         let ldProof;
         try {
-            ldProof = this.ldProver.prove(lTree, lEvaluations, context.evaluationDomain, lCombination.degree);
+            ldProof = this.ldProver.prove(lTree, lEvaluations, context.evaluationDomain, lCombination.combinationDegree);
         }
         catch (error) {
             throw new StarkError_1.StarkError('Low degree proof failed', error);
@@ -217,7 +217,7 @@ class Stark {
                 throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`, error);
             }
         }
-        const lCombination = new components_1.LinearCombination(context, proof.evaluations.root, this.air.maxConstraintDegree);
+        const lCombination = new components_1.LinearCombination(context, proof.evaluations.root, this.air.constraintCount, this.air.maxConstraintDegree);
         const lEvaluations = new Map();
         const lEvaluationValues = utils_1.buffersToBigInts(proof.degree.lcProof.values);
         for (let i = 0; i < proof.degree.lcProof.values.length; i++) {
@@ -227,7 +227,7 @@ class Stark {
         this.logger.log(label, `Verified liner combination proof`);
         // 6 ----- verify low-degree proof
         try {
-            this.ldProver.verify(proof.degree.root, lCombination.degree, G2, proof.degree.ldProof);
+            this.ldProver.verify(proof.degree.root, lCombination.combinationDegree, G2, proof.degree.ldProof);
         }
         catch (error) {
             throw new StarkError_1.StarkError('Verification of low degree failed', error);
@@ -260,7 +260,7 @@ class Stark {
             }
             // check correctness of liner combination
             // TODO: include sValues into the check
-            let lCheck = lCombination.computeOne(x, pValues, bValues, dValues);
+            let lCheck = lCombination.computeOne(x, pValues, sValues, bValues, dValues);
             if (lEvaluations.get(step) !== lCheck) {
                 throw new StarkError_1.StarkError(`Linear combination at position ${step} is inconsistent`);
             }
