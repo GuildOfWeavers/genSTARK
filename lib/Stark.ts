@@ -117,8 +117,9 @@ export class Stark {
 
         // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
         const sEvaluations = new Array<bigint[]>(this.air.secretInputCount);
+        // TODO: make evaluations be a part of an explicit interface
         for (let i = 0; i < sEvaluations.length; i++) {
-            sEvaluations[i] = (context.sRegisters[i] as any).evaluations;    // TODO: find a better way to do this
+            sEvaluations[i] = (context.sRegisters[i] as any).evaluations;
         }
 
         const hash = getHashFunction(this.hashAlgorithm);
@@ -146,6 +147,7 @@ export class Stark {
         this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
 
         // 10 ---- compute random linear combination of evaluations
+        // TODO: include sEvaluations into linear combination
         const lCombination = new LinearCombination(context, eTree.root, this.air.maxConstraintDegree);
         const lEvaluations = lCombination.computeMany(pEvaluations, bEvaluations, dEvaluations);;
         this.logger.log(label, 'Computed random linear combination of evaluations');
@@ -309,7 +311,8 @@ export class Stark {
                 }
             }
 
-            // check correctness of liner 
+            // check correctness of liner combination
+            // TODO: include sValues into the check
             let lCheck = lCombination.computeOne(x, pValues, bValues, dValues);
             if (lEvaluations.get(step) !== lCheck) {
                 throw new StarkError(`Linear combination at position ${step} is inconsistent`);
@@ -324,10 +327,7 @@ export class Stark {
     // UTILITIES
     // --------------------------------------------------------------------------------------------
     sizeOf(proof: StarkProof): number {
-        // TODO: include secret input count, refactor
-        const valueCount = this.air.stateWidth + this.air.constraintCount + proof.evaluations.bpc; 
-        const valueSize = valueCount * this.air.field.elementSize;
-        const size = sizeOf(proof, valueSize, this.hashAlgorithm);
+        const size = sizeOf(proof, this.hashAlgorithm);
         return size.total;
     }
 

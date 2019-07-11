@@ -89,8 +89,9 @@ class Stark {
         this.logger.log(label, 'Computed B(x) polynomials');
         // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
         const sEvaluations = new Array(this.air.secretInputCount);
+        // TODO: make evaluations be a part of an explicit interface
         for (let i = 0; i < sEvaluations.length; i++) {
-            sEvaluations[i] = context.sRegisters[i].evaluations; // TODO: find a better way to do this
+            sEvaluations[i] = context.sRegisters[i].evaluations;
         }
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
         const mergedEvaluations = new Array(evaluationDomainSize);
@@ -114,6 +115,7 @@ class Stark {
         const eProof = eTree.proveBatch(augmentedPositions);
         this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
         // 10 ---- compute random linear combination of evaluations
+        // TODO: include sEvaluations into linear combination
         const lCombination = new components_1.LinearCombination(context, eTree.root, this.air.maxConstraintDegree);
         const lEvaluations = lCombination.computeMany(pEvaluations, bEvaluations, dEvaluations);
         ;
@@ -256,7 +258,8 @@ class Stark {
                     throw new StarkError_1.StarkError(`Boundary constraint at position ${step} was not satisfied`);
                 }
             }
-            // check correctness of liner 
+            // check correctness of liner combination
+            // TODO: include sValues into the check
             let lCheck = lCombination.computeOne(x, pValues, bValues, dValues);
             if (lEvaluations.get(step) !== lCheck) {
                 throw new StarkError_1.StarkError(`Linear combination at position ${step} is inconsistent`);
@@ -269,10 +272,7 @@ class Stark {
     // UTILITIES
     // --------------------------------------------------------------------------------------------
     sizeOf(proof) {
-        // TODO: include secret input count, refactor
-        const valueCount = this.air.stateWidth + this.air.constraintCount + proof.evaluations.bpc;
-        const valueSize = valueCount * this.air.field.elementSize;
-        const size = utils_1.sizeOf(proof, valueSize, this.hashAlgorithm);
+        const size = utils_1.sizeOf(proof, this.hashAlgorithm);
         return size.total;
     }
     serialize(proof) {

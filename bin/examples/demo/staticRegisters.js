@@ -1,12 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 // IMPORTS
 // ================================================================================================
-import { Stark } from '../../index';
-
+const index_1 = require("../../index");
 // STARK DEFINITION
 // ================================================================================================
-const steps = 2**6, result = 780n;
-
-const demoStark = new Stark(`
+const steps = 2 ** 6, result = 780n;
+const demoStark = new index_1.Stark(`
 define Demo over prime field (96769) {
 
     transition 1 register in ${steps} steps {
@@ -22,27 +22,23 @@ define Demo over prime field (96769) {
         $k1: spread [1, 2, 3, 4, 5, 6, 7, 8];
     }
 }`);
-
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
 const initValues = [1n];
 const assertions = [
     { step: 0, register: 0, value: initValues[0] },
-    { step: steps-1, register: 0, value: result  }
+    { step: steps - 1, register: 0, value: result }
 ];
-
 // generate a proof
 const proof = demoStark.prove(assertions, initValues);
 console.log('-'.repeat(20));
-
 // verify the proof
 demoStark.verify(assertions, proof);
 console.log('-'.repeat(20));
-
 // EXECUTION TRACE
 // ================================================================================================
-// K0 is the first (repeating) constant, K1 is the second (stretched) constant, 
+// K0 is the first (repeating) static register, K1 is the second (stretched) static, 
 // V0 is the mutable register. The transition function is vNext = v0 + 1 + K0 + 2 * K1
 //
 //  Step	K0	K1	V0
@@ -110,3 +106,4 @@ console.log('-'.repeat(20));
 //  61      2   8   741
 //  62      3   8   760
 //  63      4   8   780
+//# sourceMappingURL=staticRegisters.js.map

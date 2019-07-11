@@ -10,38 +10,40 @@ const demoStark = new index_1.Stark(`
 define Demo over prime field (96769) {
 
     transition 1 register in ${steps} steps {
-        out: $r0 + 1 + $k0 + 2 * $k1;
+        out: $r0 + 1 + $p0 + 2 * $s0;
     }
 
     enforce 1 constraint {
-        out: $n0 - ($r0 + 1 + $k0 + 2 * $k1);
+        out: $n0 - ($r0 + 1 + $p0 + 2 * $s0);
     }
 
     using 2 readonly registers {
-        $k0: repeat [1, 2, 3, 4];
-        $k1: spread [1, 2, 3, 4, 5, 6, 7, 8];
+        $p0: repeat [...];
+        $s0: spread [...];
     }
 }`);
 // TESTING
-// ================================================================================================
+// =================================================================================================
 // set up inputs and assertions
 const initValues = [1n];
+const publicInputs = [[1n, 2n, 3n, 4n]];
+const secretInputs = [[1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n]];
 const assertions = [
     { step: 0, register: 0, value: initValues[0] },
     { step: steps - 1, register: 0, value: result }
 ];
 // generate a proof
-const proof = demoStark.prove(assertions, initValues);
+const proof = demoStark.prove(assertions, initValues, publicInputs, secretInputs);
 console.log('-'.repeat(20));
 // verify the proof
-demoStark.verify(assertions, proof);
+demoStark.verify(assertions, proof, publicInputs);
 console.log('-'.repeat(20));
 // EXECUTION TRACE
 // ================================================================================================
-// K0 is the first (repeating) constant, K1 is the second (stretched) constant, 
+// P0 is the register containing public inputs, S0 is the register containing secret inputs, 
 // V0 is the mutable register. The transition function is vNext = v0 + 1 + K0 + 2 * K1
 //
-//  Step	K0	K1	V0
+//  Step	P0	S0	V0
 //  0       1   1   1
 //  1       2   1   5
 //  2       3   1   10
@@ -106,4 +108,4 @@ console.log('-'.repeat(20));
 //  61      2   8   741
 //  62      3   8   760
 //  63      4   8   780
-//# sourceMappingURL=readonlyRegisters.js.map
+//# sourceMappingURL=inputRegisters.js.map

@@ -35,26 +35,26 @@ export class Serializer {
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
     mergeValues([pValues, sValues, bValues, dValues]: bigint[][][], bCount: number, position: number): Buffer {
-        const elementSize = this.fieldElementSize;
-        const elementCount = this.stateWidth + this.secretInputCount + bCount + this.constraintCount;
-        const buffer = Buffer.allocUnsafe(elementCount * elementSize);
-        const padLength = elementSize * 2;
+        const valueSize = this.fieldElementSize;
+        const valueCount = this.getValueCount(bCount)
+        const buffer = Buffer.allocUnsafe(valueCount * valueSize);
+        const padLength = valueSize * 2;
 
         let offset = 0;
 
         for (let register = 0; register < this.stateWidth; register++) {
             let hex = pValues[register][position].toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, elementSize, 'hex');
+            offset += buffer.write(hex, offset, valueSize, 'hex');
         }
 
         for (let register = 0; register < this.secretInputCount; register++) {
             let hex = sValues[register][position].toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, elementSize, 'hex');
+            offset += buffer.write(hex, offset, valueSize, 'hex');
         }
 
         for (let i = 0; i < bCount; i++) {
             let hex = bValues[i][position].toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, elementSize, 'hex');
+            offset += buffer.write(hex, offset, valueSize, 'hex');
         }
     
         for (let constraint = 0; constraint < this.constraintCount; constraint++) {
@@ -97,10 +97,8 @@ export class Serializer {
     // --------------------------------------------------------------------------------------------
     serializeProof(proof: StarkProof, hashAlgorithm: HashAlgorithm): Buffer {
         const nodeSize = getHashDigestSize(hashAlgorithm);
-        const valueCount = this.stateWidth + this.constraintCount + proof.evaluations.bpc;
-        const valueSize = valueCount * this.fieldElementSize;
 
-        const size = utils.sizeOf(proof, valueSize, hashAlgorithm);
+        const size = utils.sizeOf(proof, hashAlgorithm);
         const buffer = Buffer.allocUnsafe(size.total);
         let offset = 0;
 
@@ -136,7 +134,7 @@ export class Serializer {
         offset += buffer.copy(eRoot, 0, offset, offset + nodeSize);
         const bpc = buffer.readUInt8(offset); offset += 1;
         const eDepth = buffer.readUInt8(offset); offset += 1;
-        const valueCount = this.stateWidth + this.constraintCount + bpc;
+        const valueCount = this.getValueCount(bpc);
         const valueSize = valueCount * this.fieldElementSize;
         const eValueInfo = utils.readArray(buffer, offset, valueSize); offset = eValueInfo.offset;
         const eNodeInfo = utils.readMatrix(buffer, offset, nodeSize); offset = eNodeInfo.offset;
@@ -173,5 +171,11 @@ export class Serializer {
                 ldProof: { components, remainder: remainderInfo.values }
             }
         };
+    }
+
+    // PRIVATE METHODS
+    // --------------------------------------------------------------------------------------------
+    private getValueCount(bCount: number): number {
+        return this.stateWidth + this.secretInputCount + bCount + this.constraintCount;
     }
 }

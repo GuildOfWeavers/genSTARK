@@ -6,12 +6,15 @@ const merkle_1 = require("@guildofweavers/merkle");
 exports.MAX_ARRAY_LENGTH = 256;
 // PUBLIC FUNCTIONS
 // ================================================================================================
-function sizeOf(proof, valueSize, hashAlgorithm) {
+function sizeOf(proof, hashAlgorithm) {
     const nodeSize = merkle_1.getHashDigestSize(hashAlgorithm);
     let size = 0;
     // evaluations
     size += nodeSize; // root
-    const evData = sizeOfArray(proof.evaluations.values, valueSize);
+    let evData = 1; // length of values array
+    for (let value of proof.evaluations.values) {
+        evData += value.byteLength;
+    }
     const evProof = sizeOfMatrix(proof.evaluations.nodes, nodeSize);
     size += 1; // evaluation proof depth
     size += 1; // boundary poly count
