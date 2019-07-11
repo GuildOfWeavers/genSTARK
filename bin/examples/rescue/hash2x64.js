@@ -44,7 +44,7 @@ define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
         [16397105823254198500, 12297829367440648875]
     ];
 
-    transition 2 register in 32 steps {
+    transition 2 registers in 32 steps {
         S: [$r0, $r1];
         K1: [$k0, $k1];
         K2: [$k2, $k3];
@@ -52,7 +52,7 @@ define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
         out: MDS # S^(inv_alpha) + K2;
     }
 
-    enforce 2 constraint of degree 3 {
+    enforce 2 constraints {
         S: [$r0, $r1];
         N: [$n0, $n1];
         K1: [$k0, $k1];
@@ -75,12 +75,12 @@ define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
 // ================================================================================================
 // Generate proof that hashing 42 with Rescue results in 14354339131598895532
 // set up inputs and assertions
-const inputs = buildInputs(42n);
+const initValues = buildInputs(42n);
 const assertions = [
     { step: steps - 1, register: 0, value: 14354339131598895532n }
 ];
 // generate a proof
-const proof = rescueStark.prove(assertions, inputs);
+const proof = rescueStark.prove(assertions, initValues);
 console.log('-'.repeat(20));
 // verify that the prover knows the value that hashes to 14354339131598895532
 rescueStark.verify(assertions, proof);

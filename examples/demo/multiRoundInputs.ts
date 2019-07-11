@@ -56,7 +56,7 @@ define Rescue over prime field (2^128 - 9 * 2^32 + 1) {
         [ 73878794827854483309086441046605817365, 229228508225866824084614421584601165863, 125857624914110248133585690282064031000,  84953896817024417490170340940393220925]
     ];
 
-    transition 4 register in 32 steps {
+    transition 4 registers in 32 steps {
         S: [$r0, $r1, $r2, $r3];
         K1: [$k0, $k1, $k2, $k3];
         K2: [$k4, $k5, $k6, $k7];
@@ -65,7 +65,7 @@ define Rescue over prime field (2^128 - 9 * 2^32 + 1) {
         out: MDS # S^(inv_alpha) + K2;
     }
 
-    enforce 4 constraint of degree 3 {
+    enforce 4 constraints {
         S: [$r0, $r1, $r2, $r3];
         N: [$n0, $n1, $n2, $n3];
         K1: [$k0, $k1, $k2, $k3];
