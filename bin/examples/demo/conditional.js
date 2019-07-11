@@ -5,6 +5,7 @@ const utils_1 = require("../rescue/utils");
 // STARK PARAMETERS
 // ================================================================================================
 const field = new index_1.PrimeField(2n ** 128n - 9n * 2n ** 32n + 1n);
+const rounds = 16;
 const steps = 32;
 const alpha = 3n;
 const invAlpha = -113427455640312821154458202464371168597n;
@@ -31,7 +32,7 @@ const { roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
 const rescueStark = new index_1.Stark(`
-define Rescue over prime field (2^128 - 9 * 2^32 + 1) {
+define Demo over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;
     inv_alpha: 0-113427455640312821154458202464371168597;
@@ -50,56 +51,92 @@ define Rescue over prime field (2^128 - 9 * 2^32 + 1) {
         [ 73878794827854483309086441046605817365, 229228508225866824084614421584601165863, 125857624914110248133585690282064031000,  84953896817024417490170340940393220925]
     ];
 
-    transition 4 registers in 32 steps {
-        S: [$r0, $r1, $r2, $r3];
-        K1: [$k0, $k1, $k2, $k3];
-        K2: [$k4, $k5, $k6, $k7];
-
-        S: MDS # S^alpha + K1;
-        out: MDS # S^(inv_alpha) + K2;
+    transition 4 registers in ${rounds * steps} steps {
+        when ($k0) {
+            // use secret registers as inputs for the first step
+            S: [$s0, $s1, 0, 0];
+            K1: [$k1, $k2, $k3, $k4];
+            K2: [$k5, $k6, $k7, $k8];
+    
+            S: MDS # S^alpha + K1;
+            out: MDS # S^(inv_alpha) + K2;            
+        }
+        else {
+            S: [$r0, $r1, $r2, $r3];
+            K1: [$k1, $k2, $k3, $k4];
+            K2: [$k5, $k6, $k7, $k8];
+    
+            S: MDS # S^alpha + K1;
+            out: MDS # S^(inv_alpha) + K2;
+        }
     }
 
     enforce 4 constraints {
-        S: [$r0, $r1, $r2, $r3];
-        N: [$n0, $n1, $n2, $n3];
-        K1: [$k0, $k1, $k2, $k3];
-        K2: [$k4, $k5, $k6, $k7];
+        when ($k0) {
+            S: [$s0, $s1, 0, 0];
+            N: [$n0, $n1, $n2, $n3];
+            K1: [$k1, $k2, $k3, $k4];
+            K2: [$k5, $k6, $k7, $k8];
 
-        T1: MDS # S^alpha + K1;
-        T2: (INV_MDS # (N - K2))^alpha;
+            T1: MDS # S^alpha + K1;
+            T2: (INV_MDS # (N - K2))^alpha;
 
-        out: T1 - T2;
+            out: T1 - T2;
+        }
+        else {
+            S: [$r0, $r1, $r2, $r3];
+            N: [$n0, $n1, $n2, $n3];
+            K1: [$k1, $k2, $k3, $k4];
+            K2: [$k5, $k6, $k7, $k8];
+    
+            T1: MDS # S^alpha + K1;
+            T2: (INV_MDS # (N - K2))^alpha;
+    
+            out: T1 - T2;
+        }
     }
 
-    using 8 readonly registers {
-        $k0: repeat [${roundConstants[0].join(', ')}];
-        $k1: repeat [${roundConstants[1].join(', ')}];
-        $k2: repeat [${roundConstants[2].join(', ')}];
-        $k3: repeat [${roundConstants[3].join(', ')}];
-        $k4: repeat [${roundConstants[4].join(', ')}];
-        $k5: repeat [${roundConstants[5].join(', ')}];
-        $k6: repeat [${roundConstants[6].join(', ')}];
-        $k7: repeat [${roundConstants[7].join(', ')}];
+    using 11 readonly registers {
+        // 31 ones followed by a zero - will be used to control conditional expression
+        $k0: repeat binary [
+            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ];
+
+        // inputs to be hashed
+        $s0: spread [...];
+        $s1: spread [...];
+
+        // constants for Rescue hash function
+        $k1: repeat [${roundConstants[0].join(', ')}];
+        $k2: repeat [${roundConstants[1].join(', ')}];
+        $k3: repeat [${roundConstants[2].join(', ')}];
+        $k4: repeat [${roundConstants[3].join(', ')}];
+        $k5: repeat [${roundConstants[4].join(', ')}];
+        $k6: repeat [${roundConstants[5].join(', ')}];
+        $k7: repeat [${roundConstants[6].join(', ')}];
+        $k8: repeat [${roundConstants[7].join(', ')}];
     }
 }`);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const rounds = 16;
-const inputs = [];
+let initValues = [0n, 0n, 0n, 0n];
+const secretInputs = [[], []];
 const assertions = [];
 for (let i = 0; i < rounds; i++) {
-    inputs.push([BigInt(i), BigInt(i) ** 2n, 0n, 0n]);
-    let result = rescue.modifiedSponge(inputs[i], keyStates).hash;
+    let v1 = BigInt(i), v2 = BigInt(i) ** 2n;
+    secretInputs[0].push(v1);
+    secretInputs[1].push(v2);
+    let result = rescue.modifiedSponge([v1, v2, 0n, 0n], keyStates).hash;
     let step = (i + 1) * 32 - 1;
     assertions.push({ step, register: 0, value: result[0] });
     assertions.push({ step, register: 1, value: result[1] });
 }
 // generate a proof
-const proof = rescueStark.prove(assertions, []); // TODO
+const proof = rescueStark.prove(assertions, initValues, [], secretInputs);
 console.log('-'.repeat(20));
 // verify the proof
-rescueStark.verify(assertions, proof); // TODO
+rescueStark.verify(assertions, proof);
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(rescueStark.sizeOf(proof) / 1024 * 100) / 100} KB`);
-//# sourceMappingURL=multiRoundInputs.js.map
+//# sourceMappingURL=conditional.js.map
