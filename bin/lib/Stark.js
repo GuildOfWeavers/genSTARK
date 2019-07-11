@@ -25,43 +25,52 @@ class Stark {
             throw new TypeError('Source script must be a string');
         if (!source.trim())
             throw new TypeError('Source script cannot be an empty string');
-        this.air = air_script_1.parseScript(source); // TODO: pass extension factor
-        this.field = this.air.field;
-        const vOptions = validateSecurityOptions(options, this.air.maxConstraintDegree);
-        this.extensionFactor = vOptions.extensionFactor;
-        this.exeQueryCount = vOptions.exeSpotCheckCount;
+        const vOptions = validateSecurityOptions(options);
+        this.air = air_script_1.parseScript(source, undefined, vOptions.extensionFactor);
+        this.exeQueryCount = vOptions.exeQueryCount;
         this.hashAlgorithm = vOptions.hashAlgorithm;
-        this.ldProver = new components_1.LowDegreeProver(vOptions.friSpotCheckCount, this.hashAlgorithm, this.air);
+        this.ldProver = new components_1.LowDegreeProver(vOptions.friQueryCount, this.hashAlgorithm, this.air);
         this.serializer = new Serializer_1.Serializer(this.air);
         this.logger = logger || new utils_1.Logger();
     }
     // PROVER
     // --------------------------------------------------------------------------------------------
-    prove(assertions, inputs) {
+    prove(assertions, initValues, publicInputs, secretInputs) {
         const label = this.logger.start('Starting STARK computation');
+        const extensionFactor = this.air.extensionFactor;
         // 0 ----- validate parameters
         if (!Array.isArray(assertions))
             throw new TypeError('Assertions parameter must be an array');
         if (assertions.length === 0)
             throw new TypeError('At least one assertion must be provided');
-        if (!Array.isArray(inputs))
-            throw new TypeError('Inputs parameter must be an array');
-        if (inputs.length === 0)
-            throw new TypeError('At least one input must be provided');
+        if (!Array.isArray(initValues))
+            throw new TypeError('Initialization values parameter must be an array');
         // 1 ----- set up evaluation context
-        const context = this.air.createContext([], []); // TODO: pass inputs
+        const context = this.air.createContext(publicInputs || [], secretInputs || []);
         const evaluationDomainSize = context.evaluationDomain.length;
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- generate execution trace and make sure it is correct
-        const executionTrace = this.air.generateExecutionTrace([], context); // TODO: pass inputs, catch exception
+        let executionTrace;
+        try {
+            executionTrace = this.air.generateExecutionTrace(initValues, context);
+        }
+        catch (error) {
+            throw new StarkError_1.StarkError(`Failed to generate the execution trace`, error);
+        }
         validateAssertions(executionTrace, assertions);
         this.logger.log(label, 'Generated execution trace');
         // 3 ----- compute P(x) polynomials and low-degree extend them
-        const pPoly = new components_1.TracePolynomial(this.air.field, executionTrace);
-        const pEvaluations = pPoly.evaluate(context);
+        const pPoly = new components_1.TracePolynomial(context);
+        const pEvaluations = pPoly.evaluate(executionTrace);
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
-        const qEvaluations = this.air.evaluateExtendedTrace(pEvaluations, context); // TODO: catch exception
+        let qEvaluations;
+        try {
+            qEvaluations = this.air.evaluateExtendedTrace(pEvaluations, context);
+        }
+        catch (error) {
+            throw new StarkError_1.StarkError('Failed to evaluate transition constraints', error);
+        }
         this.logger.log(label, 'Computed Q(x) polynomials');
         // 5 ----- compute polynomial Z(x) separately as numerator and denominator
         const zPoly = new components_1.ZeroPolynomial(context);
@@ -69,11 +78,11 @@ class Stark {
         this.logger.log(label, 'Computed Z(x) polynomial');
         // 6 ----- compute D(x) = Q(x) / Z(x)
         // first, invert numerators of Z(x)
-        const zNumInverses = this.field.invMany(zEvaluations.numerators);
+        const zNumInverses = this.air.field.invMany(zEvaluations.numerators);
         this.logger.log(label, 'Inverted Z(x) numerators');
         // then, multiply all values together to compute D(x)
         const zDenominators = zEvaluations.denominators;
-        const dEvaluations = this.field.mulMany(qEvaluations, zDenominators, zNumInverses);
+        const dEvaluations = this.air.field.mulMany(qEvaluations, zDenominators, zNumInverses);
         this.logger.log(label, 'Computed D(x) polynomials');
         // 7 ----- compute boundary constraints B(x)
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
@@ -92,17 +101,17 @@ class Stark {
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hashAlgorithm);
         this.logger.log(label, 'Built evaluation merkle tree');
         // 9 ----- spot check evaluation tree at pseudo-random positions
-        const spotCheckCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
-        const positions = utils_1.getPseudorandomIndexes(eTree.root, spotCheckCount, evaluationDomainSize, this.extensionFactor);
+        const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
+        const positions = utils_1.getPseudorandomIndexes(eTree.root, queryCount, evaluationDomainSize, extensionFactor);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = new Array(augmentedPositions.length);
         for (let i = 0; i < augmentedPositions.length; i++) {
             eValues[i] = mergedEvaluations[augmentedPositions[i]];
         }
         const eProof = eTree.proveBatch(augmentedPositions);
-        this.logger.log(label, `Computed ${spotCheckCount} evaluation spot checks`);
+        this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
         // 10 ---- compute random linear combination of evaluations
-        const lCombination = new components_1.LinearCombination(context, eTree.root);
+        const lCombination = new components_1.LinearCombination(context, eTree.root, this.air.maxConstraintDegree);
         const lEvaluations = lCombination.computeMany(pEvaluations, bEvaluations, dEvaluations);
         ;
         this.logger.log(label, 'Computed random linear combination of evaluations');
@@ -138,22 +147,23 @@ class Stark {
     }
     // VERIFIER
     // --------------------------------------------------------------------------------------------
-    verify(assertions, proof, iterations = 1) {
+    verify(assertions, proof, publicInputs) {
         const label = this.logger.start('Starting STARK verification');
         const eRoot = proof.evaluations.root;
+        const extensionFactor = this.air.extensionFactor;
         // 0 ----- validate parameters
         if (assertions.length < 1)
             throw new TypeError('At least one assertion must be provided');
         // 1 ----- set up evaluation context
-        const context = this.air.createContext([]); // TODO: pass public inputs
-        const evaluationDomainSize = context.traceLength * this.extensionFactor;
+        const context = this.air.createContext(publicInputs || []);
+        const evaluationDomainSize = context.traceLength * extensionFactor;
         const G2 = context.rootOfUnity;
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const zPoly = new components_1.ZeroPolynomial(context);
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
-        const spotCheckCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / this.extensionFactor);
-        const positions = utils_1.getPseudorandomIndexes(eRoot, spotCheckCount, evaluationDomainSize, this.extensionFactor);
+        const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
+        const positions = utils_1.getPseudorandomIndexes(eRoot, queryCount, evaluationDomainSize, extensionFactor);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         this.logger.log(label, `Computed positions for evaluation spot checks`);
         // 3 ----- decode evaluation spot-checks
@@ -200,7 +210,7 @@ class Stark {
                 throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`, error);
             }
         }
-        const lCombination = new components_1.LinearCombination(context, proof.evaluations.root);
+        const lCombination = new components_1.LinearCombination(context, proof.evaluations.root, this.air.maxConstraintDegree);
         const lEvaluations = new Map();
         const lEvaluationValues = utils_1.buffersToBigInts(proof.degree.lcProof.values);
         for (let i = 0; i < proof.degree.lcProof.values.length; i++) {
@@ -219,16 +229,17 @@ class Stark {
         // 7 ----- verify transition and boundary constraints
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
-            let x = this.field.exp(G2, BigInt(step));
+            let x = this.air.field.exp(G2, BigInt(step));
             let pValues = pEvaluations.get(step);
             let bValues = bEvaluations.get(step);
             let dValues = dEvaluations.get(step);
+            let sValues = []; // TODO: populate
             let zValue = zPoly.evaluateAt(x);
             // check transition 
-            let npValues = pEvaluations.get((step + this.extensionFactor) % evaluationDomainSize);
-            let qValues = this.air.evaluateConstraintsAt(x, pValues, npValues, [], context); // TODO: pass secret inputs
+            let npValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize);
+            let qValues = this.air.evaluateConstraintsAt(x, pValues, npValues, sValues, context);
             for (let j = 0; j < qValues.length; j++) {
-                let qCheck = this.field.mul(zValue, dValues[j]);
+                let qCheck = this.air.field.mul(zValue, dValues[j]);
                 if (qValues[j] !== qCheck) {
                     throw new StarkError_1.StarkError(`Transition constraint at position ${step} was not satisfied`);
                 }
@@ -255,7 +266,7 @@ class Stark {
     sizeOf(proof) {
         // TODO: include secret input count, refactor
         const valueCount = this.air.stateWidth + this.air.constraintCount + proof.evaluations.bpc;
-        const valueSize = valueCount * this.field.elementSize;
+        const valueSize = valueCount * this.air.field.elementSize;
         const size = utils_1.sizeOf(proof, valueSize, this.hashAlgorithm);
         return size.total;
     }
@@ -268,7 +279,7 @@ class Stark {
     // HELPER METHODS
     // --------------------------------------------------------------------------------------------
     getAugmentedPositions(positions, evaluationDomainSize) {
-        const skip = this.extensionFactor;
+        const skip = this.air.extensionFactor;
         const augmentedPositionSet = new Set();
         for (let i = 0; i < positions.length; i++) {
             augmentedPositionSet.add(positions[i]);
@@ -280,34 +291,14 @@ class Stark {
 exports.Stark = Stark;
 // HELPER FUNCTIONS
 // ================================================================================================
-function validateSecurityOptions(options, maxConstraintDegree) {
-    // extension factor
-    const minExtensionFactor = 2 ** Math.ceil(Math.log2((maxConstraintDegree + 1) * 2));
-    let extensionFactor = options ? options.extensionFactor : undefined;
-    if (extensionFactor === undefined) {
-        extensionFactor = minExtensionFactor;
-        if (extensionFactor > MAX_EXTENSION_FACTOR) {
-            throw new TypeError(`Transition constraints degree must be smaller than or equal to ${MAX_EXTENSION_FACTOR / 2 - 1}`);
-        }
-    }
-    else {
-        if (extensionFactor > MAX_EXTENSION_FACTOR || !Number.isInteger(extensionFactor)) {
-            throw new TypeError(`Extension factor must be an integer smaller than or equal to ${MAX_EXTENSION_FACTOR}`);
-        }
-        if (!utils_1.isPowerOf2(extensionFactor)) {
-            throw new TypeError(`Extension factor must be a power of 2`);
-        }
-        if (extensionFactor < minExtensionFactor) {
-            throw new TypeError(`Extension factor must be at ${minExtensionFactor}`);
-        }
-    }
+function validateSecurityOptions(options) {
     // execution trace spot checks
-    const exeSpotCheckCount = (options ? options.exeSpotCheckCount : undefined) || DEFAULT_EXE_SPOT_CHECKS;
+    const exeSpotCheckCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_SPOT_CHECKS;
     if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT || !Number.isInteger(exeSpotCheckCount)) {
         throw new TypeError(`Execution sample size must be an integer between 1 and ${MAX_EXE_SPOT_CHECK_COUNT}`);
     }
     // low degree evaluation spot checks
-    const friSpotCheckCount = (options ? options.friSpotCheckCount : undefined) || DEFAULT_FRI_SPOT_CHECKS;
+    const friSpotCheckCount = (options ? options.friQueryCount : undefined) || DEFAULT_FRI_SPOT_CHECKS;
     if (friSpotCheckCount < 1 || friSpotCheckCount > MAX_FRI_SPOT_CHECK_COUNT || !Number.isInteger(friSpotCheckCount)) {
         throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_SPOT_CHECK_COUNT}`);
     }
@@ -316,7 +307,8 @@ function validateSecurityOptions(options, maxConstraintDegree) {
     if (!HASH_ALGORITHMS.includes(hashAlgorithm)) {
         throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
     }
-    return { extensionFactor, exeSpotCheckCount, friSpotCheckCount, hashAlgorithm };
+    const extensionFactor = (options ? options.extensionFactor : undefined);
+    return { extensionFactor, exeQueryCount: exeSpotCheckCount, friQueryCount: friSpotCheckCount, hashAlgorithm };
 }
 function normalizeInputs(inputs, registerCount) {
     if (!Array.isArray(inputs))

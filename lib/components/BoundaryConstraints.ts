@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { Polynom, Assertion } from '@guildofweavers/genstark';
-import { FiniteField, EvaluationContext } from '@guildofweavers/air-script';
+import { FiniteField } from '@guildofweavers/air-script';
 
 // INTERFACES
 // ================================================================================================

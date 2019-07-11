@@ -96,10 +96,10 @@ for (let i = 0; i < rounds; i++) {
     assertions.push({ step, register: 1, value: result[1] });
 }
 // generate a proof
-const proof = rescueStark.prove(assertions, inputs);
+const proof = rescueStark.prove(assertions, []); // TODO
 console.log('-'.repeat(20));
 // verify the proof
-rescueStark.verify(assertions, proof, rounds);
+rescueStark.verify(assertions, proof); // TODO
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(rescueStark.sizeOf(proof) / 1024 * 100) / 100} KB`);
 //# sourceMappingURL=multiRoundInputs.js.map

@@ -4,9 +4,10 @@ import { FiniteField } from '@guildofweavers/air-script';
 
 // INTERFACES
 // ================================================================================================
-interface DomainParams {
-    executionDomain : bigint[];
-    evaluationDomain: bigint[];
+interface TracePolynomialConfig {
+    readonly field              : FiniteField;
+    readonly executionDomain    : bigint[];
+    readonly evaluationDomain   : bigint[];
 }
 
 // CLASS DEFINITION
@@ -14,26 +15,28 @@ interface DomainParams {
 export class TracePolynomial {
 
     readonly field              : FiniteField;
-    readonly executionTrace     : bigint[][];
+    readonly executionDomain    : bigint[];
+    readonly evaluationDomain   : bigint[];
     
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(field: FiniteField, executionTrace: bigint[][]) {
-        this.field = field;
-        this.executionTrace = executionTrace;
+    constructor(config: TracePolynomialConfig) {
+        this.field = config.field;
+        this.executionDomain = config.executionDomain;
+        this.evaluationDomain = config.evaluationDomain;
     }
 
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    evaluate({ executionDomain, evaluationDomain }: DomainParams) {
+    evaluate(executionTrace: bigint[][]) {
 
-        const registerCount = this.executionTrace.length;
+        const registerCount = executionTrace.length;
 
         // for each register in the execution trace, compute a polynomial and low-degree extend it
         const result = new Array<bigint[]>(registerCount);
         for (let register = 0; register < registerCount; register++) {
-            let p = this.field.interpolateRoots(executionDomain, this.executionTrace[register]);
-            result[register] = this.field.evalPolyAtRoots(p, evaluationDomain);
+            let p = this.field.interpolateRoots(this.executionDomain, executionTrace[register]);
+            result[register] = this.field.evalPolyAtRoots(p, this.evaluationDomain);
         }
 
         return result;

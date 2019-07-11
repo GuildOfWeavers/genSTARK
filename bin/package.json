@@ -19,7 +19,7 @@
     "url": "https://github.com/GuildOfWeavers/genSTARK.git"
   },
   "engines": {
-    "node": "12.3.x"
+    "node": "12.6.x"
   },
   "devDependencies": {
     "@types/node": "12.6.x",

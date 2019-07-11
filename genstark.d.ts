@@ -2,7 +2,7 @@ declare module '@guildofweavers/genstark' {
 
     // IMPORTS
     // --------------------------------------------------------------------------------------------
-    import { FiniteField } from '@guildofweavers/galois';
+    import { FiniteField } from '@guildofweavers/air-script';
     import { BatchMerkleProof, HashAlgorithm } from '@guildofweavers/merkle';
 
     // RE-EXPORTS
@@ -15,13 +15,13 @@ declare module '@guildofweavers/genstark' {
     export interface SecurityOptions {
 
         /** Execution trace extension factor; defaults to the smallest power of 2 greater than 2x of max constraint degree */
-        extensionFactor: number;
+        extensionFactor?: number;
 
-        /** Number of spot checks for the execution trace; defaults to 80 */
-        exeSpotCheckCount: number;
+        /** Number of queries for the execution trace; defaults to 80 */
+        exeQueryCount: number;
 
-        /** Number of spot checks for low degree proof; defaults to 40 */
-        friSpotCheckCount: number;
+        /** Number of queries for low degree proof; defaults to 40 */
+        friQueryCount: number;
 
         /** Hash algorithm for Merkle trees; defaults to sha256 */
         hashAlgorithm: HashAlgorithm;
@@ -40,24 +40,19 @@ declare module '@guildofweavers/genstark' {
         /**
          * Generate a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
-         * @param inputs An array of input values to be injected into the execution trace at position 0
+         * @param initValues 
+         * @param publicInputs
+         * @param secretInputs
          */
-        prove(assertions: Assertion[], inputs: bigint[]): StarkProof;
-
-        /**
-         * Generate a proof of computation for this STARK
-         * @param assertions Boundary constraints for the computation
-         * @param inputs An array with input sets to be injected into the execution trace
-         */
-        prove(assertions: Assertion[], inputs: bigint[][]): StarkProof;
+        prove(assertions: Assertion[], initValues: bigint[], publicInputs?: bigint[][], secretInputs?: bigint[][]): StarkProof;
 
         /**
          * Verifies a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
          * @param proof Proof of the computation
-         * @param rounds Number of input rounds of the computation; the default is 1
+         * @param publicInputs
          */
-        verify(assertions: Assertion[], proof: StarkProof, rounds?: number): boolean;
+        verify(assertions: Assertion[], proof: StarkProof, publicInputs?: bigint[][]): boolean;
 
         /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;
@@ -116,25 +111,6 @@ declare module '@guildofweavers/genstark' {
         vector(v: bigint[]): string;
         matrix(m: bigint[][]): string;
     };
-
-    // INTERNAL
-    // --------------------------------------------------------------------------------------------
-    export interface EvaluationContext {
-        readonly field              : FiniteField;
-        readonly constraintDegree   : number;
-        readonly roundSteps         : number;
-        readonly totalSteps         : number;
-        readonly domainSize         : number;
-        readonly rootOfUnity        : bigint;
-        readonly registerCount      : number;
-        readonly constantCount      : number;
-        readonly hashAlgorithm      : HashAlgorithm;
-    }
-
-    export interface ComputedRegister {
-        getValue(step: number, skip: boolean): bigint;
-        getValueAt(x: bigint): bigint;
-    }
 
     export interface Logger {
         start(message?: string) : symbol;
