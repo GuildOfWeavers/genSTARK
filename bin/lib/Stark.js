@@ -8,13 +8,12 @@ const Serializer_1 = require("./Serializer");
 const StarkError_1 = require("./StarkError");
 // MODULE VARIABLES
 // ================================================================================================
-const MAX_DOMAIN_SIZE = 2 ** 32;
-const DEFAULT_EXE_SPOT_CHECKS = 80;
-const DEFAULT_FRI_SPOT_CHECKS = 40;
-const MAX_EXTENSION_FACTOR = 32;
-const MAX_EXE_SPOT_CHECK_COUNT = 128;
-const MAX_FRI_SPOT_CHECK_COUNT = 64;
+const DEFAULT_EXE_QUERY_COUNT = 80;
+const DEFAULT_FRI_QUERY_COUNT = 40;
+const MAX_EXE_QUERY_COUNT = 128;
+const MAX_FRI_QUERY_COUNT = 64;
 const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
+const DEFAULT_HASH_ALGORITHM = 'sha256';
 // CLASS DEFINITION
 // ================================================================================================
 class Stark {
@@ -89,11 +88,15 @@ class Stark {
         const bEvaluations = bPoly.evaluateAll(pEvaluations, context.evaluationDomain);
         this.logger.log(label, 'Computed B(x) polynomials');
         // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
+        const sEvaluations = new Array(this.air.secretInputCount);
+        for (let i = 0; i < sEvaluations.length; i++) {
+            sEvaluations[i] = context.sRegisters[i].evaluations; // TODO: find a better way to do this
+        }
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
         const mergedEvaluations = new Array(evaluationDomainSize);
         const hashedEvaluations = new Array(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = this.serializer.mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], bPoly.count, i);
+            let v = this.serializer.mergeValues([pEvaluations, sEvaluations, bEvaluations, dEvaluations], bPoly.count, i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
@@ -168,6 +171,7 @@ class Stark {
         this.logger.log(label, `Computed positions for evaluation spot checks`);
         // 3 ----- decode evaluation spot-checks
         const pEvaluations = new Map();
+        const sEvaluations = new Map();
         const bEvaluations = new Map();
         const dEvaluations = new Map();
         const hashedEvaluations = new Array(augmentedPositions.length);
@@ -175,8 +179,9 @@ class Stark {
         for (let i = 0; i < proof.evaluations.values.length; i++) {
             let mergedEvaluations = proof.evaluations.values[i];
             let position = augmentedPositions[i];
-            let [p, b, d] = this.serializer.parseEvaluations(mergedEvaluations, bPoly.count);
+            let [p, s, b, d] = this.serializer.parseValues(mergedEvaluations, bPoly.count);
             pEvaluations.set(position, p);
+            sEvaluations.set(position, s);
             bEvaluations.set(position, b);
             dEvaluations.set(position, d);
             hashedEvaluations[i] = hash(mergedEvaluations);
@@ -233,7 +238,7 @@ class Stark {
             let pValues = pEvaluations.get(step);
             let bValues = bEvaluations.get(step);
             let dValues = dEvaluations.get(step);
-            let sValues = []; // TODO: populate
+            let sValues = sEvaluations.get(step);
             let zValue = zPoly.evaluateAt(x);
             // check transition 
             let npValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize);
@@ -293,50 +298,22 @@ exports.Stark = Stark;
 // ================================================================================================
 function validateSecurityOptions(options) {
     // execution trace spot checks
-    const exeSpotCheckCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_SPOT_CHECKS;
-    if (exeSpotCheckCount < 1 || exeSpotCheckCount > MAX_EXE_SPOT_CHECK_COUNT || !Number.isInteger(exeSpotCheckCount)) {
-        throw new TypeError(`Execution sample size must be an integer between 1 and ${MAX_EXE_SPOT_CHECK_COUNT}`);
+    const exeQueryCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_QUERY_COUNT;
+    if (exeQueryCount < 1 || exeQueryCount > MAX_EXE_QUERY_COUNT || !Number.isInteger(exeQueryCount)) {
+        throw new TypeError(`Execution sample size must be an integer between 1 and ${MAX_EXE_QUERY_COUNT}`);
     }
     // low degree evaluation spot checks
-    const friSpotCheckCount = (options ? options.friQueryCount : undefined) || DEFAULT_FRI_SPOT_CHECKS;
-    if (friSpotCheckCount < 1 || friSpotCheckCount > MAX_FRI_SPOT_CHECK_COUNT || !Number.isInteger(friSpotCheckCount)) {
-        throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_SPOT_CHECK_COUNT}`);
+    const friQueryCount = (options ? options.friQueryCount : undefined) || DEFAULT_FRI_QUERY_COUNT;
+    if (friQueryCount < 1 || friQueryCount > MAX_FRI_QUERY_COUNT || !Number.isInteger(friQueryCount)) {
+        throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_QUERY_COUNT}`);
     }
     // hash function
-    const hashAlgorithm = (options ? options.hashAlgorithm : undefined) || 'sha256';
+    const hashAlgorithm = (options ? options.hashAlgorithm : undefined) || DEFAULT_HASH_ALGORITHM;
     if (!HASH_ALGORITHMS.includes(hashAlgorithm)) {
         throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
     }
     const extensionFactor = (options ? options.extensionFactor : undefined);
-    return { extensionFactor, exeQueryCount: exeSpotCheckCount, friQueryCount: friSpotCheckCount, hashAlgorithm };
-}
-function normalizeInputs(inputs, registerCount) {
-    if (!Array.isArray(inputs))
-        throw new TypeError(`Inputs parameter must be an array`);
-    if (typeof inputs[0] === 'bigint') {
-        validateInputRow(inputs, registerCount, 0);
-        inputs = [inputs];
-    }
-    else {
-        for (let i = 0; i < inputs.length; i++) {
-            validateInputRow(inputs[i], registerCount, i);
-        }
-    }
-    return inputs;
-}
-function validateInputRow(row, registerCount, rowNumber) {
-    if (!Array.isArray(row)) {
-        throw new TypeError(`Input row ${rowNumber} is not an array`);
-    }
-    if (row.length !== registerCount) {
-        throw new TypeError(`Input row must have exactly ${registerCount} elements`);
-    }
-    for (let i = 0; i < registerCount; i++) {
-        if (typeof row[i] !== 'bigint') {
-            throw new TypeError(`Input ${rowNumber} for register $r${i} is not a BigInt`);
-        }
-        ;
-    }
+    return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
 }
 function validateAssertions(trace, assertions) {
     const registers = trace.length;
