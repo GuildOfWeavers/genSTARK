@@ -2,13 +2,13 @@
 // ================================================================================================
 import { Assertion } from '@guildofweavers/genstark';
 import { Stark, PrimeField } from '../../index';
-import { Rescue } from '../rescue/utils';
+import { Rescue, MerkleTree, makeHashFunction } from './utils';
 
 // STARK PARAMETERS
 // ================================================================================================
 const field = new PrimeField(2n**128n - 9n * 2n**32n + 1n);
-const rounds = 16;
-const steps = 32;
+const treeDepth = 8;
+const roundSteps = 32;
 const alpha = 3n;
 const invAlpha = -113427455640312821154458202464371168597n;
 
@@ -31,14 +31,14 @@ const constants  = [
 ];
 
 // create rescue instance, and use it to calculate key constants for every round of computation
-const rescue = new Rescue(field, alpha, invAlpha, 4, steps, mds, constants);
+const rescue = new Rescue(field, alpha, invAlpha, 4, roundSteps, mds, constants);
 const keyStates = rescue.unrollConstants();
 const { roundConstants } = rescue.groupConstants(keyStates);
 
 // STARK DEFINITION
 // ================================================================================================
-const rescueStark = new Stark(`
-define Demo over prime field (2^128 - 9 * 2^32 + 1) {
+const merkleStark = new Stark(`
+define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;
     inv_alpha: 0-113427455640312821154458202464371168597;
@@ -57,60 +57,72 @@ define Demo over prime field (2^128 - 9 * 2^32 + 1) {
         [ 73878794827854483309086441046605817365, 229228508225866824084614421584601165863, 125857624914110248133585690282064031000,  84953896817024417490170340940393220925]
     ];
 
-    transition 4 registers in ${rounds * steps} steps {
+    transition 8 registers in ${treeDepth * roundSteps} steps {
         when ($k0) {
-            // use secret registers as inputs for the first step
-            S: [$s0, $s1, 0, 0];
             K1: [$k1, $k2, $k3, $k4];
             K2: [$k5, $k6, $k7, $k8];
-    
-            S: MDS # S^alpha + K1;
-            out: MDS # S^(inv_alpha) + K2;            
+
+            S1: [$r0, $r1, $r2, $r3];
+            S1: MDS # S1^alpha + K1;
+            S1: MDS # S1^(inv_alpha) + K2;
+
+            S2: [$r4, $r5, $r6, $r7];
+            S2: MDS # S2^alpha + K1;
+            S2: MDS # S2^(inv_alpha) + K2;
+
+            out: [...S1, ...S2];
         }
         else {
-            S: [$r0, $r1, $r2, $r3];
-            K1: [$k1, $k2, $k3, $k4];
-            K2: [$k5, $k6, $k7, $k8];
-    
-            S: MDS # S^alpha + K1;
-            out: MDS # S^(inv_alpha) + K2;
+            h: $p0 ? $r4 | $r0;
+            S1: [h, $s0, 0, 0];
+            S2: [$s0, h, 0, 0];
+
+            out: [...S1, ...S2];
         }
     }
 
-    enforce 4 constraints {
+    enforce 8 constraints {
         when ($k0) {
-            S: [$s0, $s1, 0, 0];
-            N: [$n0, $n1, $n2, $n3];
             K1: [$k1, $k2, $k3, $k4];
             K2: [$k5, $k6, $k7, $k8];
 
-            T1: MDS # S^alpha + K1;
-            T2: (INV_MDS # (N - K2))^alpha;
+            S1: [$r0, $r1, $r2, $r3];
+            N1: [$n0, $n1, $n2, $n3];
+            S1: MDS # S1^alpha + K1;
+            N1: (INV_MDS # (N1 - K2))^alpha;
+            T1: S1 - N1;
 
-            out: T1 - T2;
+            S2: [$r4, $r5, $r6, $r7];
+            N2: [$n4, $n5, $n6, $n7];
+            S2: MDS # S2^alpha + K1;
+            N2: (INV_MDS # (N2 - K2))^alpha;
+            T2: S2 - N2;
+
+            out: [...T1, ...T2];
         }
         else {
-            S: [$r0, $r1, $r2, $r3];
-            N: [$n0, $n1, $n2, $n3];
-            K1: [$k1, $k2, $k3, $k4];
-            K2: [$k5, $k6, $k7, $k8];
-    
-            T1: MDS # S^alpha + K1;
-            T2: (INV_MDS # (N - K2))^alpha;
-    
-            out: T1 - T2;
+            h: $p0 ? $r4 | $r0;
+
+            S1: [h, $s0, 0, 0];
+            N1: [$n0, $n1, $n2, $n3];
+            T1: S1 - N1;
+
+            S2: [$s0, h, 0, 0];
+            N2: [$n4, $n5, $n6, $n7];
+            T2: S2 - N2;
+
+            out: [...T1, ...T2];
         }
     }
 
     using 11 readonly registers {
-        // a one followed by 31 zeros - will be used to control conditional expression
+        // 31 ones followed by a zero - will be used to control conditional expression
         $k0: repeat binary [
-            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
         ];
 
-        // inputs to be hashed
-        $s0: spread [...];
-        $s1: spread [...];
+        $p0: spread binary [...];   // binary representation of node index
+        $s0: spread [...];          // merkle branch nodes
 
         // constants for Rescue hash function
         $k1: repeat [${roundConstants[0].join(', ')}];
@@ -126,27 +138,41 @@ define Demo over prime field (2^128 - 9 * 2^32 + 1) {
 
 // TESTING
 // ================================================================================================
-// set up inputs and assertions
-let initValues: bigint[] = [0n, 0n, 0n, 0n];
-const secretInputs: bigint[][] = [[], []];
-const assertions: Assertion[] = [];
+// generate a random merkle tree
+const values = field.prng(42n, 2**treeDepth);
+const hash = makeHashFunction(rescue, keyStates);
+const tree = new MerkleTree(values, hash);
 
-for (let i = 0; i < rounds; i++) {
-    let v1 = BigInt(i), v2 = BigInt(i)**2n;
-    secretInputs[0].push(v1);
-    secretInputs[1].push(v2);
-    let result = rescue.modifiedSponge([v1, v2, 0n, 0n], keyStates).hash;
+// generate a proof for index 42
+const index = 42;
+const proof = tree.prove(index);
+//console.log(MerkleTree.verify(tree.root, index, proof, hash));
 
-    let step = (i + 1) * 32 - 1;
-    assertions.push({ step, register: 0, value: result[0] });
-    assertions.push({ step, register: 1, value: result[1] });
-}
+// set up inputs and assertions for the STARK
+const binaryIndex = toBinaryArray(index, treeDepth);
+const initValues = [proof[0], proof[1], 0n, 0n, proof[1], proof[0], 0n, 0n];
+const assertions: Assertion[] = [
+    { step: roundSteps * treeDepth - 1, register: 0, value: tree.root }
+];
 
 // generate a proof
-const proof = rescueStark.prove(assertions, initValues, [], secretInputs);
+const nodes = proof.slice(2);
+nodes.push(0n);
+const sProof = merkleStark.prove(assertions, initValues, [binaryIndex], [nodes]);
 console.log('-'.repeat(20));
 
 // verify the proof
-rescueStark.verify(assertions, proof);
+merkleStark.verify(assertions, sProof, [binaryIndex]);
 console.log('-'.repeat(20));
-console.log(`Proof size: ${Math.round(rescueStark.sizeOf(proof) / 1024 * 100) / 100} KB`);
+console.log(`Proof size: ${Math.round(merkleStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
+
+// HELPER FUNCTIONS
+// ================================================================================================
+function toBinaryArray(value: number, length: number) {
+    const binText = value.toString(2);
+    const result = new Array<bigint>(length).fill(0n);
+    for (let i = binText.length - 1, j = 0; i >= 0; i--, j++) {
+        result[j] = BigInt(binText[i]);
+    }
+    return result;
+}
