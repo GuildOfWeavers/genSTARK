@@ -59,13 +59,16 @@ define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
 
     transition 8 registers in ${treeDepth * roundSteps} steps {
         when ($k0) {
+            // constants for the hash function
             K1: [$k1, $k2, $k3, $k4];
             K2: [$k5, $k6, $k7, $k8];
 
+            // compute hash(p, v)
             S1: [$r0, $r1, $r2, $r3];
             S1: MDS # S1^alpha + K1;
             S1: MDS # S1^(inv_alpha) + K2;
 
+            // compute hash(v, p)
             S2: [$r4, $r5, $r6, $r7];
             S2: MDS # S2^alpha + K1;
             S2: MDS # S2^(inv_alpha) + K2;
@@ -73,6 +76,8 @@ define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
             out: [...S1, ...S2];
         }
         else {
+            // this happens every 32nd step
+
             h: $p0 ? $r4 | $r0;
             S1: [h, $s0, 0, 0];
             S2: [$s0, h, 0, 0];
@@ -83,15 +88,18 @@ define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
 
     enforce 8 constraints {
         when ($k0) {
+            // constants for the hash function
             K1: [$k1, $k2, $k3, $k4];
             K2: [$k5, $k6, $k7, $k8];
 
+            // constraints for hash(p, v)
             S1: [$r0, $r1, $r2, $r3];
             N1: [$n0, $n1, $n2, $n3];
             S1: MDS # S1^alpha + K1;
             N1: (INV_MDS # (N1 - K2))^alpha;
             T1: S1 - N1;
 
+            // constraints for hash(v, p)
             S2: [$r4, $r5, $r6, $r7];
             N2: [$n4, $n5, $n6, $n7];
             S2: MDS # S2^alpha + K1;
@@ -101,6 +109,8 @@ define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
             out: [...T1, ...T2];
         }
         else {
+            // this happens every 32nd step
+
             h: $p0 ? $r4 | $r0;
 
             S1: [h, $s0, 0, 0];
@@ -155,9 +165,12 @@ const assertions: Assertion[] = [
     { step: roundSteps * treeDepth - 1, register: 0, value: tree.root }
 ];
 
-// generate a proof
+// remove first 2 elements since they are already in initValues
 const nodes = proof.slice(2);
+// add a dummy value at the end so that length of nodes is a power of 2
 nodes.push(0n);
+
+// generate a proof
 const sProof = merkleStark.prove(assertions, initValues, [binaryIndex], [nodes]);
 console.log('-'.repeat(20));
 

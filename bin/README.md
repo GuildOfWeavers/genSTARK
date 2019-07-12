@@ -28,7 +28,7 @@ define Foo over prime field (2^32 - 3 * 2^25 + 1) {
     }
 
     // define transition constraints
-    enforce 1 constraint of degree 1 {
+    enforce 1 constraint {
         out: $n0 - ($r0 + 2);
     }
 }`);
@@ -47,9 +47,8 @@ console.log(result); // true
 
 There are a few more sophisticated examples in this repository:
 * [Demo STARKs](/examples/demo) - demonstration of how to use various features of this library.
-* [Fibonacci STARK](/examples/fibonacci) - proofs of computation for [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number).
 * [MiMC STARK](/examples/mimc) - basically the same as Vitalik Buterin's [MiMC tutorial](https://vitalik.ca/general/2018/07/21/starks_part_3.html).
-* [Rescue STARKs](/examples/rescue) - proof of knowledge of hash preimage of [Rescue](https://eprint.iacr.org/2019/426.pdf) hash function.
+* [Rescue STARKs](/examples/rescue) - various STARKs based on [Rescue](https://eprint.iacr.org/2019/426.pdf) hash function (e.g. proof of hash preimage, Merkle proof).
 
 When you run the examples, you should get a nice log documenting each step. Here is an example output of running MiMC STARK for 2<sup>13</sup> steps:
 ```
@@ -109,75 +108,77 @@ Security options parameter should have the following form:
 
 | Property           | Description |
 | ------------------ | ----------- |
-| extensionFactor?   | Number by which the execution trace is "stretched." Must be a power of 2 at least 2x of the constraint degree, but cannot exceed 32. This property is optional, the default is smallest power of 2 that is greater than 2 * [constraint degree + 1]. |
-| exeSpotCheckCount? | Number of positions in the execution trace to include into the proof. This property is optional; the default is 80; the max is 128. |
-| friSpotCheckCount? | Number of positions in the columns of low degree proof to include into the proof. This property is optional; the default is 40; the max is 64. |
+| extensionFactor?   | Number by which the execution trace is "stretched." Must be a power of 2 at least 2x of the constraint degree, but cannot exceed 32. This property is optional, the default is smallest power of 2 that is greater than 2 * constraint degree. |
+| exeQueryCount? | Number of queries of the execution trace to include into the proof. This property is optional; the default is 80; the max is 128. |
+| friQueryCount? | Number of queries of the columns of low degree proof to include into the proof. This property is optional; the default is 40; the max is 64. |
 | hashAlgorithm?     | Hash algorithm to use when building Merkle trees for the proof. Currently, can be one of two values: `sha256` or `blake2s256`. This property is optional; the default is `sha256`. |
 
 ## Generating proofs
 Once you have a `Stark` object, you can start generating proofs using `Stark.prove()` method like so:
 ```TypeScript
-const proof = myStark.prove(assertions, inputs);
+const proof = myStark.prove(assertions, initValues, publicInputs?, secretInputs?);
 ```
 The meaning of the parameters is as follows:
 
-| Parameter  | Description |
-| ---------- | ----------- |
-| assertions | An array of [Assertion](#Assertions) objects (also called boundary constraints). These assertions specify register values at specific steps of a valid computation. At least 1 assertion must be provided. |
-| inputs     | An array of `BigInt`'s containing initial values for all mutable registers. This can also be a 2-dimensional array when multiple sets of inputs (see [input injection](#Input-injection) below). |
+| Parameter     | Description |
+| ------------- | ----------- |
+| assertions    | An array of [Assertion](#Assertions) objects (also called boundary constraints). These assertions specify register values at specific steps of a valid computation. At least 1 assertion must be provided. |
+| initValues    | An array of `BigInt`'s containing initial values for all mutable registers. |
+| publicInputs? | An array containing values for all specified public registers. This parameter is optional and can be skipped if no public input registers have been defined. |
+| secretInputs? | An array containing values for all specified secret registers. This parameter is optional and can be skipped if no secret input registers have been defined. |
 
-### Input Injection
-When you need to generate a proof of computation for a single set of inputs, you pass a simple array to the `prove()` method. This will inject the values from the array into the execution trace at position 0. For many use cases this is sufficient - but what if you need to generate a proof of the same computation for multiple sets of inputs? That's where input injection comes in.
+### Initial values and inputs
+Handling of initial values and inputs deserves a bit more explanation. As described above, there are 3 ways to supply inputs to `STARK.prove()` method:
 
-With input injection, you can provide multiple sets of inputs to the `prove()` method, and generate a single proof that the computation was executed correctly for all provided inputs. Here is how it works:
+* `initValues` parameter is always required. It is basically used to define step 0 or the execution trace. Thus, the number of values provided must match the number of mutable registers in the STARK.
+* The other two parameters provide values for the input registers defined in the STARK. To learn more about these, refer to [Readonly registers](https://github.com/GuildOfWeavers/AirScript#readonly-registers) section of AirScript documentation. These parameters are required only if STARK's definition includes input registers.
 
-Let's say you've defined a STARK for you computation and this STARK requires 32 steps (e.g. it could be a STARK for a hash function). You want to prove that when run with some secret input `a` the output is `x`, and when run with another secret input `b`, the output is `y`. So, you define your inputs like so:
-```TypeScript
-let a = [...];        // first set of inputs
-let b = [...];        // second set of inputs
-let inputs = [a, b];  
+For example, the fragment below specifies that a STARK must have 3 readonly registers, but that the values for these registers are not available at the STARK's definition time (the `[...]` indicate that the values will be provided later):
 ```
-You can then pass this `inputs` object into the `prove()` method, and here is what will happen:
-
-* Input array `a` will get injected into the execution trace at position 0;
-* Input array `b` will get injected into the execution trace at position 32;
-
-So, essentially, you'll have an execution trace that is a combination of execution traces of independently running the computation first with inputs `a` and then with inputs `b`.
-
-You'll also need to set up your [assertions](#Assertions) to check the output of both executions like so:
-```TypeScript
-let assertions = [
-    { step: 31, register: 0, value: x },
-    { step: 63, register: 0, value: y }
-];
+using 3 readonly registers {
+    $p0: repeat [...];
+    $p1: spread [...];
+    $s0: spread [...];
+}
 ```
-(the above assumes that the results of the computation are located in a single register).
+Moreover, by using prefixes `$p` and `$s` it also specifies that 2 of the registers are *public* (the values will be known to the prover **and** the verified), and 1 of the registers is *secret* (the values will be known **only** to the prover).
 
-For a concrete example, check out a [multiRoundInputs](/examples/demo) demo STARK.
+So, based on this definition, the parameters for `STARK.prove()` method should be supplied like so:
 
-There are a couple of things to note about input injection:
+```TypeScript
+// let's say we have 2 mutable registers
+let initValues = [1n, 2n];
 
-1. The number of input sets must be a power of 2 (e.g. 2, 4, 8, etc.). If you need to generate a proof for a different number of input sets, you can just pad them (e.g. if you have 15 input sets, just add a dummy 16th set).
-2. When you use multiple input sets, the degree of the calculation is increased by 1. This is handled automatically, so - you don't need to do anything differently, but still a good thing to be aware of.
+// define values for public input registers
+let pValues1 = [1n, 2n, 3n, 4n];
+let pValues2 = [1n, 2n, 3n, 4n, 5n, 6n, 7n, 7n];
+
+// define values for secret input registers
+let sValues = [10n, 11n, 12n, 13n];
+
+// generate the proof
+let proof = fooStark.prove(assertions, initValues, [pValues1, pValues2], [sValues]);
+```
+When the proof is generated, the provided values will "appear" in registers `$p0`, `$p1`, and `$s0` to be used in transition function and transition constraints. The rules for how this happens are also described in the [Readonly registers](https://github.com/GuildOfWeavers/AirScript#readonly-registers) section of AirScript documentation.
+
 
 ## Verifying proofs
 Once you've generated a proof, you can verify it using `Stark.verify()` method like so:
 
 ```TypeScript
-const result = myStark.verify(assertions, proof, rounds);
+const result = myStark.verify(assertions, proof, publicInputs?);
 ```
 The meaning of the parameters is as follows:
 
-| Parameter  | Description |
-| ---------- | ----------- |
-| assertions | The same array of [Assertion](#Assertions) objects that was passed to the `prove()` method. |
-| proof      | The proof object that was generated by the `prove()` method. |
-| rounds?    | The number of input sets over which the computation was run. The default value is 1, so, if you ran the computation over a single set of inputs, you can omit this parameter. |
+| Parameter     | Description |
+| ------------- | ----------- |
+| assertions    | The same array of [Assertion](#Assertions) objects that was passed to the `prove()` method. |
+| proof         | The proof object that was generated by the `prove()` method. |
+| publicInputs? | An array containing values for all specified public registers. This parameter is optional and can be skipped if no public input registers have been defined. |
 
-Notice that `inputs` parameter does not need to be provided to the `verify()` method. Verifying the proof basically attests to something like this: 
+Verifying a proof basically attests to something like this: 
 
-
->If you start with some set of inputs (known to the prover), and run the computation for the specified number of steps, the execution trace generated by the computation will satisfy the specified assertions.
+>If you start with some set of initial values (known to the prover), and run the computation for the specified number of steps, the execution trace generated by the computation will satisfy the specified assertions.
 
 ## Assertions
 Assertions (or boundary constraints) are objects that specify the exact value of a given mutable register at a given step. An assertion object has the following form:
@@ -193,17 +194,18 @@ interface Assertion {
 # Performance
 Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single thread):
 
-| STARK       | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
-| ----------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
-| Fibonacci   | 32 bits    | 1      | 2         | 2<sup>6</sup>  | 50 ms      | 12 KB      |
-| Fibonacci   | 32 bits    | 1      | 2         | 2<sup>13</sup> | 1 sec      | 147 KB     |
-| Fibonacci   | 32 bits    | 1      | 2         | 2<sup>17</sup> | 13 sec     | 290 KB     |
-| MiMC        | 256 bits   | 3      | 1         | 2<sup>6</sup>  | 100 ms     | 46 KB      |
-| MiMC        | 256 bits   | 3      | 1         | 2<sup>13</sup> | 4.5 sec    | 220 KB     |
-| MiMC        | 256 bits   | 3      | 1         | 2<sup>17</sup> | 72 sec     | 394 KB     |
-| Rescue      | 128 bits   | 3      | 4         | 2<sup>5</sup>  | 120 ms     | 37 KB      |
-| Rescue x16  | 128 bits   | 3      | 4         | 2<sup>9</sup>  | 1 sec      | 114 KB     |
-| Rescue x256 | 128 bits   | 3      | 4         | 2<sup>13</sup> | 13 sec     | 237 KB     |
+| STARK               | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
+| ------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
+| Fibonacci           | 32 bits    | 1      | 2         | 2<sup>6</sup>  | 50 ms      | 12 KB      |
+| Fibonacci           | 32 bits    | 1      | 2         | 2<sup>13</sup> | 1 sec      | 147 KB     |
+| Fibonacci           | 32 bits    | 1      | 2         | 2<sup>17</sup> | 13 sec     | 290 KB     |
+| MiMC                | 256 bits   | 3      | 1         | 2<sup>6</sup>  | 100 ms     | 46 KB      |
+| MiMC                | 256 bits   | 3      | 1         | 2<sup>13</sup> | 4.5 sec    | 220 KB     |
+| MiMC                | 256 bits   | 3      | 1         | 2<sup>17</sup> | 72 sec     | 394 KB     |
+| Merkle Proof (d=8)  | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 800 ms     | 114 KB     |
+| Merkle Proof (d=16) | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.6 sec    | 136 KB     |
+
+Merkle proofs are based on a modified version of [Rescue](/examples/rescue) hash function, and in addition to 8 state registers require 1 public input register and 1 secret input register.
 
 The potential to improve proof time is at least 10x (by moving hashing and math functions out of JavaScript), and potentially much higher (by using SIMD and parallelism).
 
