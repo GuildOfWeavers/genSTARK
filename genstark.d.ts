@@ -40,9 +40,9 @@ declare module '@guildofweavers/genstark' {
         /**
          * Generate a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
-         * @param initValues 
-         * @param publicInputs
-         * @param secretInputs
+         * @param initValues An array containing initial values for all mutable registers
+         * @param publicInputs An array containing values for all specified public registers
+         * @param secretInputs An array containing values for all specified secret registers
          */
         prove(assertions: Assertion[], initValues: bigint[], publicInputs?: bigint[][], secretInputs?: bigint[][]): StarkProof;
 
@@ -50,7 +50,7 @@ declare module '@guildofweavers/genstark' {
          * Verifies a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
          * @param proof Proof of the computation
-         * @param publicInputs
+         * @param publicInputs An array containing values for all specified public registers
          */
         verify(assertions: Assertion[], proof: StarkProof, publicInputs?: bigint[][]): boolean;
 
