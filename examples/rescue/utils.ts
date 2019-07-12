@@ -2,6 +2,18 @@
 // ================================================================================================
 import { PrimeField } from '@guildofweavers/galois';
 
+// HASH FUNCTION
+// ================================================================================================
+export interface HashFunction {
+    (v1: bigint, v2: bigint): bigint;
+}
+
+export function makeHashFunction(rescue: Rescue, constants: bigint[][]): HashFunction {
+    return function(v1: bigint, v2: bigint) {
+        return rescue.modifiedSponge([v1, v2, 0n, 0n], constants, true).hash[0];
+    }
+}
+
 // RESCUE CLASS DEFINITION
 // ================================================================================================
 export class Rescue {
@@ -75,7 +87,7 @@ export class Rescue {
         return { hash: output, trace };
     }
 
-    modifiedSponge(inputs: bigint[], unrolledKeys: bigint[][]) {
+    modifiedSponge(inputs: bigint[], unrolledKeys: bigint[][], discardTrace = false) {
         const trace = new Array<bigint[]>();
     
         // copy inputs to state
@@ -83,7 +95,7 @@ export class Rescue {
         for (let i = 0; i < inputs.length; i++) {
             state[i] = inputs[i];
         }
-        trace.push([...state]);
+        if (!discardTrace) trace.push([...state]);
         
         for (let r = 0, k = 2; r < this.rounds - 1; r++, k += 2) {
     
@@ -92,14 +104,14 @@ export class Rescue {
                 state[i] = this.field.exp(state[i], this.alpha);
             }
             state = this.vadd(this.mmul(this.mds, state), unrolledKeys[k]);
-            trace.push([...state]);
+            if (!discardTrace) trace.push([...state]);
 
             // round r, step 2
             for (let i = 0; i < this.registers; i++) {
                 state[i] = this.field.exp(state[i], this.invAlpha);
             }
             state = this.vadd(this.mmul(this.mds, state), unrolledKeys[k+1]);
-            trace.push([...state]);
+            if (!discardTrace) trace.push([...state]);
         }
     
         // build and return output
@@ -212,5 +224,50 @@ export class Rescue {
         }
 
         return { iConstants, cConstants, constantMatrix };
+    }
+}
+
+// MERKLE TREE
+// ================================================================================================
+export class MerkleTree {
+
+    readonly nodes: bigint[];
+
+    constructor(values: bigint[], hash: HashFunction) {
+        this.nodes = [...new Array(values.length), ...values];
+        for (let i = values.length - 1; i > 0; i--) {
+            this.nodes[i] = hash(this.nodes[i * 2], this.nodes[i * 2 + 1]);
+        }
+    }
+
+    get root(): bigint {
+        return this.nodes[1];
+    }
+
+    prove(index: number): bigint[] {
+        index += Math.floor(this.nodes.length / 2);
+        const proof = [this.nodes[index]];
+        while (index > 1) {
+            proof.push(this.nodes[index ^ 1]);
+            index = index >> 1;
+        }
+        return proof;
+    }
+
+    static verify(root: bigint, index: number, proof: bigint[], hash: HashFunction): boolean {
+        index += 2**proof.length;
+
+        let v = proof[0];
+        for (let i = 1; i < proof.length; i++) {
+            if (index & 1) {
+                v = hash(proof[i], v);
+            }
+            else {
+                v = hash(v, proof[i]);
+            }
+            index = index >> 1;
+        }
+
+        return root === v;
     }
 }

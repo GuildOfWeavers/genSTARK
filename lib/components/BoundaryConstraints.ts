@@ -1,6 +1,15 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, Polynom, Assertion, EvaluationContext } from '@guildofweavers/genstark';
+import { Polynom, Assertion } from '@guildofweavers/genstark';
+import { FiniteField } from '@guildofweavers/air-script';
+
+// INTERFACES
+// ================================================================================================
+interface BoundaryConstraintsConfig {
+    readonly field              : FiniteField;
+    readonly extensionFactor    : number;
+    readonly rootOfUnity        : bigint;
+}
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -11,15 +20,15 @@ export class BoundaryConstraints {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(assertions: Assertion[], context: EvaluationContext) {
-        const field = this.field = context.field;
-        const extensionFactor = context.domainSize / context.totalSteps;
+    constructor(assertions: Assertion[], config: BoundaryConstraintsConfig) {
+        const field = this.field = config.field;
+        const extensionFactor = config.extensionFactor;
 
         // combine constraints for each register
         const rData = new Map<number,{ xs: bigint[]; ys: bigint[]; zPoly: Polynom; }>();
         for (let c of assertions) {
             
-            let x = field.exp(context.rootOfUnity, BigInt(c.step * extensionFactor))
+            let x = field.exp(config.rootOfUnity, BigInt(c.step * extensionFactor))
             let data = rData.get(c.register);
             if (data) {
                 data.xs.push(x);

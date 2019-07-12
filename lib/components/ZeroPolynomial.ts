@@ -1,24 +1,33 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, EvaluationContext } from '@guildofweavers/genstark';
+import { FiniteField } from '@guildofweavers/air-script';
+
+// INTERFACES
+// ================================================================================================
+interface ZeroPolynomialConfig {
+    readonly field              : FiniteField;
+    readonly extensionFactor    : number;
+    readonly rootOfUnity        : bigint;
+    readonly traceLength        : number;
+}
 
 // CLASS DEFINITION
 // ================================================================================================
 export class ZeroPolynomial {
 
-    readonly field      : FiniteField;
-    readonly steps      : bigint;
-    readonly xAtLastStep: bigint;
+    readonly field          : FiniteField;
+    readonly traceLength    : bigint;
+    readonly xAtLastStep    : bigint;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(context: EvaluationContext) {
-        this.field = context.field;
-        this.steps = BigInt(context.totalSteps);
+    constructor(config: ZeroPolynomialConfig) {
+        this.field = config.field;
+        this.traceLength = BigInt(config.traceLength);
 
-        const rootOfUnity = context.rootOfUnity;
-        const extensionFactor = context.domainSize / context.totalSteps;
-        const position = (this.steps - 1n) * BigInt(extensionFactor);
+        const rootOfUnity = config.rootOfUnity;
+        const extensionFactor = config.extensionFactor;
+        const position = (this.traceLength - 1n) * BigInt(extensionFactor);
         
         this.xAtLastStep = this.field.exp(rootOfUnity, position);
     }
@@ -26,7 +35,7 @@ export class ZeroPolynomial {
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
     evaluateAt(x: bigint): bigint {
-        const xToTheSteps = this.field.exp(x, this.steps);
+        const xToTheSteps = this.field.exp(x, this.traceLength);
         const numValue = this.field.sub(xToTheSteps, 1n);
         const denValue = this.field.sub(x, this.xAtLastStep);
         const z = this.field.div(numValue, denValue);
@@ -35,13 +44,13 @@ export class ZeroPolynomial {
 
     evaluateAll(domain: bigint[]) {
         const domainSize = domain.length;
-        const steps = Number.parseInt(this.steps.toString(10), 10);
+        const traceLength = Number.parseInt(this.traceLength.toString(10), 10);
 
         const numEvaluations = new Array<bigint>(domainSize);
         const denEvaluations = new Array<bigint>(domainSize);
         for (let step = 0; step < domainSize; step++) {
             // calculate position of x^steps, and then just look it up
-            let numIndex = (step * steps) % domainSize;
+            let numIndex = (step * traceLength) % domainSize;
             numEvaluations[step] = this.field.sub(domain[numIndex], 1n);
 
             let x = domain[step];

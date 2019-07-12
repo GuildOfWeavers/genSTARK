@@ -22,7 +22,7 @@ define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
         out: $r0^3 + $k0;
     }
 
-    enforce 1 constraint of degree 3 {
+    enforce 1 constraint {
         out: $n0 - ($r0^3 + $k0);
     }
 
@@ -33,13 +33,13 @@ define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const inputs = [3n]; // we need to provide starting value for 1 register
+const initValues = [3n]; // we need to provide starting value for 1 register
 const assertions = [
-    { step: 0, register: 0, value: inputs[0] },
+    { step: 0, register: 0, value: initValues[0] },
     { step: steps - 1, register: 0, value: result } // value at last step is equal to result
 ];
 // prove that the assertions hold if we execute MiMC computation with given inputs
-let proof = mimcStark.prove(assertions, inputs);
+let proof = mimcStark.prove(assertions, initValues);
 console.log('-'.repeat(20));
 // serialize the proof
 let start = Date.now();

@@ -5,13 +5,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 class BoundaryConstraints {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(assertions, context) {
-        const field = this.field = context.field;
-        const extensionFactor = context.domainSize / context.totalSteps;
+    constructor(assertions, config) {
+        const field = this.field = config.field;
+        const extensionFactor = config.extensionFactor;
         // combine constraints for each register
         const rData = new Map();
         for (let c of assertions) {
-            let x = field.exp(context.rootOfUnity, BigInt(c.step * extensionFactor));
+            let x = field.exp(config.rootOfUnity, BigInt(c.step * extensionFactor));
             let data = rData.get(c.register);
             if (data) {
                 data.xs.push(x);

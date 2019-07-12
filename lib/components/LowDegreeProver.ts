@@ -1,26 +1,34 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, HashAlgorithm, LowDegreeProof, FriComponent, EvaluationContext } from "@guildofweavers/genstark";
+import { HashAlgorithm, LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
+import { FiniteField } from '@guildofweavers/air-script';
 import { MerkleTree, getHashDigestSize } from '@guildofweavers/merkle';
 import { getPseudorandomIndexes, bigIntsToBuffers, buffersToBigInts } from "../utils";
 import { StarkError } from '../StarkError';
+
+// INTERFACES
+// ================================================================================================
+interface LowDegreeProverContext {
+    readonly field              : FiniteField;
+    readonly extensionFactor    : number;
+}
 
 // CLASS DEFINITION
 // ================================================================================================
 export class LowDegreeProver {
 
-    readonly field          : FiniteField;
-    readonly skipMultiplesOf: number;
-    readonly hashAlgorithm  : HashAlgorithm;
-    readonly spotCheckCount : number;
+    readonly field              : FiniteField;
+    readonly skipMultiplesOf    : number;
+    readonly hashAlgorithm      : HashAlgorithm;
+    readonly queryCount         : number;
 
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(spotCheckCount: number, context: EvaluationContext) {
+    constructor(queryCount: number, hasAlgorithm: HashAlgorithm, context: LowDegreeProverContext) {
+        this.hashAlgorithm = hasAlgorithm;
+        this.queryCount = queryCount;
         this.field = context.field;
-        this.skipMultiplesOf = context.domainSize / context.totalSteps;
-        this.hashAlgorithm = context.hashAlgorithm;
-        this.spotCheckCount = spotCheckCount;
+        this.skipMultiplesOf = context.extensionFactor;
     }
 
     // PUBLIC METHODS
@@ -52,7 +60,7 @@ export class LowDegreeProver {
 
             // calculate the pseudo-randomly sampled y indices
             let columnLength = Math.floor(rouDegree / 4);
-            let positions = getPseudorandomIndexes(columnRoot, this.spotCheckCount, columnLength, this.skipMultiplesOf);
+            let positions = getPseudorandomIndexes(columnRoot, this.queryCount, columnLength, this.skipMultiplesOf);
 
             // verify Merkle proof for the column
             if (!MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
@@ -177,7 +185,7 @@ export class LowDegreeProver {
         const cTree = MerkleTree.create(bigIntsToBuffers(column, hashDigestSize), this.hashAlgorithm);
 
         // compute spot check positions in the column and corresponding positions in the original values
-        const positions = getPseudorandomIndexes(cTree.root, this.spotCheckCount, column.length, this.skipMultiplesOf);
+        const positions = getPseudorandomIndexes(cTree.root, this.queryCount, column.length, this.skipMultiplesOf);
         const polyPositions = new Array<number>(positions.length * 4);
         for (let i = 0; i < positions.length; i++) {
             polyPositions[i * 4 + 0] = positions[i];

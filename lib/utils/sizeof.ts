@@ -9,7 +9,7 @@ export const MAX_ARRAY_LENGTH = 256;
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
-export function sizeOf(proof: StarkProof, valueSize: number, hashAlgorithm: HashAlgorithm) {
+export function sizeOf(proof: StarkProof, hashAlgorithm: HashAlgorithm) {
 
     const nodeSize = getHashDigestSize(hashAlgorithm);
 
@@ -17,7 +17,10 @@ export function sizeOf(proof: StarkProof, valueSize: number, hashAlgorithm: Hash
     
     // evaluations
     size += nodeSize; // root
-    const evData = sizeOfArray(proof.evaluations.values, valueSize);
+    let evData = 1; // length of values array
+    for (let value of proof.evaluations.values) {
+        evData += value.byteLength;
+    }
     const evProof = sizeOfMatrix(proof.evaluations.nodes, nodeSize);
     size += 1; // evaluation proof depth
     size += 1; // boundary poly count

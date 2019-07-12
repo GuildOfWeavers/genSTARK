@@ -5,26 +5,20 @@ Object.defineProperty(exports, "__esModule", { value: true });
 class TracePolynomial {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(context, executionTrace) {
-        this.field = context.field;
-        this.executionTrace = executionTrace;
+    constructor(config) {
+        this.field = config.field;
+        this.executionDomain = config.executionDomain;
+        this.evaluationDomain = config.evaluationDomain;
     }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    evaluate(evaluationDomain) {
-        const registerCount = this.executionTrace.length;
-        const executionSteps = this.executionTrace[0].length;
-        const extensionFactor = evaluationDomain.length / executionSteps;
-        // compute execution domain
-        const executionDomain = new Array(executionSteps);
-        for (let step = 0; step < executionDomain.length; step++) {
-            executionDomain[step] = evaluationDomain[step * extensionFactor];
-        }
+    evaluate(executionTrace) {
+        const registerCount = executionTrace.length;
         // for each register in the execution trace, compute a polynomial and low-degree extend it
         const result = new Array(registerCount);
         for (let register = 0; register < registerCount; register++) {
-            let p = this.field.interpolateRoots(executionDomain, this.executionTrace[register]);
-            result[register] = this.field.evalPolyAtRoots(p, evaluationDomain);
+            let p = this.field.interpolateRoots(this.executionDomain, executionTrace[register]);
+            result[register] = this.field.evalPolyAtRoots(p, this.evaluationDomain);
         }
         return result;
     }

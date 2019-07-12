@@ -1,82 +1,104 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, StarkProof, FriComponent, HashAlgorithm } from "@guildofweavers/genstark";
+import { StarkProof, FriComponent, HashAlgorithm } from "@guildofweavers/genstark";
+import { FiniteField } from '@guildofweavers/air-script';
 import { getHashDigestSize } from '@guildofweavers/merkle';
 import * as utils from './utils';
+
+// INTERFACES
+// ================================================================================================
+interface SerializerConfig {
+    readonly field              : FiniteField;
+    readonly stateWidth         : number;
+    readonly secretInputCount   : number;
+    readonly constraintCount    : number;
+}
 
 // CLASS DEFINITION
 // ================================================================================================
 export class Serializer {
 
     readonly fieldElementSize   : number;
-
-    readonly registerCount      : number;
+    readonly stateWidth         : number;
+    readonly secretInputCount   : number;
     readonly constraintCount    : number;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(field: FiniteField, registerCount: number, constraintCount: number) {
-        this.fieldElementSize = field.elementSize;
-        this.registerCount = registerCount;
-        this.constraintCount = constraintCount;
+    constructor(config: SerializerConfig) {
+        this.fieldElementSize = config.field.elementSize;
+        this.stateWidth = config.stateWidth;
+        this.secretInputCount = config.secretInputCount;
+        this.constraintCount = config.constraintCount;
     }
 
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeEvaluations([pEvaluations, bEvaluations, dEvaluations]: bigint[][][],  bCount: number, position: number): Buffer {
-        const elementCount = this.registerCount + bCount + this.constraintCount;
-        const buffer = Buffer.allocUnsafe(elementCount * this.fieldElementSize);
+    mergeValues([pValues, sValues, bValues, dValues]: bigint[][][], bCount: number, position: number): Buffer {
+        const valueSize = this.fieldElementSize;
+        const valueCount = this.getValueCount(bCount)
+        const buffer = Buffer.allocUnsafe(valueCount * valueSize);
+        const padLength = valueSize * 2;
 
         let offset = 0;
 
-        for (let i = 0; i < this.registerCount; i++, offset += this.fieldElementSize) {
-            let hex = pEvaluations[i][position].toString(16).padStart(this.fieldElementSize * 2, '0');
-            buffer.write(hex, offset, this.fieldElementSize, 'hex');
+        for (let register = 0; register < this.stateWidth; register++) {
+            let hex = pValues[register][position].toString(16).padStart(padLength, '0');
+            offset += buffer.write(hex, offset, valueSize, 'hex');
         }
 
-        for (let i = 0; i < bCount; i++, offset += this.fieldElementSize) {
-            let hex = bEvaluations[i][position].toString(16).padStart(this.fieldElementSize * 2, '0');
-            buffer.write(hex, offset, this.fieldElementSize, 'hex');
+        for (let register = 0; register < this.secretInputCount; register++) {
+            let hex = sValues[register][position].toString(16).padStart(padLength, '0');
+            offset += buffer.write(hex, offset, valueSize, 'hex');
+        }
+
+        for (let i = 0; i < bCount; i++) {
+            let hex = bValues[i][position].toString(16).padStart(padLength, '0');
+            offset += buffer.write(hex, offset, valueSize, 'hex');
         }
     
-        for (let i = 0; i < this.constraintCount; i++, offset += this.fieldElementSize) {
-            let hex = dEvaluations[i][position].toString(16).padStart(this.fieldElementSize * 2, '0');
-            buffer.write(hex, offset, this.fieldElementSize, 'hex');
+        for (let constraint = 0; constraint < this.constraintCount; constraint++) {
+            let hex = dValues[constraint][position].toString(16).padStart(padLength, '0');
+            offset += buffer.write(hex, offset, this.fieldElementSize, 'hex');
         }
 
         return buffer;    
     }
 
-    parseEvaluations(buffer: Buffer, bCount: number): [bigint[], bigint[], bigint[]] {
-        
+    parseValues(buffer: Buffer, bCount: number): [bigint[], bigint[], bigint[], bigint[]] {
+        const elementSize = this.fieldElementSize;
+
         let offset = 0;
 
-        const pEvaluations = new Array<bigint>(this.registerCount);
-        for (let i = 0; i < this.registerCount; i++, offset += this.fieldElementSize) {
-            pEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
+        const pValues = new Array<bigint>(this.stateWidth);
+        for (let i = 0; i < this.stateWidth; i++, offset += elementSize) {
+            pValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
         }
 
-        const bEvaluations = new Array<bigint>(bCount);
-        for (let i = 0; i < bCount; i++, offset += this.fieldElementSize) {
-            bEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
+        const sValues = new Array<bigint>(this.secretInputCount);
+        for (let i = 0; i < this.secretInputCount; i++, offset += elementSize) {
+            sValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
         }
 
-        const dEvaluations = new Array<bigint>(this.constraintCount);
-        for (let i = 0; i < this.constraintCount; i++, offset += this.fieldElementSize) {
-            dEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
+        const bValues = new Array<bigint>(bCount);
+        for (let i = 0; i < bCount; i++, offset += elementSize) {
+            bValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
         }
 
-        return [pEvaluations, bEvaluations, dEvaluations];
+        const dValues = new Array<bigint>(this.constraintCount);
+        for (let i = 0; i < this.constraintCount; i++, offset += elementSize) {
+            dValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
+        }
+
+        return [pValues, sValues, bValues, dValues];
     }
 
     // PROOF SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
     serializeProof(proof: StarkProof, hashAlgorithm: HashAlgorithm): Buffer {
         const nodeSize = getHashDigestSize(hashAlgorithm);
-        const valueCount = this.registerCount + this.constraintCount + proof.evaluations.bpc;
-        const valueSize = valueCount * this.fieldElementSize;
 
-        const size = utils.sizeOf(proof, valueSize, hashAlgorithm);
+        const size = utils.sizeOf(proof, hashAlgorithm);
         const buffer = Buffer.allocUnsafe(size.total);
         let offset = 0;
 
@@ -112,7 +134,7 @@ export class Serializer {
         offset += buffer.copy(eRoot, 0, offset, offset + nodeSize);
         const bpc = buffer.readUInt8(offset); offset += 1;
         const eDepth = buffer.readUInt8(offset); offset += 1;
-        const valueCount = this.registerCount + this.constraintCount + bpc;
+        const valueCount = this.getValueCount(bpc);
         const valueSize = valueCount * this.fieldElementSize;
         const eValueInfo = utils.readArray(buffer, offset, valueSize); offset = eValueInfo.offset;
         const eNodeInfo = utils.readMatrix(buffer, offset, nodeSize); offset = eNodeInfo.offset;
@@ -149,5 +171,11 @@ export class Serializer {
                 ldProof: { components, remainder: remainderInfo.values }
             }
         };
+    }
+
+    // PRIVATE METHODS
+    // --------------------------------------------------------------------------------------------
+    private getValueCount(bCount: number): number {
+        return this.stateWidth + this.secretInputCount + bCount + this.constraintCount;
     }
 }

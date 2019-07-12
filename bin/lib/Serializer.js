@@ -7,54 +7,64 @@ const utils = require("./utils");
 class Serializer {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(field, registerCount, constraintCount) {
-        this.fieldElementSize = field.elementSize;
-        this.registerCount = registerCount;
-        this.constraintCount = constraintCount;
+    constructor(config) {
+        this.fieldElementSize = config.field.elementSize;
+        this.stateWidth = config.stateWidth;
+        this.secretInputCount = config.secretInputCount;
+        this.constraintCount = config.constraintCount;
     }
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeEvaluations([pEvaluations, bEvaluations, dEvaluations], bCount, position) {
-        const elementCount = this.registerCount + bCount + this.constraintCount;
-        const buffer = Buffer.allocUnsafe(elementCount * this.fieldElementSize);
+    mergeValues([pValues, sValues, bValues, dValues], bCount, position) {
+        const valueSize = this.fieldElementSize;
+        const valueCount = this.getValueCount(bCount);
+        const buffer = Buffer.allocUnsafe(valueCount * valueSize);
+        const padLength = valueSize * 2;
         let offset = 0;
-        for (let i = 0; i < this.registerCount; i++, offset += this.fieldElementSize) {
-            let hex = pEvaluations[i][position].toString(16).padStart(this.fieldElementSize * 2, '0');
-            buffer.write(hex, offset, this.fieldElementSize, 'hex');
+        for (let register = 0; register < this.stateWidth; register++) {
+            let hex = pValues[register][position].toString(16).padStart(padLength, '0');
+            offset += buffer.write(hex, offset, valueSize, 'hex');
         }
-        for (let i = 0; i < bCount; i++, offset += this.fieldElementSize) {
-            let hex = bEvaluations[i][position].toString(16).padStart(this.fieldElementSize * 2, '0');
-            buffer.write(hex, offset, this.fieldElementSize, 'hex');
+        for (let register = 0; register < this.secretInputCount; register++) {
+            let hex = sValues[register][position].toString(16).padStart(padLength, '0');
+            offset += buffer.write(hex, offset, valueSize, 'hex');
         }
-        for (let i = 0; i < this.constraintCount; i++, offset += this.fieldElementSize) {
-            let hex = dEvaluations[i][position].toString(16).padStart(this.fieldElementSize * 2, '0');
-            buffer.write(hex, offset, this.fieldElementSize, 'hex');
+        for (let i = 0; i < bCount; i++) {
+            let hex = bValues[i][position].toString(16).padStart(padLength, '0');
+            offset += buffer.write(hex, offset, valueSize, 'hex');
+        }
+        for (let constraint = 0; constraint < this.constraintCount; constraint++) {
+            let hex = dValues[constraint][position].toString(16).padStart(padLength, '0');
+            offset += buffer.write(hex, offset, this.fieldElementSize, 'hex');
         }
         return buffer;
     }
-    parseEvaluations(buffer, bCount) {
+    parseValues(buffer, bCount) {
+        const elementSize = this.fieldElementSize;
         let offset = 0;
-        const pEvaluations = new Array(this.registerCount);
-        for (let i = 0; i < this.registerCount; i++, offset += this.fieldElementSize) {
-            pEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
+        const pValues = new Array(this.stateWidth);
+        for (let i = 0; i < this.stateWidth; i++, offset += elementSize) {
+            pValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
         }
-        const bEvaluations = new Array(bCount);
-        for (let i = 0; i < bCount; i++, offset += this.fieldElementSize) {
-            bEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
+        const sValues = new Array(this.secretInputCount);
+        for (let i = 0; i < this.secretInputCount; i++, offset += elementSize) {
+            sValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
         }
-        const dEvaluations = new Array(this.constraintCount);
-        for (let i = 0; i < this.constraintCount; i++, offset += this.fieldElementSize) {
-            dEvaluations[i] = BigInt('0x' + buffer.toString('hex', offset, offset + this.fieldElementSize));
+        const bValues = new Array(bCount);
+        for (let i = 0; i < bCount; i++, offset += elementSize) {
+            bValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
         }
-        return [pEvaluations, bEvaluations, dEvaluations];
+        const dValues = new Array(this.constraintCount);
+        for (let i = 0; i < this.constraintCount; i++, offset += elementSize) {
+            dValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
+        }
+        return [pValues, sValues, bValues, dValues];
     }
     // PROOF SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
     serializeProof(proof, hashAlgorithm) {
         const nodeSize = merkle_1.getHashDigestSize(hashAlgorithm);
-        const valueCount = this.registerCount + this.constraintCount + proof.evaluations.bpc;
-        const valueSize = valueCount * this.fieldElementSize;
-        const size = utils.sizeOf(proof, valueSize, hashAlgorithm);
+        const size = utils.sizeOf(proof, hashAlgorithm);
         const buffer = Buffer.allocUnsafe(size.total);
         let offset = 0;
         // evaluations
@@ -87,7 +97,7 @@ class Serializer {
         offset += 1;
         const eDepth = buffer.readUInt8(offset);
         offset += 1;
-        const valueCount = this.registerCount + this.constraintCount + bpc;
+        const valueCount = this.getValueCount(bpc);
         const valueSize = valueCount * this.fieldElementSize;
         const eValueInfo = utils.readArray(buffer, offset, valueSize);
         offset = eValueInfo.offset;
@@ -127,6 +137,11 @@ class Serializer {
                 ldProof: { components, remainder: remainderInfo.values }
             }
         };
+    }
+    // PRIVATE METHODS
+    // --------------------------------------------------------------------------------------------
+    getValueCount(bCount) {
+        return this.stateWidth + this.secretInputCount + bCount + this.constraintCount;
     }
 }
 exports.Serializer = Serializer;
