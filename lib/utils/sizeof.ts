@@ -23,7 +23,6 @@ export function sizeOf(proof: StarkProof, hashAlgorithm: HashAlgorithm) {
     }
     const evProof = sizeOfMatrix(proof.evaluations.nodes, nodeSize);
     size += 1; // evaluation proof depth
-    size += 1; // boundary poly count
     size += evData + evProof;
 
     // degree

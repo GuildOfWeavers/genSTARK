@@ -70,13 +70,27 @@ declare module '@guildofweavers/genstark' {
             values  : Buffer[];
             nodes   : Buffer[][];
             depth   : number;
-            bpc     : number;
         };
         degree: {
             root    : Buffer;
             lcProof : BatchMerkleProof;
             ldProof : LowDegreeProof;
         }
+    }
+
+    export interface StarkProof2 {
+        values      : Buffer[];
+        evProof: {
+            root    : Buffer;
+            nodes   : Buffer[][];
+            depth   : number;
+        };
+        lcProof: {
+            root    : Buffer;
+            nodes   : Buffer[][];
+            depth   : number;
+        };
+        ldProof     : LowDegreeProof;
     }
 
     // CONSTRAINTS

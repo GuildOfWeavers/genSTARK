@@ -11,13 +11,12 @@ class Serializer {
         this.fieldElementSize = config.field.elementSize;
         this.stateWidth = config.stateWidth;
         this.secretInputCount = config.secretInputCount;
-        this.constraintCount = config.constraintCount;
     }
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeValues([pValues, sValues, bValues, dValues], bCount, position) {
+    mergeValues([pValues, sValues], position) {
         const valueSize = this.fieldElementSize;
-        const valueCount = this.getValueCount(bCount);
+        const valueCount = this.getValueCount();
         const buffer = Buffer.allocUnsafe(valueCount * valueSize);
         const padLength = valueSize * 2;
         let offset = 0;
@@ -29,17 +28,9 @@ class Serializer {
             let hex = sValues[register][position].toString(16).padStart(padLength, '0');
             offset += buffer.write(hex, offset, valueSize, 'hex');
         }
-        for (let i = 0; i < bCount; i++) {
-            let hex = bValues[i][position].toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, valueSize, 'hex');
-        }
-        for (let constraint = 0; constraint < this.constraintCount; constraint++) {
-            let hex = dValues[constraint][position].toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, this.fieldElementSize, 'hex');
-        }
         return buffer;
     }
-    parseValues(buffer, bCount) {
+    parseValues(buffer) {
         const elementSize = this.fieldElementSize;
         let offset = 0;
         const pValues = new Array(this.stateWidth);
@@ -50,15 +41,7 @@ class Serializer {
         for (let i = 0; i < this.secretInputCount; i++, offset += elementSize) {
             sValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
         }
-        const bValues = new Array(bCount);
-        for (let i = 0; i < bCount; i++, offset += elementSize) {
-            bValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
-        }
-        const dValues = new Array(this.constraintCount);
-        for (let i = 0; i < this.constraintCount; i++, offset += elementSize) {
-            dValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
-        }
-        return [pValues, sValues, bValues, dValues];
+        return [pValues, sValues];
     }
     // PROOF SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
@@ -69,7 +52,6 @@ class Serializer {
         let offset = 0;
         // evaluations
         offset += proof.evaluations.root.copy(buffer, offset);
-        offset = buffer.writeUInt8(proof.evaluations.bpc, offset);
         offset = buffer.writeUInt8(proof.evaluations.depth, offset);
         offset = utils.writeArray(buffer, offset, proof.evaluations.values);
         offset = utils.writeMatrix(buffer, offset, proof.evaluations.nodes);
@@ -93,11 +75,9 @@ class Serializer {
         let offset = 0;
         const eRoot = Buffer.allocUnsafe(nodeSize);
         offset += buffer.copy(eRoot, 0, offset, offset + nodeSize);
-        const bpc = buffer.readUInt8(offset);
-        offset += 1;
         const eDepth = buffer.readUInt8(offset);
         offset += 1;
-        const valueCount = this.getValueCount(bpc);
+        const valueCount = this.getValueCount();
         const valueSize = valueCount * this.fieldElementSize;
         const eValueInfo = utils.readArray(buffer, offset, valueSize);
         offset = eValueInfo.offset;
@@ -128,8 +108,7 @@ class Serializer {
                 root: eRoot,
                 values: eValueInfo.values,
                 nodes: eNodeInfo.matrix,
-                depth: eDepth,
-                bpc: bpc
+                depth: eDepth
             },
             degree: {
                 root: dRoot,
@@ -140,8 +119,8 @@ class Serializer {
     }
     // PRIVATE METHODS
     // --------------------------------------------------------------------------------------------
-    getValueCount(bCount) {
-        return this.stateWidth + this.secretInputCount + bCount + this.constraintCount;
+    getValueCount() {
+        return this.stateWidth + this.secretInputCount;
     }
 }
 exports.Serializer = Serializer;

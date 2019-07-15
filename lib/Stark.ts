@@ -126,11 +126,11 @@ export class Stark {
         const mergedEvaluations = new Array<Buffer>(evaluationDomainSize);
         const hashedEvaluations = new Array<Buffer>(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = this.serializer.mergeValues([pEvaluations, sEvaluations, bEvaluations, dEvaluations], bPoly.count, i);
+            let v = this.serializer.mergeValues([pEvaluations, sEvaluations], i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
-        this.logger.log(label, 'Serialized evaluations of P(x), B(x), and D(x) polynomials');
+        this.logger.log(label, 'Serialized evaluations of P(x) and S(x) polynomials');
 
         const eTree = MerkleTree.create(hashedEvaluations, this.hashAlgorithm);
         this.logger.log(label, 'Built evaluation merkle tree');
@@ -174,8 +174,7 @@ export class Stark {
                 root    : eTree.root,
                 values  : eValues,
                 nodes   : eProof.nodes,
-                depth   : eProof.depth,
-                bpc     : bPoly.count
+                depth   : eProof.depth
             },
             degree: {
                 root    : lTree.root,
@@ -214,20 +213,16 @@ export class Stark {
         // 3 ----- decode evaluation spot-checks
         const pEvaluations = new Map<number, bigint[]>();
         const sEvaluations = new Map<number, bigint[]>();
-        const bEvaluations = new Map<number, bigint[]>();
-        const dEvaluations = new Map<number, bigint[]>();
         const hashedEvaluations = new Array<Buffer>(augmentedPositions.length);
         const hash = getHashFunction(this.hashAlgorithm);
 
         for (let i = 0; i < proof.evaluations.values.length; i++) {
             let mergedEvaluations = proof.evaluations.values[i];
             let position = augmentedPositions[i];
-            let [p, s, b, d] = this.serializer.parseValues(mergedEvaluations, bPoly.count);
+            let [p, s] = this.serializer.parseValues(mergedEvaluations);
             
             pEvaluations.set(position, p);
             sEvaluations.set(position, s);
-            bEvaluations.set(position, b);
-            dEvaluations.set(position, d);
 
             hashedEvaluations[i] = hash(mergedEvaluations);
         }
@@ -288,31 +283,16 @@ export class Stark {
             let x = this.air.field.exp(G2, BigInt(step));
 
             let pValues = pEvaluations.get(step)!;
-            let bValues = bEvaluations.get(step)!;
-            let dValues = dEvaluations.get(step)!;
+            let nValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize)!;
             let sValues = sEvaluations.get(step)!;
             let zValue = zPoly.evaluateAt(x);
 
-            // check transition 
-            let npValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize)!;
-            let qValues = this.air.evaluateConstraintsAt(x, pValues, npValues, sValues, context);
-            for (let j = 0; j < qValues.length; j++) {
-                let qCheck = this.air.field.mul(zValue, dValues[j]);
-                if (qValues[j] !== qCheck) {
-                    throw new StarkError(`Transition constraint at position ${step} was not satisfied`);
-                }
-            }
-
-            // check boundary constraints
-            let bChecks = bPoly.evaluateAt(pEvaluations.get(step)!, x);
-            for (let j = 0; j < bChecks.length; j++) {
-                if (bChecks[j] !== bValues[j]) {
-                    throw new StarkError(`Boundary constraint at position ${step} was not satisfied`);
-                }
-            }
+            // evaluate constraints and use the result to compute D(x) and B(x)
+            let qValues = this.air.evaluateConstraintsAt(x, pValues, nValues, sValues, context);
+            let dValues = this.air.field.divVectorElements(qValues, zValue);
+            let bValues = bPoly.evaluateAt(pValues, x);
 
             // check correctness of liner combination
-            // TODO: include sValues into the check
             let lCheck = lCombination.computeOne(x, pValues, sValues, bValues, dValues);
             if (lEvaluations.get(step) !== lCheck) {
                 throw new StarkError(`Linear combination at position ${step} is inconsistent`);

@@ -11,7 +11,6 @@ interface SerializerConfig {
     readonly field              : FiniteField;
     readonly stateWidth         : number;
     readonly secretInputCount   : number;
-    readonly constraintCount    : number;
 }
 
 // CLASS DEFINITION
@@ -21,7 +20,6 @@ export class Serializer {
     readonly fieldElementSize   : number;
     readonly stateWidth         : number;
     readonly secretInputCount   : number;
-    readonly constraintCount    : number;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
@@ -29,14 +27,13 @@ export class Serializer {
         this.fieldElementSize = config.field.elementSize;
         this.stateWidth = config.stateWidth;
         this.secretInputCount = config.secretInputCount;
-        this.constraintCount = config.constraintCount;
     }
 
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeValues([pValues, sValues, bValues, dValues]: bigint[][][], bCount: number, position: number): Buffer {
+    mergeValues([pValues, sValues]: bigint[][][], position: number): Buffer {
         const valueSize = this.fieldElementSize;
-        const valueCount = this.getValueCount(bCount)
+        const valueCount = this.getValueCount()
         const buffer = Buffer.allocUnsafe(valueCount * valueSize);
         const padLength = valueSize * 2;
 
@@ -52,20 +49,10 @@ export class Serializer {
             offset += buffer.write(hex, offset, valueSize, 'hex');
         }
 
-        for (let i = 0; i < bCount; i++) {
-            let hex = bValues[i][position].toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, valueSize, 'hex');
-        }
-    
-        for (let constraint = 0; constraint < this.constraintCount; constraint++) {
-            let hex = dValues[constraint][position].toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, this.fieldElementSize, 'hex');
-        }
-
         return buffer;    
     }
 
-    parseValues(buffer: Buffer, bCount: number): [bigint[], bigint[], bigint[], bigint[]] {
+    parseValues(buffer: Buffer): [bigint[], bigint[]] {
         const elementSize = this.fieldElementSize;
 
         let offset = 0;
@@ -80,17 +67,7 @@ export class Serializer {
             sValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
         }
 
-        const bValues = new Array<bigint>(bCount);
-        for (let i = 0; i < bCount; i++, offset += elementSize) {
-            bValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
-        }
-
-        const dValues = new Array<bigint>(this.constraintCount);
-        for (let i = 0; i < this.constraintCount; i++, offset += elementSize) {
-            dValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
-        }
-
-        return [pValues, sValues, bValues, dValues];
+        return [pValues, sValues];
     }
 
     // PROOF SERIALIZER/PARSER
@@ -104,7 +81,6 @@ export class Serializer {
 
         // evaluations
         offset += proof.evaluations.root.copy(buffer, offset);
-        offset = buffer.writeUInt8(proof.evaluations.bpc, offset);
         offset = buffer.writeUInt8(proof.evaluations.depth, offset);
         offset = utils.writeArray(buffer, offset, proof.evaluations.values);
         offset = utils.writeMatrix(buffer, offset, proof.evaluations.nodes);
@@ -132,9 +108,8 @@ export class Serializer {
         let offset = 0;
         const eRoot = Buffer.allocUnsafe(nodeSize);
         offset += buffer.copy(eRoot, 0, offset, offset + nodeSize);
-        const bpc = buffer.readUInt8(offset); offset += 1;
         const eDepth = buffer.readUInt8(offset); offset += 1;
-        const valueCount = this.getValueCount(bpc);
+        const valueCount = this.getValueCount();
         const valueSize = valueCount * this.fieldElementSize;
         const eValueInfo = utils.readArray(buffer, offset, valueSize); offset = eValueInfo.offset;
         const eNodeInfo = utils.readMatrix(buffer, offset, nodeSize); offset = eNodeInfo.offset;
@@ -162,8 +137,7 @@ export class Serializer {
                 root: eRoot,
                 values: eValueInfo.values,
                 nodes: eNodeInfo.matrix,
-                depth: eDepth,
-                bpc: bpc
+                depth: eDepth
             },
             degree: {
                 root: dRoot,
@@ -175,7 +149,7 @@ export class Serializer {
 
     // PRIVATE METHODS
     // --------------------------------------------------------------------------------------------
-    private getValueCount(bCount: number): number {
-        return this.stateWidth + this.secretInputCount + bCount + this.constraintCount;
+    private getValueCount(): number {
+        return this.stateWidth + this.secretInputCount;
     }
 }
