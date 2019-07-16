@@ -115,8 +115,7 @@ class Stark {
         const eProof = eTree.proveBatch(augmentedPositions);
         this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
         // 10 ---- compute random linear combination of evaluations
-        // TODO: include sEvaluations into linear combination
-        const lCombination = new components_1.LinearCombination(context, eTree.root, this.air.constraintCount, this.air.maxConstraintDegree);
+        const lCombination = new components_1.LinearCombination(context, eTree.root, context.constraints); // TODO: duplicate parameter
         const lEvaluations = lCombination.computeMany(pEvaluations, sEvaluations, bEvaluations, dEvaluations);
         ;
         this.logger.log(label, 'Computed random linear combination of evaluations');
@@ -165,7 +164,7 @@ class Stark {
         const G2 = context.rootOfUnity;
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const zPoly = new components_1.ZeroPolynomial(context);
-        const lCombination = new components_1.LinearCombination(context, eRoot, this.air.constraintCount, this.air.maxConstraintDegree);
+        const lCombination = new components_1.LinearCombination(context, eRoot, context.constraints); // TODO: duplicate parameter
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
         const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
@@ -199,8 +198,9 @@ class Stark {
         }
         catch (error) {
             if (error instanceof StarkError_1.StarkError === false) {
-                throw new StarkError_1.StarkError(`Verification of evaluation Merkle proof failed`, error);
+                error = new StarkError_1.StarkError(`Verification of evaluation Merkle proof failed`, error);
             }
+            throw error;
         }
         this.logger.log(label, `Verified evaluation merkle proof`);
         // 5 ----- verify low-degree proof
@@ -224,7 +224,7 @@ class Stark {
             let qValues = this.air.evaluateConstraintsAt(x, pValues, nValues, sValues, context);
             let dValues = this.air.field.divVectorElements(qValues, zValue);
             let bValues = bPoly.evaluateAt(pValues, x);
-            // check correctness of liner combination
+            // compute linear combination of all evaluations
             lcValues[i] = lCombination.computeOne(x, pValues, sValues, bValues, dValues);
         }
         this.logger.log(label, `Verified transition and boundary constraints`);
@@ -242,8 +242,9 @@ class Stark {
         }
         catch (error) {
             if (error instanceof StarkError_1.StarkError === false) {
-                throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`, error);
+                error = new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`, error);
             }
+            throw error;
         }
         this.logger.log(label, `Verified liner combination merkle proof`);
         this.logger.done(label, 'STARK verified');

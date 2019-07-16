@@ -147,8 +147,7 @@ export class Stark {
         this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
 
         // 10 ---- compute random linear combination of evaluations
-        // TODO: include sEvaluations into linear combination
-        const lCombination = new LinearCombination(context, eTree.root, this.air.constraintCount, this.air.maxConstraintDegree);
+        const lCombination = new LinearCombination(context, eTree.root, context.constraints);   // TODO: duplicate parameter
         const lEvaluations = lCombination.computeMany(pEvaluations, sEvaluations, bEvaluations, dEvaluations);;
         this.logger.log(label, 'Computed random linear combination of evaluations');
 
@@ -203,7 +202,7 @@ export class Stark {
 
         const bPoly = new BoundaryConstraints(assertions, context);
         const zPoly = new ZeroPolynomial(context);
-        const lCombination = new LinearCombination(context, eRoot, this.air.constraintCount, this.air.maxConstraintDegree);
+        const lCombination = new LinearCombination(context, eRoot, context.constraints); // TODO: duplicate parameter
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- compute positions for evaluation spot-checks
@@ -243,8 +242,9 @@ export class Stark {
         }
         catch (error) {
             if (error instanceof StarkError === false) {
-                throw new StarkError(`Verification of evaluation Merkle proof failed`, error);
+                error = new StarkError(`Verification of evaluation Merkle proof failed`, error);
             }
+            throw error;
         }
         this.logger.log(label, `Verified evaluation merkle proof`);
 
@@ -273,7 +273,7 @@ export class Stark {
             let dValues = this.air.field.divVectorElements(qValues, zValue);
             let bValues = bPoly.evaluateAt(pValues, x);
 
-            // check correctness of liner combination
+            // compute linear combination of all evaluations
             lcValues[i] = lCombination.computeOne(x, pValues, sValues, bValues, dValues);
         }
         this.logger.log(label, `Verified transition and boundary constraints`);
@@ -292,8 +292,9 @@ export class Stark {
         }
         catch (error) {
             if (error instanceof StarkError === false) {
-                throw new StarkError(`Verification of linear combination Merkle proof failed`, error);
+                error = new StarkError(`Verification of linear combination Merkle proof failed`, error);
             }
+            throw error;
         }
         this.logger.log(label, `Verified liner combination merkle proof`);
 

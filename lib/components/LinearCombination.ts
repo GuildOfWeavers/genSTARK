@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { EvaluationContext, FiniteField } from '@guildofweavers/air-script';
+import { FiniteField, EvaluationContext, ConstraintSpecs } from '@guildofweavers/air-script';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -8,7 +8,7 @@ export class LinearCombination {
 
     readonly field              : FiniteField
     readonly combinationDegree  : number;
-    readonly constraintDegrees  : number[];
+    readonly constraintGroups   : Map<number,number[]>; // degree -> index array
     readonly traceLength        : number;
     readonly rootOfUnity        : bigint;
     readonly domainSize         : number;
@@ -16,86 +16,120 @@ export class LinearCombination {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(context: EvaluationContext, seed: Buffer, constraintCount: number, maxConstraintDegree: number) {
+    constructor(context: EvaluationContext, seed: Buffer, constraints: ConstraintSpecs[]) {
         this.field = context.field;
         this.traceLength = context.traceLength;
         this.rootOfUnity = context.rootOfUnity;
         this.domainSize = this.traceLength * context.extensionFactor;
         this.coefficients = this.field.prng(seed, 256); // TODO: calculate intelligently
+        this.constraintGroups = new Map<number, number[]>();
+
+        let maxDegree = 0;
+        for (let i = 0; i < constraints.length; i++) {
+            let degree = (constraints[i].degree - 1) * context.traceLength;
+            let group = this.constraintGroups.get(degree);
+            if (!group) {
+                group = [];
+                this.constraintGroups.set(degree, group);
+            }
+            group.push(i);
+
+            if (maxDegree < degree) {
+                maxDegree = degree;
+            }
+        }
 
         // the logic is as follows:
         // deg(Q(x)) = steps * deg(constraints) = deg(D(x)) + deg(Z(x))
         // thus, deg(D(x)) = deg(Q(x)) - steps;
         // and, linear combination degree is max(deg(D(x)), steps)
-        this.combinationDegree = context.traceLength * Math.max(maxConstraintDegree - 1, 1);
-        // TODO: use actual constraint degrees in the future
-        this.constraintDegrees = new Array(constraintCount).fill(maxConstraintDegree);
+        this.combinationDegree = Math.max(maxDegree, context.traceLength);
     }
 
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
     computeMany(pEvaluations: bigint[][], sEvaluations: bigint[][], bEvaluations: bigint[][], dEvaluations: bigint[][]) {
-        let allEvaluations: bigint[][];
+        let allEvaluations: bigint[][], psbPowers: bigint[] | undefined;
 
-        // TODO: get rid of conditional logic in favor of degree normalization
-        if (this.combinationDegree > this.traceLength) {
-            // normalize degrees of P(x) and B(x) polynomials
-            const psbEvaluations = [...pEvaluations, ...sEvaluations, ...bEvaluations];
-            const psbEvaluations2 = this.normalizeDegree(psbEvaluations, this.traceLength);    
-            allEvaluations = [...psbEvaluations2, ...psbEvaluations, ...dEvaluations];
-        }
-        else {
-            // increase degree of D(x) polynomial
-            const dPowerSeed = this.field.exp(this.rootOfUnity, BigInt(this.traceLength - 1));
-            const powers = this.field.getPowerSeries(dPowerSeed, this.domainSize);
-            const dEvaluations2 = this.field.mulMany(dEvaluations, powers);
-            allEvaluations = [...pEvaluations, ...sEvaluations, ...bEvaluations, ...dEvaluations2];
+        // degree of P, S, and B evaluations is equal to trace length
+        // here, we compute the degree by which P, S, B evaluations need to be increased
+        // to match the degree of linear combination
+        const psbIncrementalDegree = BigInt(this.combinationDegree - this.traceLength);
+
+        // raise degree of D evaluations to match combination degree
+        const dEvaluations2: bigint[][] = [];
+        for (let [degree, indexes] of this.constraintGroups) {
+            if (degree === this.combinationDegree) continue;
+
+            // compute the sequence of powers for the incremental degree
+            let incrementalDegree = BigInt(this.combinationDegree - degree);
+            let powerSeed = this.field.exp(this.rootOfUnity, incrementalDegree);
+            let powers = this.field.getPowerSeries(powerSeed, this.domainSize);
+
+            // remember powers for P, S, B evaluations to avoid generating them twice
+            if (incrementalDegree === psbIncrementalDegree) {
+                psbPowers = powers;
+            }
+
+            // raise the degree of D evaluations
+            for (let i of indexes) {
+                dEvaluations2.push(this.field.mulVectorElements(dEvaluations[i], powers));
+            }
         }
 
-        // then compute a linear combination of all polynomials
+        // raise degree of P, S, B evaluations to match combination degree
+        const psbEvaluations = [...pEvaluations, ...sEvaluations, ...bEvaluations];
+        const psbEvaluations2: bigint[][] = [];
+        if (psbIncrementalDegree > 0n) {
+            // if incremental powers for P, S, B evaluations haven't been computed yet,
+            // compute them now
+            if (!psbPowers) {
+                const powerSeed = this.field.exp(this.rootOfUnity, psbIncrementalDegree);
+                psbPowers = this.field.getPowerSeries(powerSeed, this.domainSize);
+            }
+            
+            // raise the degree of P, S, B evaluations
+            for (let i = 0; i < psbEvaluations.length; i++) {
+                psbEvaluations2.push(this.field.mulVectorElements(psbEvaluations[i], psbPowers));
+            }
+        }
+
+        // put all evaluations together
+        allEvaluations = [...psbEvaluations, ...psbEvaluations2, ...dEvaluations, ...dEvaluations2];
+
+        // compute a linear combination of all evaluations
         this.coefficients.splice(allEvaluations.length); // TODO: remove
         return this.field.combineMany(allEvaluations, this.coefficients);
     }
 
     computeOne(x: bigint, pValues: bigint[], sValues: bigint[], bValues: bigint[], dValues: bigint[]) {
-        let lcValues: bigint[];
+        let allValues: bigint[];
+        
+        // raise degree of D values, when needed
+        let dValues2: bigint[] = []
+        for (let [degree, indexes] of this.constraintGroups) {
+            if (degree === this.combinationDegree) continue;
+
+            let power = this.field.exp(x, BigInt(this.combinationDegree - degree));
+            for (let i of indexes) {
+                dValues2.push(this.field.mul(dValues[i], power));
+            }
+        }
+
+        // raise degree of P, S, and B values, when needed
+        const psbValues = [...pValues, ...sValues, ...bValues];
+        let psbValues2: bigint[] = [];
         if (this.combinationDegree > this.traceLength) {
             let power = this.field.exp(x, BigInt(this.combinationDegree - this.traceLength));
-            let psbValues = [...pValues, ...sValues, ...bValues];
-            let psbValues2 = new Array<bigint>(psbValues.length);
-            for (let j = 0; j < psbValues2.length; j++) {
-                psbValues2[j] = this.field.mul(psbValues[j], power);
-            }
-            lcValues = [...psbValues2, ...psbValues, ...dValues];
-        }
-        else {
-            let power = this.field.exp(x, BigInt(this.traceLength - 1));
-            let dValues2 = new Array<bigint>(dValues.length);
-            for (let j = 0; j < dValues2.length; j++) {
-                dValues2[j] = this.field.mul(dValues[j], power);
-            }
-            lcValues = [...pValues, ...sValues, ...bValues, ...dValues2]
+            psbValues2 = this.field.mulVectorElements(psbValues, power);
         }
 
-        if (this.coefficients.length > lcValues.length) {
-            this.coefficients.splice(lcValues.length);  // TODO: remove
+        // put all evaluations together
+        allValues = [...psbValues, ...psbValues2, ...dValues, ...dValues2];
+
+        if (this.coefficients.length > allValues.length) {
+            this.coefficients.splice(allValues.length);  // TODO: remove
         }
-        return this.field.combine(lcValues, this.coefficients);
-    }
-
-    // PRIVATE METHODS
-    // --------------------------------------------------------------------------------------------
-    private normalizeDegree(source: bigint[][], sourceDegree: number) {
-        if (sourceDegree === this.combinationDegree) return [];
-
-        const incrementalDegree = BigInt(this.combinationDegree - sourceDegree);
-        const powerSeed = this.field.exp(this.rootOfUnity, incrementalDegree);
-        const powers = this.field.getPowerSeries(powerSeed, this.domainSize);
-
-        const result = new Array<bigint[]>(source.length);
-        for (let i = 0; i < result.length; i++) {
-            result[i] = this.field.mulVectorElements(source[i], powers);
-        }
-        return result;
+        return this.field.combineVectors(allValues, this.coefficients);
     }
 }
