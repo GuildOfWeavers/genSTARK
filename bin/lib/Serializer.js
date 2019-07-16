@@ -50,44 +50,51 @@ class Serializer {
         const size = utils.sizeOf(proof, hashAlgorithm);
         const buffer = Buffer.allocUnsafe(size.total);
         let offset = 0;
-        // evaluations
-        offset += proof.evaluations.root.copy(buffer, offset);
-        offset = buffer.writeUInt8(proof.evaluations.depth, offset);
-        offset = utils.writeArray(buffer, offset, proof.evaluations.values);
-        offset = utils.writeMatrix(buffer, offset, proof.evaluations.nodes);
-        // degree
-        offset += proof.degree.root.copy(buffer, offset);
-        offset = utils.writeMerkleProof(buffer, offset, proof.degree.lcProof, nodeSize);
-        offset = buffer.writeUInt8(proof.degree.ldProof.components.length, offset);
-        for (let i = 0; i < proof.degree.ldProof.components.length; i++) {
-            let component = proof.degree.ldProof.components[i];
+        // values
+        offset = utils.writeArray(buffer, offset, proof.values);
+        // evProof
+        offset += proof.evProof.root.copy(buffer, offset);
+        offset = buffer.writeUInt8(proof.evProof.depth, offset);
+        offset = utils.writeMatrix(buffer, offset, proof.evProof.nodes);
+        // lcProof
+        offset += proof.lcProof.root.copy(buffer, offset);
+        offset = buffer.writeUInt8(proof.lcProof.depth, offset);
+        offset = utils.writeMatrix(buffer, offset, proof.lcProof.nodes);
+        // ldProof
+        offset = buffer.writeUInt8(proof.ldProof.components.length, offset);
+        for (let i = 0; i < proof.ldProof.components.length; i++) {
+            let component = proof.ldProof.components[i];
             offset += component.columnRoot.copy(buffer, offset);
             offset = utils.writeMerkleProof(buffer, offset, component.columnProof, nodeSize);
             offset = utils.writeMerkleProof(buffer, offset, component.polyProof, nodeSize);
         }
-        offset = utils.writeArray(buffer, offset, proof.degree.ldProof.remainder);
+        offset = utils.writeArray(buffer, offset, proof.ldProof.remainder);
         // return the buffer
         return buffer;
     }
     parseProof(buffer, hashAlgorithm) {
         const nodeSize = merkle_1.getHashDigestSize(hashAlgorithm);
-        // evaluations
         let offset = 0;
-        const eRoot = Buffer.allocUnsafe(nodeSize);
-        offset += buffer.copy(eRoot, 0, offset, offset + nodeSize);
-        const eDepth = buffer.readUInt8(offset);
-        offset += 1;
+        // values
         const valueCount = this.getValueCount();
         const valueSize = valueCount * this.fieldElementSize;
-        const eValueInfo = utils.readArray(buffer, offset, valueSize);
-        offset = eValueInfo.offset;
-        const eNodeInfo = utils.readMatrix(buffer, offset, nodeSize);
-        offset = eNodeInfo.offset;
-        // degree
-        const dRoot = Buffer.allocUnsafe(nodeSize);
-        offset += buffer.copy(dRoot, 0, offset, offset + nodeSize);
-        const lcProofInfo = utils.readMerkleProof(buffer, offset, nodeSize);
-        offset = lcProofInfo.offset;
+        const valueInfo = utils.readArray(buffer, offset, valueSize);
+        offset = valueInfo.offset;
+        // evProof
+        const evRoot = Buffer.allocUnsafe(nodeSize);
+        offset += buffer.copy(evRoot, 0, offset, offset + nodeSize);
+        const evDepth = buffer.readUInt8(offset);
+        offset += 1;
+        const evNodeInfo = utils.readMatrix(buffer, offset, nodeSize);
+        offset = evNodeInfo.offset;
+        // lcProof
+        const lcRoot = Buffer.allocUnsafe(nodeSize);
+        offset += buffer.copy(lcRoot, 0, offset, offset + nodeSize);
+        const lcDepth = buffer.readUInt8(offset);
+        offset += 1;
+        const lcNodeInfo = utils.readMatrix(buffer, offset, nodeSize);
+        offset = lcNodeInfo.offset;
+        // ldProof
         const componentCount = buffer.readUInt8(offset);
         offset += 1;
         const components = new Array(componentCount);
@@ -104,17 +111,18 @@ class Serializer {
         offset = remainderInfo.offset;
         // build and return the proof
         return {
-            evaluations: {
-                root: eRoot,
-                values: eValueInfo.values,
-                nodes: eNodeInfo.matrix,
-                depth: eDepth
+            values: valueInfo.values,
+            evProof: {
+                root: evRoot,
+                nodes: evNodeInfo.matrix,
+                depth: evDepth
             },
-            degree: {
-                root: dRoot,
-                lcProof: lcProofInfo.proof,
-                ldProof: { components, remainder: remainderInfo.values }
-            }
+            lcProof: {
+                root: lcRoot,
+                nodes: lcNodeInfo.matrix,
+                depth: lcDepth,
+            },
+            ldProof: { components, remainder: remainderInfo.values }
         };
     }
     // PRIVATE METHODS
