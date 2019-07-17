@@ -4,7 +4,7 @@ import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, Logger as ILogge
 import { MerkleTree, BatchMerkleProof, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
 import { parseScript, AirObject } from '@guildofweavers/air-script';
 import { TracePolynomial, ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination } from './components';
-import { Logger, getPseudorandomIndexes, sizeOf, bigIntsToBuffers, buffersToBigInts } from './utils';
+import { Logger, getPseudorandomIndexes, sizeOf, bigIntsToBuffers } from './utils';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -116,17 +116,11 @@ export class Stark {
         this.logger.log(label, 'Computed B(x) polynomials');
 
         // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
-        const sEvaluations = new Array<bigint[]>(this.air.secretInputCount);
-        // TODO: make evaluations be a part of an explicit interface
-        for (let i = 0; i < sEvaluations.length; i++) {
-            sEvaluations[i] = (context.sRegisters[i] as any).evaluations;
-        }
-
         const hash = getHashFunction(this.hashAlgorithm);
         const mergedEvaluations = new Array<Buffer>(evaluationDomainSize);
         const hashedEvaluations = new Array<Buffer>(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = this.serializer.mergeValues([pEvaluations, sEvaluations], i);
+            let v = this.serializer.mergeValues([pEvaluations, context.sEvaluations], i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
@@ -147,8 +141,8 @@ export class Stark {
         this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
 
         // 10 ---- compute random linear combination of evaluations
-        const lCombination = new LinearCombination(context, eTree.root, context.constraints);   // TODO: duplicate parameter
-        const lEvaluations = lCombination.computeMany(pEvaluations, sEvaluations, bEvaluations, dEvaluations);;
+        const lCombination = new LinearCombination(eTree.root, this.air.constraints, context);
+        const lEvaluations = lCombination.computeMany(pEvaluations, context.sEvaluations, bEvaluations, dEvaluations);
         this.logger.log(label, 'Computed random linear combination of evaluations');
 
         // 11 ----- Compute low-degree proof
@@ -198,11 +192,10 @@ export class Stark {
         // 1 ----- set up evaluation context
         const context = this.air.createContext(publicInputs || []);
         const evaluationDomainSize = context.traceLength * extensionFactor;
-        const G2 = context.rootOfUnity;
 
         const bPoly = new BoundaryConstraints(assertions, context);
         const zPoly = new ZeroPolynomial(context);
-        const lCombination = new LinearCombination(context, eRoot, context.constraints); // TODO: duplicate parameter
+        const lCombination = new LinearCombination(eRoot, this.air.constraints, context);
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- compute positions for evaluation spot-checks
@@ -250,6 +243,7 @@ export class Stark {
 
         // 5 ----- verify low-degree proof
         try {
+            const G2 = context.rootOfUnity;
             this.ldProver.verify(proof.lcProof.root, lCombination.combinationDegree, G2, proof.ldProof);
         }
         catch (error) {
@@ -257,11 +251,11 @@ export class Stark {
         }
         this.logger.log(label, `Verified low-degree proof`);
 
-        // 6 ----- verify transition and boundary constraints
+        // 6 ----- compute linear combinations of P, S, B, and D values for all spot checks
         const lcValues = new Array<bigint>(positions.length);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
-            let x = this.air.field.exp(G2, BigInt(step));
+            let x = this.air.field.exp(context.rootOfUnity, BigInt(step));
 
             let pValues = pEvaluations.get(step)!;
             let nValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize)!;

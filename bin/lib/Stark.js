@@ -88,16 +88,11 @@ class Stark {
         const bEvaluations = bPoly.evaluateAll(pEvaluations, context.evaluationDomain);
         this.logger.log(label, 'Computed B(x) polynomials');
         // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
-        const sEvaluations = new Array(this.air.secretInputCount);
-        // TODO: make evaluations be a part of an explicit interface
-        for (let i = 0; i < sEvaluations.length; i++) {
-            sEvaluations[i] = context.sRegisters[i].evaluations;
-        }
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
         const mergedEvaluations = new Array(evaluationDomainSize);
         const hashedEvaluations = new Array(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = this.serializer.mergeValues([pEvaluations, sEvaluations], i);
+            let v = this.serializer.mergeValues([pEvaluations, context.sEvaluations], i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
@@ -115,9 +110,8 @@ class Stark {
         const eProof = eTree.proveBatch(augmentedPositions);
         this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
         // 10 ---- compute random linear combination of evaluations
-        const lCombination = new components_1.LinearCombination(context, eTree.root, context.constraints); // TODO: duplicate parameter
-        const lEvaluations = lCombination.computeMany(pEvaluations, sEvaluations, bEvaluations, dEvaluations);
-        ;
+        const lCombination = new components_1.LinearCombination(eTree.root, this.air.constraints, context);
+        const lEvaluations = lCombination.computeMany(pEvaluations, context.sEvaluations, bEvaluations, dEvaluations);
         this.logger.log(label, 'Computed random linear combination of evaluations');
         // 11 ----- Compute low-degree proof
         const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
@@ -161,10 +155,9 @@ class Stark {
         // 1 ----- set up evaluation context
         const context = this.air.createContext(publicInputs || []);
         const evaluationDomainSize = context.traceLength * extensionFactor;
-        const G2 = context.rootOfUnity;
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const zPoly = new components_1.ZeroPolynomial(context);
-        const lCombination = new components_1.LinearCombination(context, eRoot, context.constraints); // TODO: duplicate parameter
+        const lCombination = new components_1.LinearCombination(eRoot, this.air.constraints, context);
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
         const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
@@ -205,17 +198,18 @@ class Stark {
         this.logger.log(label, `Verified evaluation merkle proof`);
         // 5 ----- verify low-degree proof
         try {
+            const G2 = context.rootOfUnity;
             this.ldProver.verify(proof.lcProof.root, lCombination.combinationDegree, G2, proof.ldProof);
         }
         catch (error) {
             throw new StarkError_1.StarkError('Verification of low degree failed', error);
         }
         this.logger.log(label, `Verified low-degree proof`);
-        // 6 ----- verify transition and boundary constraints
+        // 6 ----- compute linear combinations of P, S, B, and D values for all spot checks
         const lcValues = new Array(positions.length);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
-            let x = this.air.field.exp(G2, BigInt(step));
+            let x = this.air.field.exp(context.rootOfUnity, BigInt(step));
             let pValues = pEvaluations.get(step);
             let nValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize);
             let sValues = sEvaluations.get(step);

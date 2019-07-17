@@ -5,7 +5,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 class LinearCombination {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(context, seed, constraints) {
+    constructor(seed, constraints, context) {
         this.field = context.field;
         this.seed = seed;
         this.rootOfUnity = context.rootOfUnity;
@@ -92,7 +92,8 @@ class LinearCombination {
         for (let { degree, indexes } of this.constraintGroups) {
             if (degree === this.combinationDegree)
                 continue;
-            let power = this.field.exp(x, BigInt(this.combinationDegree - degree));
+            let constraintIncrementalDegree = BigInt(this.combinationDegree - degree);
+            let power = this.field.exp(x, constraintIncrementalDegree);
             for (let i of indexes) {
                 dValues2.push(this.field.mul(dValues[i], power));
             }

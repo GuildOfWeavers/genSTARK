@@ -14,12 +14,12 @@ export class LinearCombination {
     readonly rootOfUnity            : bigint;
     readonly domainSize             : number;
 
-    readonly seed                   : Buffer;
-    coefficients?                   : bigint[];
+    private readonly seed           : Buffer;
+    private coefficients?           : bigint[];
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(context: EvaluationContext, seed: Buffer, constraints: ConstraintSpecs[]) {
+    constructor(seed: Buffer, constraints: ConstraintSpecs[], context: EvaluationContext) {
         this.field = context.field;
         this.seed = seed;
         this.rootOfUnity = context.rootOfUnity;
@@ -122,7 +122,8 @@ export class LinearCombination {
         for (let { degree, indexes } of this.constraintGroups) {
             if (degree === this.combinationDegree) continue;
 
-            let power = this.field.exp(x, BigInt(this.combinationDegree - degree));
+            let constraintIncrementalDegree = BigInt(this.combinationDegree - degree);
+            let power = this.field.exp(x, constraintIncrementalDegree);
             for (let i of indexes) {
                 dValues2.push(this.field.mul(dValues[i], power));
             }

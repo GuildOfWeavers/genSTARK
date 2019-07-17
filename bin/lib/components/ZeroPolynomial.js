@@ -5,11 +5,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 class ZeroPolynomial {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(config) {
-        this.field = config.field;
-        this.traceLength = BigInt(config.traceLength);
-        const rootOfUnity = config.rootOfUnity;
-        const extensionFactor = config.extensionFactor;
+    constructor(context) {
+        this.field = context.field;
+        this.traceLength = BigInt(context.traceLength);
+        const rootOfUnity = context.rootOfUnity;
+        const extensionFactor = context.extensionFactor;
         const position = (this.traceLength - 1n) * BigInt(extensionFactor);
         this.xAtLastStep = this.field.exp(rootOfUnity, position);
     }
