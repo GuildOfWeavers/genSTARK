@@ -197,12 +197,12 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single threa
 | STARK               | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
 | ------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
 | Fibonacci           | 32 bits    | 1      | 2         | 2<sup>6</sup>  | 50 ms      | 9 KB       |
-| Fibonacci           | 32 bits    | 1      | 2         | 2<sup>13</sup> | 1 sec      | 138 KB     |
-| Fibonacci           | 32 bits    | 1      | 2         | 2<sup>17</sup> | 13 sec     | 287 KB     |
+| Fibonacci           | 32 bits    | 1      | 2         | 2<sup>13</sup> | 1 sec      | 140 KB     |
+| Fibonacci           | 32 bits    | 1      | 2         | 2<sup>17</sup> | 13 sec     | 280 KB     |
 | MiMC                | 256 bits   | 3      | 1         | 2<sup>6</sup>  | 100 ms     | 36 KB      |
-| MiMC                | 256 bits   | 3      | 1         | 2<sup>13</sup> | 4.5 sec    | 212 KB     |
+| MiMC                | 256 bits   | 3      | 1         | 2<sup>13</sup> | 4.5 sec    | 214 KB     |
 | MiMC                | 256 bits   | 3      | 1         | 2<sup>17</sup> | 72 sec     | 381 KB     |
-| Merkle Proof (d=8)  | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 800 ms     | 92 KB      |
+| Merkle Proof (d=8)  | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 800 ms     | 88 KB      |
 | Merkle Proof (d=16) | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.6 sec    | 109 KB     |
 
 Merkle proofs are based on a modified version of [Rescue](/examples/rescue) hash function, and in addition to 8 state registers require 1 public input register and 1 secret input register.
