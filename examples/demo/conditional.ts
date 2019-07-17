@@ -39,7 +39,7 @@ define Demo over prime field (2^32 - 3 * 2^25 + 1) {
 // =================================================================================================
 // set up inputs and assertions
 const initValues = [0n];
-const publicInputs = [[0n, 1n, 0n, 1n], [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n]];
+const publicInputs = [[0n, 1n], [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n]];
 const secretInputs = [[0n, 0n, 0n, 1n], [9n, 11n, 13n, 15n]];
 
 const assertions = [
