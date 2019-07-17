@@ -1,15 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField } from '@guildofweavers/air-script';
-
-// INTERFACES
-// ================================================================================================
-interface ZeroPolynomialConfig {
-    readonly field              : FiniteField;
-    readonly extensionFactor    : number;
-    readonly rootOfUnity        : bigint;
-    readonly traceLength        : number;
-}
+import { FiniteField, EvaluationContext } from '@guildofweavers/air-script';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -21,12 +12,12 @@ export class ZeroPolynomial {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(config: ZeroPolynomialConfig) {
-        this.field = config.field;
-        this.traceLength = BigInt(config.traceLength);
+    constructor(context: EvaluationContext) {
+        this.field = context.field;
+        this.traceLength = BigInt(context.traceLength);
 
-        const rootOfUnity = config.rootOfUnity;
-        const extensionFactor = config.extensionFactor;
+        const rootOfUnity = context.rootOfUnity;
+        const extensionFactor = context.extensionFactor;
         const position = (this.traceLength - 1n) * BigInt(extensionFactor);
         
         this.xAtLastStep = this.field.exp(rootOfUnity, position);

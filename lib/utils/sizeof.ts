@@ -12,32 +12,37 @@ export const MAX_ARRAY_LENGTH = 256;
 export function sizeOf(proof: StarkProof, hashAlgorithm: HashAlgorithm) {
 
     const nodeSize = getHashDigestSize(hashAlgorithm);
-
     let size = 0;
     
-    // evaluations
-    size += nodeSize; // root
+    // evData
     let evData = 1; // length of values array
-    for (let value of proof.evaluations.values) {
+    for (let value of proof.values) {
         evData += value.byteLength;
     }
-    const evProof = sizeOfMatrix(proof.evaluations.nodes, nodeSize);
-    size += 1; // evaluation proof depth
-    size += 1; // boundary poly count
-    size += evData + evProof;
+    size += evData;
 
-    // degree
-    size += nodeSize; // root
-    const lcProof = sizeOfMerkleProof(proof.degree.lcProof, nodeSize);
+    // evProof
+    let evProof = nodeSize; // root
+    evProof += sizeOfMatrix(proof.evProof.nodes, nodeSize);
+    evProof += 1; // evaluation proof depth
+    size += evProof;
+
+    // lcProof
+    let lcProof = nodeSize; // root;
+    lcProof += sizeOfMatrix(proof.lcProof.nodes, nodeSize);
+    lcProof += 1; // linear combination proof depth
+    size += lcProof;
+
+    // ldProof
     let ldProof = 1; // ld component count
-    for (let i = 0; i < proof.degree.ldProof.components.length; i++) {
-        let component = proof.degree.ldProof.components[i];
+    for (let i = 0; i < proof.ldProof.components.length; i++) {
+        let component = proof.ldProof.components[i];
         ldProof += nodeSize; // column root
         ldProof += sizeOfMerkleProof(component.columnProof, nodeSize);
         ldProof += sizeOfMerkleProof(component.polyProof, nodeSize);
     }
-    ldProof += sizeOfArray(proof.degree.ldProof.remainder, nodeSize);
-    size += lcProof + ldProof;
+    ldProof += sizeOfArray(proof.ldProof.remainder, nodeSize);
+    size += ldProof;
 
     return { evData, evProof, lcProof, ldProof, total: size };
 }

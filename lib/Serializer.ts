@@ -11,7 +11,6 @@ interface SerializerConfig {
     readonly field              : FiniteField;
     readonly stateWidth         : number;
     readonly secretInputCount   : number;
-    readonly constraintCount    : number;
 }
 
 // CLASS DEFINITION
@@ -21,7 +20,6 @@ export class Serializer {
     readonly fieldElementSize   : number;
     readonly stateWidth         : number;
     readonly secretInputCount   : number;
-    readonly constraintCount    : number;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
@@ -29,14 +27,13 @@ export class Serializer {
         this.fieldElementSize = config.field.elementSize;
         this.stateWidth = config.stateWidth;
         this.secretInputCount = config.secretInputCount;
-        this.constraintCount = config.constraintCount;
     }
 
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeValues([pValues, sValues, bValues, dValues]: bigint[][][], bCount: number, position: number): Buffer {
+    mergeValues([pValues, sValues]: bigint[][][], position: number): Buffer {
         const valueSize = this.fieldElementSize;
-        const valueCount = this.getValueCount(bCount)
+        const valueCount = this.getValueCount()
         const buffer = Buffer.allocUnsafe(valueCount * valueSize);
         const padLength = valueSize * 2;
 
@@ -52,20 +49,10 @@ export class Serializer {
             offset += buffer.write(hex, offset, valueSize, 'hex');
         }
 
-        for (let i = 0; i < bCount; i++) {
-            let hex = bValues[i][position].toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, valueSize, 'hex');
-        }
-    
-        for (let constraint = 0; constraint < this.constraintCount; constraint++) {
-            let hex = dValues[constraint][position].toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, this.fieldElementSize, 'hex');
-        }
-
         return buffer;    
     }
 
-    parseValues(buffer: Buffer, bCount: number): [bigint[], bigint[], bigint[], bigint[]] {
+    parseValues(buffer: Buffer): [bigint[], bigint[]] {
         const elementSize = this.fieldElementSize;
 
         let offset = 0;
@@ -80,17 +67,7 @@ export class Serializer {
             sValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
         }
 
-        const bValues = new Array<bigint>(bCount);
-        for (let i = 0; i < bCount; i++, offset += elementSize) {
-            bValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
-        }
-
-        const dValues = new Array<bigint>(this.constraintCount);
-        for (let i = 0; i < this.constraintCount; i++, offset += elementSize) {
-            dValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
-        }
-
-        return [pValues, sValues, bValues, dValues];
+        return [pValues, sValues];
     }
 
     // PROOF SERIALIZER/PARSER
@@ -102,24 +79,28 @@ export class Serializer {
         const buffer = Buffer.allocUnsafe(size.total);
         let offset = 0;
 
-        // evaluations
-        offset += proof.evaluations.root.copy(buffer, offset);
-        offset = buffer.writeUInt8(proof.evaluations.bpc, offset);
-        offset = buffer.writeUInt8(proof.evaluations.depth, offset);
-        offset = utils.writeArray(buffer, offset, proof.evaluations.values);
-        offset = utils.writeMatrix(buffer, offset, proof.evaluations.nodes);
+        // values
+        offset = utils.writeArray(buffer, offset, proof.values);
 
-        // degree
-        offset += proof.degree.root.copy(buffer, offset);
-        offset = utils.writeMerkleProof(buffer, offset, proof.degree.lcProof, nodeSize);
-        offset = buffer.writeUInt8(proof.degree.ldProof.components.length, offset);
-        for (let i = 0; i < proof.degree.ldProof.components.length; i++) {
-            let component = proof.degree.ldProof.components[i];
+        // evProof
+        offset += proof.evProof.root.copy(buffer, offset);
+        offset = buffer.writeUInt8(proof.evProof.depth, offset);
+        offset = utils.writeMatrix(buffer, offset, proof.evProof.nodes);
+
+        // lcProof
+        offset += proof.lcProof.root.copy(buffer, offset);
+        offset = buffer.writeUInt8(proof.lcProof.depth, offset);
+        offset = utils.writeMatrix(buffer, offset, proof.lcProof.nodes);
+
+        // ldProof
+        offset = buffer.writeUInt8(proof.ldProof.components.length, offset);
+        for (let i = 0; i < proof.ldProof.components.length; i++) {
+            let component = proof.ldProof.components[i];
             offset += component.columnRoot.copy(buffer, offset);
             offset = utils.writeMerkleProof(buffer, offset, component.columnProof, nodeSize);
             offset = utils.writeMerkleProof(buffer, offset, component.polyProof, nodeSize);
         }
-        offset = utils.writeArray(buffer, offset, proof.degree.ldProof.remainder);
+        offset = utils.writeArray(buffer, offset, proof.ldProof.remainder);
 
         // return the buffer
         return buffer;
@@ -127,24 +108,27 @@ export class Serializer {
 
     parseProof(buffer: Buffer, hashAlgorithm: HashAlgorithm): StarkProof {
         const nodeSize = getHashDigestSize(hashAlgorithm);
-        
-        // evaluations
         let offset = 0;
-        const eRoot = Buffer.allocUnsafe(nodeSize);
-        offset += buffer.copy(eRoot, 0, offset, offset + nodeSize);
-        const bpc = buffer.readUInt8(offset); offset += 1;
-        const eDepth = buffer.readUInt8(offset); offset += 1;
-        const valueCount = this.getValueCount(bpc);
+
+        // values
+        const valueCount = this.getValueCount();
         const valueSize = valueCount * this.fieldElementSize;
-        const eValueInfo = utils.readArray(buffer, offset, valueSize); offset = eValueInfo.offset;
-        const eNodeInfo = utils.readMatrix(buffer, offset, nodeSize); offset = eNodeInfo.offset;
+        const valueInfo = utils.readArray(buffer, offset, valueSize); offset = valueInfo.offset;
 
-        // degree
-        const dRoot = Buffer.allocUnsafe(nodeSize);
-        offset += buffer.copy(dRoot, 0, offset, offset + nodeSize);
-        const lcProofInfo = utils.readMerkleProof(buffer, offset, nodeSize); offset = lcProofInfo.offset;
+        // evProof
+        const evRoot = Buffer.allocUnsafe(nodeSize);
+        offset += buffer.copy(evRoot, 0, offset, offset + nodeSize);
+        const evDepth = buffer.readUInt8(offset); offset += 1;
+        const evNodeInfo = utils.readMatrix(buffer, offset, nodeSize); offset = evNodeInfo.offset;
+
+        // lcProof
+        const lcRoot = Buffer.allocUnsafe(nodeSize);
+        offset += buffer.copy(lcRoot, 0, offset, offset + nodeSize);
+        const lcDepth = buffer.readUInt8(offset); offset += 1;
+        const lcNodeInfo = utils.readMatrix(buffer, offset, nodeSize); offset = lcNodeInfo.offset;
+
+        // ldProof
         const componentCount = buffer.readUInt8(offset); offset += 1;
-
         const components = new Array<FriComponent>(componentCount);
         for (let i = 0; i < componentCount; i++) {
             let columnRoot = Buffer.allocUnsafe(nodeSize);
@@ -158,24 +142,24 @@ export class Serializer {
 
         // build and return the proof
         return {
-            evaluations: {
-                root: eRoot,
-                values: eValueInfo.values,
-                nodes: eNodeInfo.matrix,
-                depth: eDepth,
-                bpc: bpc
+            values      : valueInfo.values,
+            evProof: {
+                root    : evRoot,
+                nodes   : evNodeInfo.matrix,
+                depth   : evDepth
             },
-            degree: {
-                root: dRoot,
-                lcProof: lcProofInfo.proof,
-                ldProof: { components, remainder: remainderInfo.values }
-            }
+            lcProof: {
+                root    : lcRoot,
+                nodes   : lcNodeInfo.matrix,
+                depth   : lcDepth,
+            },
+            ldProof     : { components, remainder: remainderInfo.values }
         };
     }
 
     // PRIVATE METHODS
     // --------------------------------------------------------------------------------------------
-    private getValueCount(bCount: number): number {
-        return this.stateWidth + this.secretInputCount + bCount + this.constraintCount;
+    private getValueCount(): number {
+        return this.stateWidth + this.secretInputCount;
     }
 }

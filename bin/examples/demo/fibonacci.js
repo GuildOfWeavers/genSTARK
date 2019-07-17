@@ -6,9 +6,9 @@ const assert = require("assert");
 const index_1 = require("../../index");
 // STARK DEFINITION
 // ================================================================================================
-//const steps = 2**6, result = 1783540607n;         // ~60 ms to prove, ~20 KB proof size
-const steps = 2 ** 13, result = 203257732n; // ~1 second to prove, ~147 KB proof size
-//const steps = 2**17, result = 2391373091n;        // ~13 seconds to prove, ~290 KB proof size
+//const steps = 2**6, result = 1783540607n;         // ~50 ms to prove, ~9 KB proof size
+const steps = 2 ** 13, result = 203257732n; // ~1 second to prove, ~140 KB proof size
+//const steps = 2**17, result = 2391373091n;        // ~13 seconds to prove, ~280 KB proof size
 const fibStark = new index_1.Stark(`
 define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
 

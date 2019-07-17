@@ -1,15 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { Polynom, Assertion } from '@guildofweavers/genstark';
-import { FiniteField } from '@guildofweavers/air-script';
-
-// INTERFACES
-// ================================================================================================
-interface BoundaryConstraintsConfig {
-    readonly field              : FiniteField;
-    readonly extensionFactor    : number;
-    readonly rootOfUnity        : bigint;
-}
+import { FiniteField, EvaluationContext } from '@guildofweavers/air-script';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -20,15 +12,15 @@ export class BoundaryConstraints {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(assertions: Assertion[], config: BoundaryConstraintsConfig) {
-        const field = this.field = config.field;
-        const extensionFactor = config.extensionFactor;
+    constructor(assertions: Assertion[], context: EvaluationContext) {
+        const field = this.field = context.field;
+        const extensionFactor = context.extensionFactor;
 
         // combine constraints for each register
         const rData = new Map<number,{ xs: bigint[]; ys: bigint[]; zPoly: Polynom; }>();
         for (let c of assertions) {
             
-            let x = field.exp(config.rootOfUnity, BigInt(c.step * extensionFactor))
+            let x = field.exp(context.rootOfUnity, BigInt(c.step * extensionFactor))
             let data = rData.get(c.register);
             if (data) {
                 data.xs.push(x);
@@ -58,45 +50,32 @@ export class BoundaryConstraints {
     // --------------------------------------------------------------------------------------------
     evaluateAt(pEvaluations: bigint[], x: bigint): bigint[] {
 
-        let slot = 0;
-        let bEvaluations = new Array<bigint>(this.count);
+        let bEvaluations = new Array<bigint>();
         for (let [register, c] of this.polys) {
             let z = this.field.evalPolyAt(c.zPoly, x);
             let i = this.field.evalPolyAt(c.iPoly, x);
             let p = pEvaluations[register];
+
             // B(x) = (P(x) - I(x)) / Z(x)
             let b = this.field.div(this.field.sub(p, i),z);
-            bEvaluations[slot] = b;
-            
-            slot++;
+            bEvaluations.push(b);
         }
 
         return bEvaluations;
     }
 
     evaluateAll(pEvaluations: bigint[][], domain: bigint[]): bigint[][] {
-        const domainSize = domain.length;
-
-        let slot = 0;
-        const bEvaluations = new Array<bigint[]>(this.count);
+        
+        const bEvaluations = new Array<bigint[]>();
         for (let [register, c] of this.polys) {
             let iEvaluations = this.field.evalPolyAtRoots(c.iPoly, domain);
             let zEvaluations = this.field.evalPolyAtRoots(c.zPoly, domain);
             let zEvaluationsInverse = this.field.invMany(zEvaluations);
 
-            bEvaluations[slot] = new Array(domainSize);
-            // TODO: convert to batch operation
-            for (let step = 0; step < domainSize; step++) {
-                let p = pEvaluations[register][step];
-                let i = iEvaluations[step];
-                let zInverse = zEvaluationsInverse[step];
-
-                // B(x) = (P(x) - I(x)) / Z(x)
-                let b = this.field.mul(this.field.sub(p, i), zInverse);
-                bEvaluations[slot][step] = b;
-            }
-
-            slot++;
+            // B(x) = (P(x) - I(x)) / Z(x)
+            let b = this.field.subVectorElements(pEvaluations[register], iEvaluations);
+            b = this.field.mulVectorElements(b, zEvaluationsInverse);
+            bEvaluations.push(b);
         }
 
         return bEvaluations;
