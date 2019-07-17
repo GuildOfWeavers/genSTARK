@@ -68,7 +68,7 @@ Computed random linear combination of evaluations in 468 ms
 Computed low-degree proof in 1358 ms
 STARK computed in 4530 ms
 --------------------
-Proof serialized in 3 ms; size: 220.04 KB
+Proof serialized in 3 ms; size: 214.19 KB
 --------------------
 Proof parsed in 8 ms
 --------------------
