@@ -21,7 +21,7 @@ class LowDegreeProver {
             components: new Array(),
             remainder: []
         };
-        this.fri(lTree, values, maxDegreePlus1, 0, domain, result);
+        this.fri(lTree, values.toValues(), maxDegreePlus1, 0, domain.toValues(), result);
         return result;
     }
     verify(lRoot, maxDegreePlus1, rootOfUnity, proof) {
@@ -75,10 +75,11 @@ class LowDegreeProver {
             const specialX = this.field.prng(lRoot);
             // verify for each selected y coordinate that the four points from the polynomial and the 
             // one point from the column that are on that y coordinate are on the same deg < 4 polynomial
-            const polys = this.field.interpolateQuarticBatch(xs, ys);
+            const polys = this.field.interpolateQuarticBatch(this.field.newMatrixFrom(xs), this.field.newMatrixFrom(ys));
             const columnValues = utils_1.buffersToBigInts(columnProof.values);
-            for (let i = 0; i < polys.length; i++) {
-                if (this.field.evalPolyAt(polys[i], specialX) !== columnValues[i]) {
+            const polyVectors = this.field.matrixRowsToVectors(polys);
+            for (let i = 0; i < polys.rowCount; i++) {
+                if (this.field.evalPolyAt(polyVectors[i], specialX) !== columnValues[i]) {
                     throw new StarkError_1.StarkError(`Degree 4 polynomial didn't evaluate to column value at depth ${depth}`);
                 }
             }
@@ -129,12 +130,13 @@ class LowDegreeProver {
             ys[i][3] = values[i + columnLength * 3];
         }
         // build polynomials from values in each row
-        const xPolys = this.field.interpolateQuarticBatch(xs, ys);
+        const xPolys = this.field.interpolateQuarticBatch(this.field.newMatrixFrom(xs), this.field.newMatrixFrom(ys));
         // select a pseudo-random x coordinate and evaluate each row polynomial at the coordinate
         const specialX = this.field.prng(lTree.root);
-        const column = new Array(xPolys.length);
+        const column = new Array(xPolys.rowCount);
+        const polyVectors = this.field.matrixRowsToVectors(xPolys);
         for (let i = 0; i < column.length; i++) {
-            column[i] = this.field.evalPolyAt(xPolys[i], specialX);
+            column[i] = this.field.evalPolyAt(polyVectors[i], specialX);
         }
         // put the resulting column into a merkle tree
         const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
@@ -166,19 +168,19 @@ class LowDegreeProver {
             }
         }
         // pick a subset of points from the remainder and interpolate them into a polynomial
-        const domain = this.field.getPowerCycle(rootOfUnity);
+        const domain = this.field.getPowerSeries(rootOfUnity, remainder.length);
         const xs = new Array(maxDegreePlus1);
         const ys = new Array(maxDegreePlus1);
         for (let i = 0; i < maxDegreePlus1; i++) {
             let p = positions[i];
-            xs[i] = domain[p];
+            xs[i] = domain.getValue(p);
             ys[i] = remainder[p];
         }
-        const poly = this.field.interpolate(xs, ys);
+        const poly = this.field.interpolate(this.field.newVectorFrom(xs), this.field.newVectorFrom(ys));
         // check that polynomial evaluates correctly for all other points in the remainder
         for (let i = maxDegreePlus1; i < positions.length; i++) {
             let p = positions[i];
-            if (this.field.evalPolyAt(poly, domain[p]) !== remainder[p]) {
+            if (this.field.evalPolyAt(poly, domain.getValue(p)) !== remainder[p]) {
                 throw new StarkError_1.StarkError(`Remainder is not a valid degree ${maxDegreePlus1 - 1} polynomial`);
             }
         }

@@ -62,6 +62,9 @@ function bigIntsToBuffers(values, size) {
     const result = new Array(values.length);
     const maxValue = 2n ** BigInt(size * 8);
     const hexSize = size * 2;
+    if (!Array.isArray(values)) {
+        values = values.toValues(); // TODO
+    }
     for (let i = 0; i < values.length; i++) {
         let v = values[i];
         if (v >= maxValue) {

@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { PrimeField } from '@guildofweavers/galois';
+import { FiniteField } from '@guildofweavers/galois';
 
 // HASH FUNCTION
 // ================================================================================================
@@ -18,7 +18,7 @@ export function makeHashFunction(rescue: Rescue, constants: bigint[][]): HashFun
 // ================================================================================================
 export class Rescue {
 
-    readonly field      : PrimeField;
+    readonly field      : FiniteField;
     readonly alpha      : bigint;
     readonly invAlpha   : bigint;
     readonly registers  : number;
@@ -30,7 +30,7 @@ export class Rescue {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(field: PrimeField, alpha: bigint, invAlpha: bigint, registers: number, rounds: number, mds: bigint[][], constants: bigint[]) {
+    constructor(field: FiniteField, alpha: bigint, invAlpha: bigint, registers: number, rounds: number, mds: bigint[][], constants: bigint[]) {
         this.field = field;
         this.alpha = alpha;
         this.invAlpha = invAlpha;

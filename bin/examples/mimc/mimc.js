@@ -7,8 +7,8 @@ const index_1 = require("../../index");
 // STARK DEFINITION
 // ================================================================================================
 //const steps = 2**6, result = 115147868172009559599970888602262339785331471694954098733392001040646413813295n;
-const steps = 2 ** 13, result = 95224774355499767951968048714566316597785297695903697235130434363122555476056n;
-//const steps = 2**17, result = 47923185371606372287465305238563325603777484372847211522043297561219208703471n;
+//const steps = 2**13, result = 147825736855841423522558179849475373187n;
+const steps = 2 ** 17, result = 258147208663839268890169448829281413476n;
 // define round constants
 const roundConstants = new Array(64);
 for (let i = 0; i < 64; i++) {
@@ -16,7 +16,7 @@ for (let i = 0; i < 64; i++) {
 }
 // create the STARK for MiMC computation
 const mimcStark = new index_1.Stark(`
-define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
+define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
 
     transition 1 register in ${steps} steps {
         out: $r0^3 + $k0;

@@ -1,12 +1,12 @@
 // IMPORTS
 // ================================================================================================
 import { Assertion } from '@guildofweavers/genstark';
-import { Stark, PrimeField } from '../../index';
+import { Stark, createPrimeField } from '../../index';
 import { Rescue, MerkleTree, makeHashFunction } from './utils';
 
 // STARK PARAMETERS
 // ================================================================================================
-const field = new PrimeField(2n**128n - 9n * 2n**32n + 1n);
+const field = createPrimeField(2n**128n - 9n * 2n**32n + 1n);
 const treeDepth = 8;
 const roundSteps = 32;
 const alpha = 3n;
@@ -151,7 +151,7 @@ define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
 // generate a random merkle tree
 const values = field.prng(42n, 2**treeDepth);
 const hash = makeHashFunction(rescue, keyStates);
-const tree = new MerkleTree(values, hash);
+const tree = new MerkleTree(values.toValues(), hash);    // TODO?
 
 // generate a proof for index 42
 const index = 42;

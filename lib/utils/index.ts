@@ -2,6 +2,7 @@
 // ================================================================================================
 import * as crypto from 'crypto';
 import * as inliners from './inliners';
+import { Vector } from '@guildofweavers/galois';
 
 // RE-EXPORTS
 // ================================================================================================
@@ -50,10 +51,15 @@ export function getPseudorandomIndexes(seed: Buffer, count: number, max: number,
     return result;
 }
 
-export function bigIntsToBuffers(values: bigint[], size: number): Buffer[] {
+export function bigIntsToBuffers(values: bigint[] | Vector, size: number): Buffer[] {
     const result = new Array<Buffer>(values.length);
     const maxValue = 2n**BigInt(size * 8);
     const hexSize = size * 2;
+
+    if (!Array.isArray(values)) {
+        values = values.toValues(); // TODO
+    }
+
     for (let i = 0; i < values.length; i++) {
         let v = values[i];
         if (v >= maxValue) {

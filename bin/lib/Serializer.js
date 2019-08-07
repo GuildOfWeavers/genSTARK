@@ -21,11 +21,11 @@ class Serializer {
         const padLength = valueSize * 2;
         let offset = 0;
         for (let register = 0; register < this.stateWidth; register++) {
-            let hex = pValues[register][position].toString(16).padStart(padLength, '0');
+            let hex = pValues.getValue(register, position).toString(16).padStart(padLength, '0');
             offset += buffer.write(hex, offset, valueSize, 'hex');
         }
         for (let register = 0; register < this.secretInputCount; register++) {
-            let hex = sValues[register][position].toString(16).padStart(padLength, '0');
+            let hex = sValues[register].getValue(position).toString(16).padStart(padLength, '0');
             offset += buffer.write(hex, offset, valueSize, 'hex');
         }
         return buffer;

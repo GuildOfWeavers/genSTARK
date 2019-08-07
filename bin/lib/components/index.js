@@ -1,7 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var TracePolynomial_1 = require("./TracePolynomial");
-exports.TracePolynomial = TracePolynomial_1.TracePolynomial;
 var ZeroPolynomial_1 = require("./ZeroPolynomial");
 exports.ZeroPolynomial = ZeroPolynomial_1.ZeroPolynomial;
 var BoundaryConstraints_1 = require("./BoundaryConstraints");

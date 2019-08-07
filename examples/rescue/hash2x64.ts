@@ -1,11 +1,11 @@
 // IMPORTS
 // ================================================================================================
-import { Stark, PrimeField } from '../../index';
+import { Stark, createPrimeField } from '../../index';
 import { Rescue } from './utils';
 
 // STARK PARAMETERS
 // ================================================================================================
-const field = new PrimeField(2n**64n - 21n * 2n**30n + 1n);
+const field = createPrimeField(2n**64n - 21n * 2n**30n + 1n);
 const steps = 32;
 const alpha = 3n;
 const invAlpha = -6148914683720324437n;

@@ -25,7 +25,7 @@ class Stark {
         if (!source.trim())
             throw new TypeError('Source script cannot be an empty string');
         const vOptions = validateSecurityOptions(options);
-        this.air = air_script_1.parseScript(source, undefined, vOptions.extensionFactor);
+        this.air = air_script_1.parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: undefined }); // TODO
         this.exeQueryCount = vOptions.exeQueryCount;
         this.hashAlgorithm = vOptions.hashAlgorithm;
         this.ldProver = new components_1.LowDegreeProver(vOptions.friQueryCount, this.hashAlgorithm, this.air);
@@ -59,8 +59,8 @@ class Stark {
         validateAssertions(executionTrace, assertions);
         this.logger.log(label, 'Generated execution trace');
         // 3 ----- compute P(x) polynomials and low-degree extend them
-        const pPoly = new components_1.TracePolynomial(context);
-        const pEvaluations = pPoly.evaluate(executionTrace);
+        const pPolys = this.air.field.interpolateRoots(context.executionDomain, executionTrace);
+        const pEvaluations = this.air.field.evalPolysAtRoots(pPolys, context.evaluationDomain);
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
         let qEvaluations;
@@ -76,18 +76,17 @@ class Stark {
         const zEvaluations = zPoly.evaluateAll(context.evaluationDomain);
         this.logger.log(label, 'Computed Z(x) polynomial');
         // 6 ----- compute D(x) = Q(x) / Z(x)
-        // first, invert numerators of Z(x)
-        const zNumInverses = this.air.field.invMany(zEvaluations.numerators);
-        this.logger.log(label, 'Inverted Z(x) numerators');
+        // first, compute inverse of Z(x)
+        const zInverses = this.air.field.divVectorElements(zEvaluations.denominators, zEvaluations.numerators);
+        this.logger.log(label, 'Computed Z(x) inverses');
         // then, multiply all values together to compute D(x)
-        const zDenominators = zEvaluations.denominators;
-        const dEvaluations = this.air.field.mulMany(qEvaluations, zDenominators, zNumInverses);
+        const dEvaluations = this.air.field.mulMatrixRows(qEvaluations, zInverses);
         this.logger.log(label, 'Computed D(x) polynomials');
         // 7 ----- compute boundary constraints B(x)
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const bEvaluations = bPoly.evaluateAll(pEvaluations, context.evaluationDomain);
         this.logger.log(label, 'Computed B(x) polynomials');
-        // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
+        // 8 ----- build merkle tree for evaluations of P(x) and S(x)
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
         const mergedEvaluations = new Array(evaluationDomainSize);
         const hashedEvaluations = new Array(evaluationDomainSize);
@@ -216,7 +215,7 @@ class Stark {
             let zValue = zPoly.evaluateAt(x);
             // evaluate constraints and use the result to compute D(x) and B(x)
             let qValues = this.air.evaluateConstraintsAt(x, pValues, nValues, sValues, context);
-            let dValues = this.air.field.divVectorElements(qValues, zValue);
+            let dValues = this.air.field.divVectorElements(this.air.field.newVectorFrom(qValues), zValue).toValues();
             let bValues = bPoly.evaluateAt(pValues, x);
             // compute linear combination of all evaluations
             lcValues[i] = lCombination.computeOne(x, pValues, sValues, bValues, dValues);
@@ -291,8 +290,8 @@ function validateSecurityOptions(options) {
     return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
 }
 function validateAssertions(trace, assertions) {
-    const registers = trace.length;
-    const steps = trace[0].length;
+    const registers = trace.rowCount;
+    const steps = trace.colCount;
     for (let a of assertions) {
         // make sure register references are correct
         if (a.register < 0 || a.register >= registers) {
@@ -303,7 +302,7 @@ function validateAssertions(trace, assertions) {
             throw new Error(`Invalid assertion: step ${a.step} is outside of execution trace`);
         }
         // make sure assertions don't contradict execution trace
-        if (trace[a.register][a.step] !== a.value) {
+        if (trace.getValue(a.register, a.step) !== a.value) {
             throw new StarkError_1.StarkError(`Assertion at step ${a.step}, register ${a.register} conflicts with execution trace`);
         }
     }

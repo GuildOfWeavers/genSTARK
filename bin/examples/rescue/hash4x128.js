@@ -6,7 +6,7 @@ const index_1 = require("../../index");
 const utils_1 = require("./utils");
 // STARK PARAMETERS
 // ================================================================================================
-const field = new index_1.PrimeField(2n ** 128n - 9n * 2n ** 32n + 1n);
+const field = index_1.createPrimeField(2n ** 128n - 9n * 2n ** 32n + 1n);
 const steps = 32;
 const alpha = 3n;
 const invAlpha = -113427455640312821154458202464371168597n;

@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { StarkProof, FriComponent, HashAlgorithm } from "@guildofweavers/genstark";
-import { FiniteField } from '@guildofweavers/air-script';
+import { FiniteField, Matrix, Vector } from '@guildofweavers/air-script';
 import { getHashDigestSize } from '@guildofweavers/merkle';
 import * as utils from './utils';
 
@@ -31,7 +31,7 @@ export class Serializer {
 
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeValues([pValues, sValues]: bigint[][][], position: number): Buffer {
+    mergeValues([pValues, sValues]: [Matrix, Vector[]], position: number): Buffer {
         const valueSize = this.fieldElementSize;
         const valueCount = this.getValueCount()
         const buffer = Buffer.allocUnsafe(valueCount * valueSize);
@@ -40,12 +40,12 @@ export class Serializer {
         let offset = 0;
 
         for (let register = 0; register < this.stateWidth; register++) {
-            let hex = pValues[register][position].toString(16).padStart(padLength, '0');
+            let hex = pValues.getValue(register, position).toString(16).padStart(padLength, '0');
             offset += buffer.write(hex, offset, valueSize, 'hex');
         }
 
         for (let register = 0; register < this.secretInputCount; register++) {
-            let hex = sValues[register][position].toString(16).padStart(padLength, '0');
+            let hex = sValues[register].getValue(position).toString(16).padStart(padLength, '0');
             offset += buffer.write(hex, offset, valueSize, 'hex');
         }
 

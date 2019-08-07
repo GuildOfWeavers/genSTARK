@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, EvaluationContext, ConstraintSpecs } from '@guildofweavers/air-script';
+import { FiniteField, EvaluationContext, ConstraintSpecs, Matrix, Vector } from '@guildofweavers/air-script';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -15,7 +15,7 @@ export class LinearCombination {
     readonly domainSize             : number;
 
     private readonly seed           : Buffer;
-    private coefficients?           : bigint[];
+    private coefficients?           : Vector;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
@@ -65,11 +65,15 @@ export class LinearCombination {
 
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    computeMany(pEvaluations: bigint[][], sEvaluations: bigint[][], bEvaluations: bigint[][], dEvaluations: bigint[][]) {
-        let allEvaluations: bigint[][], psbPowers: bigint[] | undefined;
+    computeMany(pEvaluations: Matrix, sEvaluations: Vector[], bEvaluations: Matrix, dEvaluations: Matrix): Vector {
+        let allEvaluations: Vector[], psbPowers: Vector | undefined;
+
+        const pVectors = this.field.matrixRowsToVectors(pEvaluations);
+        const bVectors = this.field.matrixRowsToVectors(bEvaluations);
+        const dVectors = this.field.matrixRowsToVectors(dEvaluations);
 
         // raise degree of D evaluations to match combination degree
-        const dEvaluations2: bigint[][] = [];
+        const dEvaluations2: Vector[] = [];
         for (let { degree, indexes } of this.constraintGroups) {
             if (degree === this.combinationDegree) continue;
 
@@ -85,13 +89,13 @@ export class LinearCombination {
 
             // raise the degree of D evaluations
             for (let i of indexes) {
-                dEvaluations2.push(this.field.mulVectorElements(dEvaluations[i], powers));
+                dEvaluations2.push(this.field.mulVectorElements(dVectors[i], powers));
             }
         }
 
-        // raise degree of P, S, B evaluations to match combination degree
-        const psbEvaluations = [...pEvaluations, ...sEvaluations, ...bEvaluations];
-        const psbEvaluations2: bigint[][] = [];
+        // raise degree of P, S, B evaluations to match combination degree        
+        const psbEvaluations = [...pVectors, ...sEvaluations, ...bVectors];
+        const psbEvaluations2: Vector[] = [];
         if (this.psbIncrementalDegree > 0n) {
             // if incremental powers for P, S, B evaluations haven't been computed yet,
             // compute them now
@@ -107,15 +111,15 @@ export class LinearCombination {
         }
 
         // put all evaluations together
-        allEvaluations = [...psbEvaluations, ...psbEvaluations2, ...dEvaluations, ...dEvaluations2];
+        allEvaluations = [...psbEvaluations, ...psbEvaluations2, ...dVectors, ...dEvaluations2];
 
         // compute a linear combination of all evaluations
         this.coefficients = this.field.prng(this.seed, allEvaluations.length);
-        return this.field.combineMany(allEvaluations, this.coefficients);
+        return this.field.combineManyVectors(allEvaluations, this.coefficients);
     }
 
     computeOne(x: bigint, pValues: bigint[], sValues: bigint[], bValues: bigint[], dValues: bigint[]) {
-        let allValues: bigint[];
+        let allValues: Vector;
         
         // raise degree of D values, when needed
         let dValues2: bigint[] = []
@@ -131,14 +135,15 @@ export class LinearCombination {
 
         // raise degree of P, S, and B values, when needed
         const psbValues = [...pValues, ...sValues, ...bValues];
+        let psbVector = this.field.newVectorFrom(psbValues);
         let psbValues2: bigint[] = [];
         if (this.psbIncrementalDegree > 0n) {
             let power = this.field.exp(x, this.psbIncrementalDegree);
-            psbValues2 = this.field.mulVectorElements(psbValues, power);
+            psbValues2 = this.field.mulVectorElements(psbVector, power).toValues(); // TODO
         }
 
         // put all evaluations together
-        allValues = [...psbValues, ...psbValues2, ...dValues, ...dValues2];
+        allValues = this.field.newVectorFrom([...psbValues, ...psbValues2, ...dValues, ...dValues2]);
 
         if (!this.coefficients) {
             this.coefficients = this.field.prng(this.seed, allValues.length);
