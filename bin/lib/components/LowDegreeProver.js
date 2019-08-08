@@ -123,7 +123,7 @@ class LowDegreeProver {
         const column = this.field.evalQuarticBatch(xPolys, specialX);
         // put the resulting column into a merkle tree
         const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
-        const cTree = merkle_1.MerkleTree.create(utils_1.bigIntsToBuffers(column, hashDigestSize), this.hashAlgorithm);
+        const cTree = merkle_1.MerkleTree.create(utils_1.vectorToBuffers(column, hashDigestSize), this.hashAlgorithm);
         // compute spot check positions in the column and corresponding positions in the original values
         const columnLength = column.length;
         const positions = utils_1.getPseudorandomIndexes(cTree.root, this.queryCount, columnLength, this.skipMultiplesOf);

@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@guildofweavers/air-script": "0.3.x",
-    "@guildofweavers/galois": "^0.4.4",
+    "@guildofweavers/galois": "0.4.x",
     "@guildofweavers/merkle": "0.1.x"
   }
 }

@@ -4,7 +4,7 @@ import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, Logger as ILogge
 import { MerkleTree, BatchMerkleProof, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
 import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
 import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination } from './components';
-import { Logger, getPseudorandomIndexes, sizeOf, bigIntsToBuffers } from './utils';
+import { Logger, getPseudorandomIndexes, sizeOf, vectorToBuffers } from './utils';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -119,7 +119,7 @@ export class Stark {
         const mergedEvaluations = new Array<Buffer>(evaluationDomainSize);
         const hashedEvaluations = new Array<Buffer>(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = this.serializer.mergeValues([pEvaluations, context.sEvaluations], i);
+            let v = this.serializer.mergeValues(pEvaluations, context.sEvaluations, i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
@@ -146,9 +146,11 @@ export class Stark {
 
         // 11 ----- Compute low-degree proof
         const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
-        const lEvaluations2 = bigIntsToBuffers(lEvaluations, hashDigestSize)
+        const lEvaluations2 = vectorToBuffers(lEvaluations, hashDigestSize);
         const lTree = MerkleTree.create(lEvaluations2, this.hashAlgorithm);
+        this.logger.log(label, 'Built liner combination merkle tree');
         const lcProof = lTree.proveBatch(positions);
+
         let ldProof;
         try {
             ldProof = this.ldProver.prove(lTree, lEvaluations, context.evaluationDomain, lCombination.combinationDegree);
@@ -275,7 +277,7 @@ export class Stark {
         try {
             const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
             const lcProof: BatchMerkleProof = {
-                values  : bigIntsToBuffers(lcValues, hashDigestSize),
+                values  : vectorToBuffers(this.air.field.newVectorFrom(lcValues), hashDigestSize),
                 nodes   : proof.lcProof.nodes,
                 depth   : proof.lcProof.depth
             };

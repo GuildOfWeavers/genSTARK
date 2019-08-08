@@ -6,13 +6,13 @@ const crypto = require("crypto");
 const inliners = require("./inliners");
 // RE-EXPORTS
 // ================================================================================================
-var serializaton_1 = require("./serializaton");
-exports.writeMerkleProof = serializaton_1.writeMerkleProof;
-exports.readMerkleProof = serializaton_1.readMerkleProof;
-exports.writeMatrix = serializaton_1.writeMatrix;
-exports.readMatrix = serializaton_1.readMatrix;
-exports.writeArray = serializaton_1.writeArray;
-exports.readArray = serializaton_1.readArray;
+var serialization_1 = require("./serialization");
+exports.writeMerkleProof = serialization_1.writeMerkleProof;
+exports.readMerkleProof = serialization_1.readMerkleProof;
+exports.writeMatrix = serialization_1.writeMatrix;
+exports.readMatrix = serialization_1.readMatrix;
+exports.writeArray = serialization_1.writeArray;
+exports.readArray = serialization_1.readArray;
 var sizeof_1 = require("./sizeof");
 exports.sizeOf = sizeof_1.sizeOf;
 var Logger_1 = require("./Logger");
@@ -58,27 +58,24 @@ function getPseudorandomIndexes(seed, count, max, excludeMultiplesOf = 0) {
     return result;
 }
 exports.getPseudorandomIndexes = getPseudorandomIndexes;
-function bigIntsToBuffers(values, size) {
+function vectorToBuffers(values, size) {
     const result = new Array(values.length);
-    const maxValue = 2n ** BigInt(size * 8);
-    const hexSize = size * 2;
-    if (!Array.isArray(values)) {
-        values = values.toValues(); // TODO
+    if (values.elementSize > size) {
+        throw Error('Cannot convert vector to buffer: vector elements are too large');
     }
     for (let i = 0; i < values.length; i++) {
-        let v = values[i];
-        if (v >= maxValue) {
-            throw Error('Cannot convert bigint to buffer: value is too large');
-        }
-        result[i] = Buffer.from(v.toString(16).padStart(hexSize, '0'), 'hex');
+        let buffer = Buffer.alloc(size);
+        values.copyValue(i, buffer, 0);
+        result[i] = buffer;
     }
     return result;
 }
-exports.bigIntsToBuffers = bigIntsToBuffers;
+exports.vectorToBuffers = vectorToBuffers;
 function buffersToBigInts(values) {
     const result = new Array(values.length);
     for (let i = 0; i < values.length; i++) {
-        result[i] = BigInt('0x' + values[i].toString('hex'));
+        let buffer = values[i];
+        result[i] = readBigInt(buffer, 0, buffer.byteLength);
     }
     return result;
 }
@@ -91,4 +88,14 @@ function sha256(value) {
     return BigInt('0x' + hash.digest().toString('hex'));
 }
 exports.sha256 = sha256;
+function readBigInt(buffer, offset, elementSize) {
+    const blocks = elementSize >> 3;
+    let value = 0n;
+    for (let i = 0n; i < blocks; i++) {
+        value = (buffer.readBigUInt64LE(offset) << (64n * i)) | value;
+        offset += 8;
+    }
+    return value;
+}
+exports.readBigInt = readBigInt;
 //# sourceMappingURL=index.js.map

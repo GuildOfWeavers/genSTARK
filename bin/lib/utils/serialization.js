@@ -83,4 +83,4 @@ function readMatrix(buffer, offset, elementSize) {
     return { matrix, offset };
 }
 exports.readMatrix = readMatrix;
-//# sourceMappingURL=serializaton.js.map
+//# sourceMappingURL=serialization.js.map

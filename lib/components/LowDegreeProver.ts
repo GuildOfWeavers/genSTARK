@@ -3,7 +3,7 @@
 import { HashAlgorithm, LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
 import { FiniteField, Vector } from '@guildofweavers/air-script';
 import { MerkleTree, getHashDigestSize } from '@guildofweavers/merkle';
-import { getPseudorandomIndexes, bigIntsToBuffers, buffersToBigInts } from "../utils";
+import { getPseudorandomIndexes, vectorToBuffers, buffersToBigInts } from "../utils";
 import { StarkError } from '../StarkError';
 
 // INTERFACES
@@ -166,7 +166,7 @@ export class LowDegreeProver {
 
         // put the resulting column into a merkle tree
         const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
-        const cTree = MerkleTree.create(bigIntsToBuffers(column, hashDigestSize), this.hashAlgorithm);
+        const cTree = MerkleTree.create(vectorToBuffers(column, hashDigestSize), this.hashAlgorithm);
 
         // compute spot check positions in the column and corresponding positions in the original values
         const columnLength = column.length;

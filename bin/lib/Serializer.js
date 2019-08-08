@@ -14,19 +14,16 @@ class Serializer {
     }
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeValues([pValues, sValues], position) {
+    mergeValues(pValues, sValues, position) {
         const valueSize = this.fieldElementSize;
         const valueCount = this.getValueCount();
         const buffer = Buffer.allocUnsafe(valueCount * valueSize);
-        const padLength = valueSize * 2;
         let offset = 0;
         for (let register = 0; register < this.stateWidth; register++) {
-            let hex = pValues.getValue(register, position).toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, valueSize, 'hex');
+            offset += pValues.copyValue(register, position, buffer, offset);
         }
         for (let register = 0; register < this.secretInputCount; register++) {
-            let hex = sValues[register].getValue(position).toString(16).padStart(padLength, '0');
-            offset += buffer.write(hex, offset, valueSize, 'hex');
+            offset += sValues[register].copyValue(position, buffer, offset);
         }
         return buffer;
     }
@@ -35,11 +32,11 @@ class Serializer {
         let offset = 0;
         const pValues = new Array(this.stateWidth);
         for (let i = 0; i < this.stateWidth; i++, offset += elementSize) {
-            pValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
+            pValues[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
         }
         const sValues = new Array(this.secretInputCount);
         for (let i = 0; i < this.secretInputCount; i++, offset += elementSize) {
-            sValues[i] = BigInt('0x' + buffer.toString('hex', offset, offset + elementSize));
+            sValues[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
         }
         return [pValues, sValues];
     }

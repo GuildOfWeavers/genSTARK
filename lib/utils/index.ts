@@ -6,7 +6,7 @@ import { Vector } from '@guildofweavers/galois';
 
 // RE-EXPORTS
 // ================================================================================================
-export { writeMerkleProof, readMerkleProof, writeMatrix, readMatrix, writeArray, readArray } from './serializaton';
+export { writeMerkleProof, readMerkleProof, writeMatrix, readMatrix, writeArray, readArray } from './serialization';
 export { sizeOf } from './sizeof';
 export { Logger } from './Logger';
 export const inline = inliners;
@@ -51,21 +51,16 @@ export function getPseudorandomIndexes(seed: Buffer, count: number, max: number,
     return result;
 }
 
-export function bigIntsToBuffers(values: bigint[] | Vector, size: number): Buffer[] {
+export function vectorToBuffers(values: Vector, size: number): Buffer[] {
     const result = new Array<Buffer>(values.length);
-    const maxValue = 2n**BigInt(size * 8);
-    const hexSize = size * 2;
-
-    if (!Array.isArray(values)) {
-        values = values.toValues(); // TODO
+    if (values.elementSize > size) {
+        throw Error('Cannot convert vector to buffer: vector elements are too large');
     }
 
     for (let i = 0; i < values.length; i++) {
-        let v = values[i];
-        if (v >= maxValue) {
-            throw Error('Cannot convert bigint to buffer: value is too large');
-        }
-        result[i] = Buffer.from(v.toString(16).padStart(hexSize, '0'), 'hex');
+        let buffer = Buffer.alloc(size);
+        values.copyValue(i, buffer, 0);
+        result[i] = buffer;
     }
     return result;
 }
@@ -73,7 +68,8 @@ export function bigIntsToBuffers(values: bigint[] | Vector, size: number): Buffe
 export function buffersToBigInts(values: Buffer[]): bigint[] {
     const result = new Array<bigint>(values.length);
     for (let i = 0; i < values.length; i++) {
-        result[i] = BigInt('0x' + values[i].toString('hex'));
+        let buffer = values[i];
+        result[i] = readBigInt(buffer, 0, buffer.byteLength);
     }
     return result;
 }
@@ -85,4 +81,14 @@ export function sha256(value: bigint | Buffer): bigint {
 
     const hash = crypto.createHash('sha256').update(buffer);
     return BigInt('0x' + hash.digest().toString('hex'));
+}
+
+export function readBigInt(buffer: Buffer, offset: number, elementSize: number): bigint {
+    const blocks = elementSize >> 3;
+    let value = 0n;
+    for (let i = 0n; i < blocks; i++) {
+        value = (buffer.readBigUInt64LE(offset) << (64n * i)) | value;
+        offset += 8;
+    }
+    return value;
 }

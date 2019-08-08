@@ -91,7 +91,7 @@ class Stark {
         const mergedEvaluations = new Array(evaluationDomainSize);
         const hashedEvaluations = new Array(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = this.serializer.mergeValues([pEvaluations, context.sEvaluations], i);
+            let v = this.serializer.mergeValues(pEvaluations, context.sEvaluations, i);
             mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
@@ -114,8 +114,9 @@ class Stark {
         this.logger.log(label, 'Computed random linear combination of evaluations');
         // 11 ----- Compute low-degree proof
         const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
-        const lEvaluations2 = utils_1.bigIntsToBuffers(lEvaluations, hashDigestSize);
+        const lEvaluations2 = utils_1.vectorToBuffers(lEvaluations, hashDigestSize);
         const lTree = merkle_1.MerkleTree.create(lEvaluations2, this.hashAlgorithm);
+        this.logger.log(label, 'Built liner combination merkle tree');
         const lcProof = lTree.proveBatch(positions);
         let ldProof;
         try {
@@ -225,7 +226,7 @@ class Stark {
         try {
             const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
             const lcProof = {
-                values: utils_1.bigIntsToBuffers(lcValues, hashDigestSize),
+                values: utils_1.vectorToBuffers(this.air.field.newVectorFrom(lcValues), hashDigestSize),
                 nodes: proof.lcProof.nodes,
                 depth: proof.lcProof.depth
             };
