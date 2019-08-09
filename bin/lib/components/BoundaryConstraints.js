@@ -52,19 +52,23 @@ class BoundaryConstraints {
         return bEvaluations;
     }
     evaluateAll(pEvaluations, domain) {
-        // TODO: try to avoid converting vectors/matrixes to/from values
         const pVectors = this.field.matrixRowsToVectors(pEvaluations);
-        const bEvaluations = new Array();
+        const pValues = new Array();
+        const iPolys = new Array();
+        const zPolys = new Array();
         for (let [register, c] of this.polys) {
-            let iEvaluations = this.field.evalPolyAtRoots(c.iPoly, domain);
-            let zEvaluations = this.field.evalPolyAtRoots(c.zPoly, domain);
-            let zEvaluationsInverse = this.field.invVectorElements(zEvaluations);
-            // B(x) = (P(x) - I(x)) / Z(x)
-            let b = this.field.subVectorElements(pVectors[register], iEvaluations);
-            b = this.field.mulVectorElements(b, zEvaluationsInverse);
-            bEvaluations.push(b.toValues());
+            pValues.push(pVectors[register]);
+            iPolys.push(c.iPoly);
+            zPolys.push(c.zPoly);
         }
-        return this.field.newMatrixFrom(bEvaluations);
+        const iPolyMatrix = this.field.vectorsToMatrix(iPolys);
+        const zPolyMatrix = this.field.vectorsToMatrix(zPolys);
+        const iValues = this.field.evalPolysAtRoots(iPolyMatrix, domain);
+        const zValues = this.field.evalPolysAtRoots(zPolyMatrix, domain);
+        // B(x) = (P(x) - I(x)) / Z(x)
+        const piValues = this.field.subMatrixElementsFromVectors(pValues, iValues);
+        const bValues = this.field.divMatrixElements(piValues, zValues);
+        return bValues;
     }
 }
 exports.BoundaryConstraints = BoundaryConstraints;
