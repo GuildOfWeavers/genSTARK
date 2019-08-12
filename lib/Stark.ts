@@ -16,7 +16,7 @@ const DEFAULT_FRI_QUERY_COUNT = 40;
 const MAX_EXE_QUERY_COUNT = 128;
 const MAX_FRI_QUERY_COUNT = 64;
 
-const HASH_ALGORITHMS: HashAlgorithm[] = ['sha256', 'blake2s256'];
+const HASH_ALGORITHMS: HashAlgorithm[] = ['sha256', 'blake2s256', 'wasmBlake2s256'];
 const DEFAULT_HASH_ALGORITHM: HashAlgorithm = 'sha256';
 
 // CLASS DEFINITION
