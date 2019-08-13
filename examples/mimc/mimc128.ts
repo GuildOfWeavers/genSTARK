@@ -5,9 +5,9 @@ import { Stark } from '../../index';
 
 // STARK DEFINITION
 // ================================================================================================
-//const steps = 2**6, result = 115147868172009559599970888602262339785331471694954098733392001040646413813295n;
-//const steps = 2**13, result = 147825736855841423522558179849475373187n;
-const steps = 2**17, result = 258147208663839268890169448829281413476n;
+//const steps = 2**6, result = 285985527232340595584273426051826821023n;
+const steps = 2**13, result = 147825736855841423522558179849475373187n;
+//const steps = 2**17, result = 258147208663839268890169448829281413476n;
 
 // define round constants
 const roundConstants = new Array<bigint>(64);
@@ -30,7 +30,7 @@ define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`);
+}`, { hashAlgorithm: 'wasmBlake2s256' });
 
 // TESTING
 // ================================================================================================

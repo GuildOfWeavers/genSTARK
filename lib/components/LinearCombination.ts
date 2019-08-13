@@ -118,7 +118,7 @@ export class LinearCombination {
         return this.field.combineManyVectors(allEvaluations, this.coefficients);
     }
 
-    computeOne(x: bigint, pValues: bigint[], sValues: bigint[], bValues: bigint[], dValues: bigint[]) {
+    computeOne(x: bigint, pValues: bigint[], sValues: bigint[], bValues: bigint[], dValues: bigint[]): bigint {
         let allValues: Vector;
         
         // raise degree of D values, when needed
@@ -139,7 +139,7 @@ export class LinearCombination {
         let psbValues2: bigint[] = [];
         if (this.psbIncrementalDegree > 0n) {
             let power = this.field.exp(x, this.psbIncrementalDegree);
-            psbValues2 = this.field.mulVectorElements(psbVector, power).toValues(); // TODO
+            psbValues2 = this.field.mulVectorElements(psbVector, power).toValues();
         }
 
         // put all evaluations together

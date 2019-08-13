@@ -116,11 +116,9 @@ export class Stark {
 
         // 8 ----- build merkle tree for evaluations of P(x) and S(x)
         const hash = getHashFunction(this.hashAlgorithm);
-        const mergedEvaluations = new Array<Buffer>(evaluationDomainSize);
         const hashedEvaluations = new Array<Buffer>(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
             let v = this.serializer.mergeValues(pEvaluations, context.sEvaluations, i);
-            mergedEvaluations[i] = v;
             hashedEvaluations[i] = hash(v);
         }
         this.logger.log(label, 'Serialized evaluations of P(x) and S(x) polynomials');
@@ -134,7 +132,8 @@ export class Stark {
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = new Array<Buffer>(augmentedPositions.length);
         for (let i = 0; i < augmentedPositions.length; i++) {
-            eValues[i] = mergedEvaluations[augmentedPositions[i]];
+            let p = augmentedPositions[i];
+            eValues[i] = this.serializer.mergeValues(pEvaluations, context.sEvaluations, p);
         }
         const eProof = eTree.proveBatch(augmentedPositions);
         this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);

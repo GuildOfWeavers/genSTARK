@@ -107,7 +107,7 @@ class LinearCombination {
         let psbValues2 = [];
         if (this.psbIncrementalDegree > 0n) {
             let power = this.field.exp(x, this.psbIncrementalDegree);
-            psbValues2 = this.field.mulVectorElements(psbVector, power).toValues(); // TODO
+            psbValues2 = this.field.mulVectorElements(psbVector, power).toValues();
         }
         // put all evaluations together
         allValues = this.field.newVectorFrom([...psbValues, ...psbValues2, ...dValues, ...dValues2]);
