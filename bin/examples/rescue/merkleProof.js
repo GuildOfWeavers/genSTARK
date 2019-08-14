@@ -144,7 +144,7 @@ define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
 // generate a random merkle tree
 const values = field.prng(42n, 2 ** treeDepth);
 const hash = utils_1.makeHashFunction(rescue, keyStates);
-const tree = new utils_1.MerkleTree(values.toValues(), hash); // TODO?
+const tree = new utils_1.MerkleTree(values.toValues(), hash);
 // generate a proof for index 42
 const index = 42;
 const proof = tree.prove(index);

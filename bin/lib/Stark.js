@@ -19,13 +19,13 @@ const DEFAULT_HASH_ALGORITHM = 'sha256';
 class Stark {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(source, options, logger) {
+    constructor(source, security, optimization, logger) {
         if (typeof source !== 'string')
             throw new TypeError('Source script must be a string');
         if (!source.trim())
             throw new TypeError('Source script cannot be an empty string');
-        const vOptions = validateSecurityOptions(options);
-        this.air = air_script_1.parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: undefined }); // TODO
+        const vOptions = validateSecurityOptions(security);
+        this.air = air_script_1.parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: optimization });
         this.indexGenerator = new components_1.QueryIndexGenerator(this.air.extensionFactor, vOptions);
         this.hashAlgorithm = vOptions.hashAlgorithm;
         this.ldProver = new components_1.LowDegreeProver(this.air.field, this.indexGenerator, this.hashAlgorithm);

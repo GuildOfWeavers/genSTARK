@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, Logger as ILogger } from '@guildofweavers/genstark';
+import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOptions, Logger as ILogger } from '@guildofweavers/genstark';
 import { MerkleTree, BatchMerkleProof, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
 import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
 import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
@@ -34,13 +34,13 @@ export class Stark {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(source: string, options?: Partial<SecurityOptions>, logger?: ILogger) {
+    constructor(source: string, security?: Partial<SecurityOptions>, optimization?: Partial<OptimizationOptions> | null, logger?: ILogger) {
 
         if (typeof source !== 'string') throw new TypeError('Source script must be a string');
         if (!source.trim()) throw new TypeError('Source script cannot be an empty string');
 
-        const vOptions = validateSecurityOptions(options);
-        this.air = parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor!, wasmOptions: undefined as any });   // TODO
+        const vOptions = validateSecurityOptions(security);
+        this.air = parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: optimization });
 
         this.indexGenerator = new QueryIndexGenerator(this.air.extensionFactor, vOptions);
         this.hashAlgorithm = vOptions.hashAlgorithm;
