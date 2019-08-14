@@ -29,7 +29,7 @@ define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`);
+}`, { hashAlgorithm: 'wasmBlake2s256' });
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

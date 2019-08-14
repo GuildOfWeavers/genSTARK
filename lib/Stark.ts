@@ -3,8 +3,8 @@
 import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, Logger as ILogger } from '@guildofweavers/genstark';
 import { MerkleTree, BatchMerkleProof, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
 import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
-import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination } from './components';
-import { Logger, getPseudorandomIndexes, sizeOf, vectorToBuffers } from './utils';
+import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
+import { Logger, sizeOf, vectorToBuffers } from './utils';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -25,8 +25,7 @@ export class Stark {
 
     readonly air                : AirObject;
 
-    readonly exeQueryCount      : number;
-
+    readonly indexGenerator     : QueryIndexGenerator;
     readonly hashAlgorithm      : HashAlgorithm;
 
     readonly ldProver           : LowDegreeProver;
@@ -43,10 +42,10 @@ export class Stark {
         const vOptions = validateSecurityOptions(options);
         this.air = parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor!, wasmOptions: undefined as any });   // TODO
 
-        this.exeQueryCount = vOptions.exeQueryCount;
+        this.indexGenerator = new QueryIndexGenerator(this.air.extensionFactor, vOptions);
         this.hashAlgorithm = vOptions.hashAlgorithm;
         
-        this.ldProver = new LowDegreeProver(vOptions.friQueryCount, this.hashAlgorithm, this.air);
+        this.ldProver = new LowDegreeProver(this.air.field, this.indexGenerator, this.hashAlgorithm);
         this.serializer = new Serializer(this.air);
         this.logger = logger || new Logger();
     }
@@ -56,7 +55,6 @@ export class Stark {
     prove(assertions: Assertion[], initValues: bigint[], publicInputs?: bigint[][], secretInputs?: bigint[][]): StarkProof {
 
         const label = this.logger.start('Starting STARK computation');
-        const extensionFactor = this.air.extensionFactor;
     
         // 0 ----- validate parameters
         if (!Array.isArray(assertions)) throw new TypeError('Assertions parameter must be an array');
@@ -127,8 +125,7 @@ export class Stark {
         this.logger.log(label, 'Built evaluation merkle tree');
         
         // 9 ----- spot check evaluation tree at pseudo-random positions
-        const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
-        const positions = getPseudorandomIndexes(eTree.root, queryCount, evaluationDomainSize, extensionFactor);
+        const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = new Array<Buffer>(augmentedPositions.length);
         for (let i = 0; i < augmentedPositions.length; i++) {
@@ -136,7 +133,7 @@ export class Stark {
             eValues[i] = this.serializer.mergeValues(pEvaluations, context.sEvaluations, p);
         }
         const eProof = eTree.proveBatch(augmentedPositions);
-        this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
+        this.logger.log(label, `Computed ${positions.length} evaluation spot checks`);
 
         // 10 ---- compute random linear combination of evaluations
         const lCombination = new LinearCombination(eTree.root, this.air.constraints, context);
@@ -199,8 +196,7 @@ export class Stark {
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- compute positions for evaluation spot-checks
-        const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
-        const positions = getPseudorandomIndexes(eRoot, queryCount, evaluationDomainSize, extensionFactor);
+        const positions = this.indexGenerator.getExeIndexes(eRoot, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         this.logger.log(label, `Computed positions for evaluation spot checks`);
 

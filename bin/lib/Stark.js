@@ -26,9 +26,9 @@ class Stark {
             throw new TypeError('Source script cannot be an empty string');
         const vOptions = validateSecurityOptions(options);
         this.air = air_script_1.parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: undefined }); // TODO
-        this.exeQueryCount = vOptions.exeQueryCount;
+        this.indexGenerator = new components_1.QueryIndexGenerator(this.air.extensionFactor, vOptions);
         this.hashAlgorithm = vOptions.hashAlgorithm;
-        this.ldProver = new components_1.LowDegreeProver(vOptions.friQueryCount, this.hashAlgorithm, this.air);
+        this.ldProver = new components_1.LowDegreeProver(this.air.field, this.indexGenerator, this.hashAlgorithm);
         this.serializer = new Serializer_1.Serializer(this.air);
         this.logger = logger || new utils_1.Logger();
     }
@@ -36,7 +36,6 @@ class Stark {
     // --------------------------------------------------------------------------------------------
     prove(assertions, initValues, publicInputs, secretInputs) {
         const label = this.logger.start('Starting STARK computation');
-        const extensionFactor = this.air.extensionFactor;
         // 0 ----- validate parameters
         if (!Array.isArray(assertions))
             throw new TypeError('Assertions parameter must be an array');
@@ -97,8 +96,7 @@ class Stark {
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hashAlgorithm);
         this.logger.log(label, 'Built evaluation merkle tree');
         // 9 ----- spot check evaluation tree at pseudo-random positions
-        const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
-        const positions = utils_1.getPseudorandomIndexes(eTree.root, queryCount, evaluationDomainSize, extensionFactor);
+        const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = new Array(augmentedPositions.length);
         for (let i = 0; i < augmentedPositions.length; i++) {
@@ -106,7 +104,7 @@ class Stark {
             eValues[i] = this.serializer.mergeValues(pEvaluations, context.sEvaluations, p);
         }
         const eProof = eTree.proveBatch(augmentedPositions);
-        this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
+        this.logger.log(label, `Computed ${positions.length} evaluation spot checks`);
         // 10 ---- compute random linear combination of evaluations
         const lCombination = new components_1.LinearCombination(eTree.root, this.air.constraints, context);
         const lEvaluations = lCombination.computeMany(pEvaluations, context.sEvaluations, bEvaluations, dEvaluations);
@@ -159,8 +157,7 @@ class Stark {
         const lCombination = new components_1.LinearCombination(eRoot, this.air.constraints, context);
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
-        const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
-        const positions = utils_1.getPseudorandomIndexes(eRoot, queryCount, evaluationDomainSize, extensionFactor);
+        const positions = this.indexGenerator.getExeIndexes(eRoot, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         this.logger.log(label, `Computed positions for evaluation spot checks`);
         // 3 ----- decode evaluation spot-checks

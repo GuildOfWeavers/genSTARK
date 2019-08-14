@@ -8,11 +8,10 @@ const StarkError_1 = require("../StarkError");
 class LowDegreeProver {
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(queryCount, hasAlgorithm, context) {
+    constructor(field, indexGenerator, hasAlgorithm) {
+        this.field = field;
         this.hashAlgorithm = hasAlgorithm;
-        this.queryCount = queryCount;
-        this.field = context.field;
-        this.skipMultiplesOf = context.extensionFactor;
+        this.indexGenerator = indexGenerator;
     }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
@@ -36,7 +35,7 @@ class LowDegreeProver {
             let { columnRoot, columnProof, polyProof } = proof.components[depth];
             // calculate the pseudo-randomly sampled y indices
             let columnLength = Math.floor(rouDegree / 4);
-            let positions = utils_1.getPseudorandomIndexes(columnRoot, this.queryCount, columnLength, this.skipMultiplesOf);
+            let positions = this.indexGenerator.getFriIndexes(columnRoot, columnLength);
             // verify Merkle proof for the column
             if (!merkle_1.MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
                 throw new StarkError_1.StarkError(`Verification of column Merkle proof failed at depth ${depth}`);
@@ -126,7 +125,7 @@ class LowDegreeProver {
         const cTree = merkle_1.MerkleTree.create(utils_1.vectorToBuffers(column, hashDigestSize), this.hashAlgorithm);
         // compute spot check positions in the column and corresponding positions in the original values
         const columnLength = column.length;
-        const positions = utils_1.getPseudorandomIndexes(cTree.root, this.queryCount, columnLength, this.skipMultiplesOf);
+        const positions = this.indexGenerator.getFriIndexes(cTree.root, columnLength);
         const polyPositions = new Array(positions.length * 4);
         for (let i = 0; i < positions.length; i++) {
             polyPositions[i * 4 + 0] = positions[i];
@@ -147,7 +146,7 @@ class LowDegreeProver {
         // exclude points which should be skipped during evaluation
         const positions = [];
         for (let i = 0; i < remainder.length; i++) {
-            if (!this.skipMultiplesOf || i % this.skipMultiplesOf) {
+            if (!this.indexGenerator.extensionFactor || i % this.indexGenerator.extensionFactor) {
                 positions.push(i);
             }
         }

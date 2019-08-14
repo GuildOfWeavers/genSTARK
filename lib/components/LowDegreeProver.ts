@@ -3,32 +3,24 @@
 import { HashAlgorithm, LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
 import { FiniteField, Vector } from '@guildofweavers/air-script';
 import { MerkleTree, getHashDigestSize } from '@guildofweavers/merkle';
-import { getPseudorandomIndexes, vectorToBuffers, buffersToBigInts } from "../utils";
+import { QueryIndexGenerator } from "./QueryIndexGenerator";
+import { vectorToBuffers, buffersToBigInts } from "../utils";
 import { StarkError } from '../StarkError';
-
-// INTERFACES
-// ================================================================================================
-interface LowDegreeProverContext {
-    readonly field              : FiniteField;
-    readonly extensionFactor    : number;
-}
 
 // CLASS DEFINITION
 // ================================================================================================
 export class LowDegreeProver {
 
     readonly field              : FiniteField;
-    readonly skipMultiplesOf    : number;
     readonly hashAlgorithm      : HashAlgorithm;
-    readonly queryCount         : number;
+    readonly indexGenerator     : QueryIndexGenerator;
 
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(queryCount: number, hasAlgorithm: HashAlgorithm, context: LowDegreeProverContext) {
+    constructor(field: FiniteField, indexGenerator: QueryIndexGenerator, hasAlgorithm: HashAlgorithm) {
+        this.field = field;
         this.hashAlgorithm = hasAlgorithm;
-        this.queryCount = queryCount;
-        this.field = context.field;
-        this.skipMultiplesOf = context.extensionFactor;
+        this.indexGenerator = indexGenerator;
     }
 
     // PUBLIC METHODS
@@ -60,7 +52,7 @@ export class LowDegreeProver {
 
             // calculate the pseudo-randomly sampled y indices
             let columnLength = Math.floor(rouDegree / 4);
-            let positions = getPseudorandomIndexes(columnRoot, this.queryCount, columnLength, this.skipMultiplesOf);
+            let positions = this.indexGenerator.getFriIndexes(columnRoot, columnLength);
 
             // verify Merkle proof for the column
             if (!MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
@@ -170,7 +162,7 @@ export class LowDegreeProver {
 
         // compute spot check positions in the column and corresponding positions in the original values
         const columnLength = column.length;
-        const positions = getPseudorandomIndexes(cTree.root, this.queryCount, columnLength, this.skipMultiplesOf);
+        const positions = this.indexGenerator.getFriIndexes(cTree.root, columnLength);
         const polyPositions = new Array<number>(positions.length * 4);
         for (let i = 0; i < positions.length; i++) {
             polyPositions[i * 4 + 0] = positions[i];
@@ -194,7 +186,7 @@ export class LowDegreeProver {
         // exclude points which should be skipped during evaluation
         const positions: number[] = [];
         for (let i = 0; i < remainder.length; i++) {
-            if (!this.skipMultiplesOf || i % this.skipMultiplesOf) {
+            if (!this.indexGenerator.extensionFactor || i % this.indexGenerator.extensionFactor) {
                 positions.push(i);
             }
         }
