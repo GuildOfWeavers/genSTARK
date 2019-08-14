@@ -1,39 +1,31 @@
 // IMPORTS
 // ================================================================================================
 import { HashAlgorithm, LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
-import { FiniteField } from '@guildofweavers/air-script';
+import { FiniteField, Vector } from '@guildofweavers/air-script';
 import { MerkleTree, getHashDigestSize } from '@guildofweavers/merkle';
-import { getPseudorandomIndexes, bigIntsToBuffers, buffersToBigInts } from "../utils";
+import { QueryIndexGenerator } from "./QueryIndexGenerator";
+import { vectorToBuffers, buffersToBigInts } from "../utils";
 import { StarkError } from '../StarkError';
-
-// INTERFACES
-// ================================================================================================
-interface LowDegreeProverContext {
-    readonly field              : FiniteField;
-    readonly extensionFactor    : number;
-}
 
 // CLASS DEFINITION
 // ================================================================================================
 export class LowDegreeProver {
 
     readonly field              : FiniteField;
-    readonly skipMultiplesOf    : number;
     readonly hashAlgorithm      : HashAlgorithm;
-    readonly queryCount         : number;
+    readonly indexGenerator     : QueryIndexGenerator;
 
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(queryCount: number, hasAlgorithm: HashAlgorithm, context: LowDegreeProverContext) {
+    constructor(field: FiniteField, indexGenerator: QueryIndexGenerator, hasAlgorithm: HashAlgorithm) {
+        this.field = field;
         this.hashAlgorithm = hasAlgorithm;
-        this.queryCount = queryCount;
-        this.field = context.field;
-        this.skipMultiplesOf = context.extensionFactor;
+        this.indexGenerator = indexGenerator;
     }
 
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    prove(lTree: MerkleTree, values: bigint[], domain: bigint[], maxDegreePlus1: number) {
+    prove(lTree: MerkleTree, values: Vector, domain: Vector, maxDegreePlus1: number) {
 
         const result: LowDegreeProof = {
             components  : new Array<FriComponent>(),
@@ -60,7 +52,7 @@ export class LowDegreeProver {
 
             // calculate the pseudo-randomly sampled y indices
             let columnLength = Math.floor(rouDegree / 4);
-            let positions = getPseudorandomIndexes(columnRoot, this.queryCount, columnLength, this.skipMultiplesOf);
+            let positions = this.indexGenerator.getFriIndexes(columnRoot, columnLength);
 
             // verify Merkle proof for the column
             if (!MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
@@ -107,10 +99,11 @@ export class LowDegreeProver {
 
             // verify for each selected y coordinate that the four points from the polynomial and the 
             // one point from the column that are on that y coordinate are on the same deg < 4 polynomial
-            const polys = this.field.interpolateQuarticBatch(xs, ys);
+            const polys = this.field.interpolateQuarticBatch(this.field.newMatrixFrom(xs), this.field.newMatrixFrom(ys));
             const columnValues = buffersToBigInts(columnProof.values);
-            for (let i = 0; i < polys.length; i++) {
-                if (this.field.evalPolyAt(polys[i], specialX) !== columnValues[i]) {
+            const polyVectors = this.field.matrixRowsToVectors(polys);
+            for (let i = 0; i < polys.rowCount; i++) {
+                if (this.field.evalPolyAt(polyVectors[i], specialX) !== columnValues[i]) {
                     throw new StarkError(`Degree 4 polynomial didn't evaluate to column value at depth ${depth}`);
                 }
             }
@@ -134,18 +127,18 @@ export class LowDegreeProver {
         }
 
         const remainder = buffersToBigInts(proof.remainder);
-        this.verifyRemainder(remainder, maxDegreePlus1, rootOfUnity);
+        this.verifyRemainder(this.field.newVectorFrom(remainder), maxDegreePlus1, rootOfUnity);
 
         return true;
     }
 
     // HELPER METHODS
     // --------------------------------------------------------------------------------------------
-    private fri(lTree: MerkleTree, values: bigint[], maxDegreePlus1: number, depth: number, domain: bigint[], result: LowDegreeProof) {
+    private fri(lTree: MerkleTree, values: Vector, maxDegreePlus1: number, depth: number, domain: Vector, result: LowDegreeProof) {
 
         // if there are not too many values left, use the polynomial directly as proof
         if (values.length <= 256) {
-            const rootOfUnity = this.field.exp(domain[1], BigInt(4**depth));
+            const rootOfUnity = this.field.exp(domain.getValue(1), BigInt(4**depth));
             this.verifyRemainder(values, maxDegreePlus1, rootOfUnity);
             result.remainder = lTree.values;
             return;
@@ -153,39 +146,23 @@ export class LowDegreeProver {
 
         // break values into rows and columns and sample 4 values for each row
         const domainStep = (4**depth);
-        const columnLength = Math.floor(values.length / 4);
-        let xs = new Array<bigint[]>(columnLength);
-        let ys = new Array<bigint[]>(columnLength);
-        for (let i = 0; i < columnLength; i++) {
-            xs[i] = new Array(4);
-            xs[i][0] = domain[i * domainStep];
-            xs[i][1] = domain[(i + columnLength) * domainStep];
-            xs[i][2] = domain[(i + columnLength * 2) * domainStep];
-            xs[i][3] = domain[(i + columnLength * 3) * domainStep];
-
-            ys[i] = new Array(4);
-            ys[i][0] = values[i];
-            ys[i][1] = values[i + columnLength];
-            ys[i][2] = values[i + columnLength * 2];
-            ys[i][3] = values[i + columnLength * 3];
-        }
+        const xs = this.field.vectorToMatrix(domain, 4, domainStep);
+        const ys = this.field.vectorToMatrix(values, 4);
 
         // build polynomials from values in each row
         const xPolys = this.field.interpolateQuarticBatch(xs, ys);
 
         // select a pseudo-random x coordinate and evaluate each row polynomial at the coordinate
         const specialX = this.field.prng(lTree.root);
-        const column = new Array<bigint>(xPolys.length);
-        for (let i = 0; i < column.length; i++) {
-            column[i] = this.field.evalPolyAt(xPolys[i], specialX);
-        }
+        const column = this.field.evalQuarticBatch(xPolys, specialX);
 
         // put the resulting column into a merkle tree
         const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
-        const cTree = MerkleTree.create(bigIntsToBuffers(column, hashDigestSize), this.hashAlgorithm);
+        const cTree = MerkleTree.create(vectorToBuffers(column, hashDigestSize), this.hashAlgorithm);
 
         // compute spot check positions in the column and corresponding positions in the original values
-        const positions = getPseudorandomIndexes(cTree.root, this.queryCount, column.length, this.skipMultiplesOf);
+        const columnLength = column.length;
+        const positions = this.indexGenerator.getFriIndexes(cTree.root, columnLength);
         const polyPositions = new Array<number>(positions.length * 4);
         for (let i = 0; i < positions.length; i++) {
             polyPositions[i * 4 + 0] = positions[i];
@@ -205,30 +182,32 @@ export class LowDegreeProver {
         this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
     }
 
-    private verifyRemainder(remainder: bigint[], maxDegreePlus1: number, rootOfUnity: bigint) {
+    private verifyRemainder(remainder: Vector, maxDegreePlus1: number, rootOfUnity: bigint) {
         // exclude points which should be skipped during evaluation
         const positions: number[] = [];
         for (let i = 0; i < remainder.length; i++) {
-            if (!this.skipMultiplesOf || i % this.skipMultiplesOf) {
+            if (!this.indexGenerator.extensionFactor || i % this.indexGenerator.extensionFactor) {
                 positions.push(i);
             }
         }
 
         // pick a subset of points from the remainder and interpolate them into a polynomial
-        const domain = this.field.getPowerCycle(rootOfUnity);
+        const domain = this.field.getPowerSeries(rootOfUnity, remainder.length);
         const xs = new Array<bigint>(maxDegreePlus1);
         const ys = new Array<bigint>(maxDegreePlus1);
         for (let i = 0; i < maxDegreePlus1; i++) {
             let p = positions[i];
-            xs[i] = domain[p];
-            ys[i] = remainder[p];
+            xs[i] = domain.getValue(p);
+            ys[i] = remainder.getValue(p);
         }
-        const poly = this.field.interpolate(xs, ys);
+        const xVector = this.field.newVectorFrom(xs);
+        const yVector = this.field.newVectorFrom(ys);
+        const poly = this.field.interpolate(xVector, yVector);
 
         // check that polynomial evaluates correctly for all other points in the remainder
         for (let i = maxDegreePlus1; i < positions.length; i++) {
             let p = positions[i];
-            if (this.field.evalPolyAt(poly, domain[p]) !== remainder[p]) {
+            if (this.field.evalPolyAt(poly, domain.getValue(p)) !== remainder.getValue(p)) {
                 throw new StarkError(`Remainder is not a valid degree ${maxDegreePlus1 - 1} polynomial`);
             }
         }

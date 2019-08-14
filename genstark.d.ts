@@ -7,7 +7,7 @@ declare module '@guildofweavers/genstark' {
 
     // RE-EXPORTS
     // --------------------------------------------------------------------------------------------
-    export { FiniteField, PrimeField, Polynom } from '@guildofweavers/galois';
+    export { FiniteField, createPrimeField, Vector, Matrix } from '@guildofweavers/galois';
     export { MerkleTree, BatchMerkleProof, HashAlgorithm, getHashDigestSize } from '@guildofweavers/merkle';
 
     // STARK
@@ -27,15 +27,25 @@ declare module '@guildofweavers/genstark' {
         hashAlgorithm: HashAlgorithm;
     }
 
+    export interface OptimizationOptions {
+
+        /** Initial number of bytes to allocate for WASM optimization */
+        initialMemory: number;
+
+        /** Maximum number of bytes to allocate for WASM optimization */
+        maximumMemory: number;
+    }
+
     export class Stark {
 
         /**
          * Creates a STARK instance based on the provided parameters
          * @param source AirScript source for the STARK
-         * @param options Security options for the STARK instance
+         * @param security Security options for the STARK instance
+         * @param optimization WebAssembly optimization options; null turns optimization off
          * @param logger Optional logger; defaults to console logging; set to null to disable
          */
-        constructor(source: string, options?: Partial<SecurityOptions>, logger?: Logger);
+        constructor(source: string, security?: Partial<SecurityOptions>, optimization?: Partial<OptimizationOptions> | null, logger?: Logger);
 
         /**
          * Generate a proof of computation for this STARK

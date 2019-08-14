@@ -12,23 +12,23 @@ const DEFAULT_EXE_QUERY_COUNT = 80;
 const DEFAULT_FRI_QUERY_COUNT = 40;
 const MAX_EXE_QUERY_COUNT = 128;
 const MAX_FRI_QUERY_COUNT = 64;
-const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
+const HASH_ALGORITHMS = ['sha256', 'blake2s256', 'wasmBlake2s256'];
 const DEFAULT_HASH_ALGORITHM = 'sha256';
 // CLASS DEFINITION
 // ================================================================================================
 class Stark {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(source, options, logger) {
+    constructor(source, security, optimization, logger) {
         if (typeof source !== 'string')
             throw new TypeError('Source script must be a string');
         if (!source.trim())
             throw new TypeError('Source script cannot be an empty string');
-        const vOptions = validateSecurityOptions(options);
-        this.air = air_script_1.parseScript(source, undefined, vOptions.extensionFactor);
-        this.exeQueryCount = vOptions.exeQueryCount;
+        const vOptions = validateSecurityOptions(security);
+        this.air = air_script_1.parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: optimization });
+        this.indexGenerator = new components_1.QueryIndexGenerator(this.air.extensionFactor, vOptions);
         this.hashAlgorithm = vOptions.hashAlgorithm;
-        this.ldProver = new components_1.LowDegreeProver(vOptions.friQueryCount, this.hashAlgorithm, this.air);
+        this.ldProver = new components_1.LowDegreeProver(this.air.field, this.indexGenerator, this.hashAlgorithm);
         this.serializer = new Serializer_1.Serializer(this.air);
         this.logger = logger || new utils_1.Logger();
     }
@@ -36,7 +36,6 @@ class Stark {
     // --------------------------------------------------------------------------------------------
     prove(assertions, initValues, publicInputs, secretInputs) {
         const label = this.logger.start('Starting STARK computation');
-        const extensionFactor = this.air.extensionFactor;
         // 0 ----- validate parameters
         if (!Array.isArray(assertions))
             throw new TypeError('Assertions parameter must be an array');
@@ -59,8 +58,8 @@ class Stark {
         validateAssertions(executionTrace, assertions);
         this.logger.log(label, 'Generated execution trace');
         // 3 ----- compute P(x) polynomials and low-degree extend them
-        const pPoly = new components_1.TracePolynomial(context);
-        const pEvaluations = pPoly.evaluate(executionTrace);
+        const pPolys = this.air.field.interpolateRoots(context.executionDomain, executionTrace);
+        const pEvaluations = this.air.field.evalPolysAtRoots(pPolys, context.evaluationDomain);
         this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
         // 4 ----- compute constraint polynomials Q(x) = C(P(x))
         let qEvaluations;
@@ -76,47 +75,45 @@ class Stark {
         const zEvaluations = zPoly.evaluateAll(context.evaluationDomain);
         this.logger.log(label, 'Computed Z(x) polynomial');
         // 6 ----- compute D(x) = Q(x) / Z(x)
-        // first, invert numerators of Z(x)
-        const zNumInverses = this.air.field.invMany(zEvaluations.numerators);
-        this.logger.log(label, 'Inverted Z(x) numerators');
+        // first, compute inverse of Z(x)
+        const zInverses = this.air.field.divVectorElements(zEvaluations.denominators, zEvaluations.numerators);
+        this.logger.log(label, 'Computed Z(x) inverses');
         // then, multiply all values together to compute D(x)
-        const zDenominators = zEvaluations.denominators;
-        const dEvaluations = this.air.field.mulMany(qEvaluations, zDenominators, zNumInverses);
+        const dEvaluations = this.air.field.mulMatrixRows(qEvaluations, zInverses);
         this.logger.log(label, 'Computed D(x) polynomials');
         // 7 ----- compute boundary constraints B(x)
         const bPoly = new components_1.BoundaryConstraints(assertions, context);
         const bEvaluations = bPoly.evaluateAll(pEvaluations, context.evaluationDomain);
         this.logger.log(label, 'Computed B(x) polynomials');
-        // 8 ----- build merkle tree for evaluations of P(x), D(x), and B(x)
+        // 8 ----- build merkle tree for evaluations of P(x) and S(x)
         const hash = merkle_1.getHashFunction(this.hashAlgorithm);
-        const mergedEvaluations = new Array(evaluationDomainSize);
         const hashedEvaluations = new Array(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = this.serializer.mergeValues([pEvaluations, context.sEvaluations], i);
-            mergedEvaluations[i] = v;
+            let v = this.serializer.mergeValues(pEvaluations, context.sEvaluations, i);
             hashedEvaluations[i] = hash(v);
         }
         this.logger.log(label, 'Serialized evaluations of P(x) and S(x) polynomials');
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hashAlgorithm);
         this.logger.log(label, 'Built evaluation merkle tree');
         // 9 ----- spot check evaluation tree at pseudo-random positions
-        const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
-        const positions = utils_1.getPseudorandomIndexes(eTree.root, queryCount, evaluationDomainSize, extensionFactor);
+        const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = new Array(augmentedPositions.length);
         for (let i = 0; i < augmentedPositions.length; i++) {
-            eValues[i] = mergedEvaluations[augmentedPositions[i]];
+            let p = augmentedPositions[i];
+            eValues[i] = this.serializer.mergeValues(pEvaluations, context.sEvaluations, p);
         }
         const eProof = eTree.proveBatch(augmentedPositions);
-        this.logger.log(label, `Computed ${queryCount} evaluation spot checks`);
+        this.logger.log(label, `Computed ${positions.length} evaluation spot checks`);
         // 10 ---- compute random linear combination of evaluations
         const lCombination = new components_1.LinearCombination(eTree.root, this.air.constraints, context);
         const lEvaluations = lCombination.computeMany(pEvaluations, context.sEvaluations, bEvaluations, dEvaluations);
         this.logger.log(label, 'Computed random linear combination of evaluations');
         // 11 ----- Compute low-degree proof
         const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
-        const lEvaluations2 = utils_1.bigIntsToBuffers(lEvaluations, hashDigestSize);
+        const lEvaluations2 = utils_1.vectorToBuffers(lEvaluations, hashDigestSize);
         const lTree = merkle_1.MerkleTree.create(lEvaluations2, this.hashAlgorithm);
+        this.logger.log(label, 'Built liner combination merkle tree');
         const lcProof = lTree.proveBatch(positions);
         let ldProof;
         try {
@@ -160,8 +157,7 @@ class Stark {
         const lCombination = new components_1.LinearCombination(eRoot, this.air.constraints, context);
         this.logger.log(label, 'Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
-        const queryCount = Math.min(this.exeQueryCount, evaluationDomainSize - evaluationDomainSize / extensionFactor);
-        const positions = utils_1.getPseudorandomIndexes(eRoot, queryCount, evaluationDomainSize, extensionFactor);
+        const positions = this.indexGenerator.getExeIndexes(eRoot, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         this.logger.log(label, `Computed positions for evaluation spot checks`);
         // 3 ----- decode evaluation spot-checks
@@ -216,7 +212,7 @@ class Stark {
             let zValue = zPoly.evaluateAt(x);
             // evaluate constraints and use the result to compute D(x) and B(x)
             let qValues = this.air.evaluateConstraintsAt(x, pValues, nValues, sValues, context);
-            let dValues = this.air.field.divVectorElements(qValues, zValue);
+            let dValues = this.air.field.divVectorElements(this.air.field.newVectorFrom(qValues), zValue).toValues();
             let bValues = bPoly.evaluateAt(pValues, x);
             // compute linear combination of all evaluations
             lcValues[i] = lCombination.computeOne(x, pValues, sValues, bValues, dValues);
@@ -226,7 +222,7 @@ class Stark {
         try {
             const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
             const lcProof = {
-                values: utils_1.bigIntsToBuffers(lcValues, hashDigestSize),
+                values: utils_1.vectorToBuffers(this.air.field.newVectorFrom(lcValues), hashDigestSize),
                 nodes: proof.lcProof.nodes,
                 depth: proof.lcProof.depth
             };
@@ -291,8 +287,8 @@ function validateSecurityOptions(options) {
     return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
 }
 function validateAssertions(trace, assertions) {
-    const registers = trace.length;
-    const steps = trace[0].length;
+    const registers = trace.rowCount;
+    const steps = trace.colCount;
     for (let a of assertions) {
         // make sure register references are correct
         if (a.register < 0 || a.register >= registers) {
@@ -303,7 +299,7 @@ function validateAssertions(trace, assertions) {
             throw new Error(`Invalid assertion: step ${a.step} is outside of execution trace`);
         }
         // make sure assertions don't contradict execution trace
-        if (trace[a.register][a.step] !== a.value) {
+        if (trace.getValue(a.register, a.step) !== a.value) {
             throw new StarkError_1.StarkError(`Assertion at step ${a.step}, register ${a.register} conflicts with execution trace`);
         }
     }

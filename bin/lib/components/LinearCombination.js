@@ -46,6 +46,9 @@ class LinearCombination {
     // --------------------------------------------------------------------------------------------
     computeMany(pEvaluations, sEvaluations, bEvaluations, dEvaluations) {
         let allEvaluations, psbPowers;
+        const pVectors = this.field.matrixRowsToVectors(pEvaluations);
+        const bVectors = this.field.matrixRowsToVectors(bEvaluations);
+        const dVectors = this.field.matrixRowsToVectors(dEvaluations);
         // raise degree of D evaluations to match combination degree
         const dEvaluations2 = [];
         for (let { degree, indexes } of this.constraintGroups) {
@@ -61,11 +64,11 @@ class LinearCombination {
             }
             // raise the degree of D evaluations
             for (let i of indexes) {
-                dEvaluations2.push(this.field.mulVectorElements(dEvaluations[i], powers));
+                dEvaluations2.push(this.field.mulVectorElements(dVectors[i], powers));
             }
         }
-        // raise degree of P, S, B evaluations to match combination degree
-        const psbEvaluations = [...pEvaluations, ...sEvaluations, ...bEvaluations];
+        // raise degree of P, S, B evaluations to match combination degree        
+        const psbEvaluations = [...pVectors, ...sEvaluations, ...bVectors];
         const psbEvaluations2 = [];
         if (this.psbIncrementalDegree > 0n) {
             // if incremental powers for P, S, B evaluations haven't been computed yet,
@@ -80,10 +83,10 @@ class LinearCombination {
             }
         }
         // put all evaluations together
-        allEvaluations = [...psbEvaluations, ...psbEvaluations2, ...dEvaluations, ...dEvaluations2];
+        allEvaluations = [...psbEvaluations, ...psbEvaluations2, ...dVectors, ...dEvaluations2];
         // compute a linear combination of all evaluations
         this.coefficients = this.field.prng(this.seed, allEvaluations.length);
-        return this.field.combineMany(allEvaluations, this.coefficients);
+        return this.field.combineManyVectors(allEvaluations, this.coefficients);
     }
     computeOne(x, pValues, sValues, bValues, dValues) {
         let allValues;
@@ -100,13 +103,14 @@ class LinearCombination {
         }
         // raise degree of P, S, and B values, when needed
         const psbValues = [...pValues, ...sValues, ...bValues];
+        let psbVector = this.field.newVectorFrom(psbValues);
         let psbValues2 = [];
         if (this.psbIncrementalDegree > 0n) {
             let power = this.field.exp(x, this.psbIncrementalDegree);
-            psbValues2 = this.field.mulVectorElements(psbValues, power);
+            psbValues2 = this.field.mulVectorElements(psbVector, power).toValues();
         }
         // put all evaluations together
-        allValues = [...psbValues, ...psbValues2, ...dValues, ...dValues2];
+        allValues = this.field.newVectorFrom([...psbValues, ...psbValues2, ...dValues, ...dValues2]);
         if (!this.coefficients) {
             this.coefficients = this.field.prng(this.seed, allValues.length);
         }

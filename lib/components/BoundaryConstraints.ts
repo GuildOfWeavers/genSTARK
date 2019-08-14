@@ -1,14 +1,14 @@
 // IMPORTS
 // ================================================================================================
-import { Polynom, Assertion } from '@guildofweavers/genstark';
-import { FiniteField, EvaluationContext } from '@guildofweavers/air-script';
+import { Assertion } from '@guildofweavers/genstark';
+import { FiniteField, EvaluationContext, Vector, Matrix } from '@guildofweavers/air-script';
 
 // CLASS DEFINITION
 // ================================================================================================
 export class BoundaryConstraints {
 
     readonly field  : FiniteField;
-    readonly polys  : Map<number, { iPoly: Polynom; zPoly: Polynom }>;
+    readonly polys  : Map<number, { iPoly: Vector; zPoly: Vector }>;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
@@ -17,25 +17,29 @@ export class BoundaryConstraints {
         const extensionFactor = context.extensionFactor;
 
         // combine constraints for each register
-        const rData = new Map<number,{ xs: bigint[]; ys: bigint[]; zPoly: Polynom; }>();
+        const rData = new Map<number,{ xs: bigint[]; ys: bigint[]; zPoly: Vector; }>();
         for (let c of assertions) {
             
-            let x = field.exp(context.rootOfUnity, BigInt(c.step * extensionFactor))
+            let x = field.exp(context.rootOfUnity, BigInt(c.step * extensionFactor));
+            let zPoly = this.field.newVectorFrom([this.field.neg(x), this.field.one]);
+
             let data = rData.get(c.register);
             if (data) {
                 data.xs.push(x);
                 data.ys.push(c.value);
-                data.zPoly = this.field.mulPolys(data.zPoly, [-x, 1n]);
+                data.zPoly = this.field.mulPolys(data.zPoly, zPoly);
             }
             else {
-                data = { xs: [x], ys: [c.value], zPoly: [-x, 1n] };
+                data = { xs: [x], ys: [c.value], zPoly:zPoly };
                 rData.set(c.register, data);
             }
         }
 
         this.polys = new Map();
         for (let [register, data] of rData) {
-            let iPoly = this.field.interpolate(data.xs, data.ys);
+            let xs = this.field.newVectorFrom(data.xs);
+            let ys = this.field.newVectorFrom(data.ys);
+            let iPoly = this.field.interpolate(xs, ys);
             this.polys.set(register, { iPoly, zPoly: data.zPoly });
         }
     }
@@ -64,20 +68,29 @@ export class BoundaryConstraints {
         return bEvaluations;
     }
 
-    evaluateAll(pEvaluations: bigint[][], domain: bigint[]): bigint[][] {
-        
-        const bEvaluations = new Array<bigint[]>();
-        for (let [register, c] of this.polys) {
-            let iEvaluations = this.field.evalPolyAtRoots(c.iPoly, domain);
-            let zEvaluations = this.field.evalPolyAtRoots(c.zPoly, domain);
-            let zEvaluationsInverse = this.field.invMany(zEvaluations);
+    evaluateAll(pEvaluations: Matrix, domain: Vector): Matrix {
 
-            // B(x) = (P(x) - I(x)) / Z(x)
-            let b = this.field.subVectorElements(pEvaluations[register], iEvaluations);
-            b = this.field.mulVectorElements(b, zEvaluationsInverse);
-            bEvaluations.push(b);
+        const pVectors = this.field.matrixRowsToVectors(pEvaluations);
+        
+        const pValues = new Array<Vector>();
+        const iPolys = new Array<Vector>();
+        const zPolys = new Array<Vector>();
+        for (let [register, c] of this.polys) {
+            pValues.push(pVectors[register]);
+            iPolys.push(c.iPoly);
+            zPolys.push(c.zPoly);
         }
 
-        return bEvaluations;
+        const iPolyMatrix = this.field.vectorsToMatrix(iPolys);
+        const zPolyMatrix = this.field.vectorsToMatrix(zPolys);
+
+        const iValues = this.field.evalPolysAtRoots(iPolyMatrix, domain);
+        const zValues = this.field.evalPolysAtRoots(zPolyMatrix, domain);
+
+        // B(x) = (P(x) - I(x)) / Z(x)
+        const piValues = this.field.subMatrixElementsFromVectors(pValues, iValues);
+        const bValues = this.field.divMatrixElements(piValues, zValues);
+
+        return bValues;
     }
 }

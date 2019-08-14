@@ -10,5 +10,5 @@ var merkle_1 = require("@guildofweavers/merkle");
 exports.MerkleTree = merkle_1.MerkleTree;
 exports.getHashDigestSize = merkle_1.getHashDigestSize;
 var galois_1 = require("@guildofweavers/galois");
-exports.PrimeField = galois_1.PrimeField;
+exports.createPrimeField = galois_1.createPrimeField;
 //# sourceMappingURL=index.js.map

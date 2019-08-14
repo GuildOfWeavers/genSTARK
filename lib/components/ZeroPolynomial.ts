@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, EvaluationContext } from '@guildofweavers/air-script';
+import { FiniteField, EvaluationContext, Vector } from '@guildofweavers/air-script';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -27,26 +27,19 @@ export class ZeroPolynomial {
     // --------------------------------------------------------------------------------------------
     evaluateAt(x: bigint): bigint {
         const xToTheSteps = this.field.exp(x, this.traceLength);
-        const numValue = this.field.sub(xToTheSteps, 1n);
+        const numValue = this.field.sub(xToTheSteps, this.field.one);
         const denValue = this.field.sub(x, this.xAtLastStep);
         const z = this.field.div(numValue, denValue);
         return z;
     }
 
-    evaluateAll(domain: bigint[]) {
+    evaluateAll(domain: Vector) {
         const domainSize = domain.length;
         const traceLength = Number.parseInt(this.traceLength.toString(10), 10);
 
-        const numEvaluations = new Array<bigint>(domainSize);
-        const denEvaluations = new Array<bigint>(domainSize);
-        for (let step = 0; step < domainSize; step++) {
-            // calculate position of x^steps, and then just look it up
-            let numIndex = (step * traceLength) % domainSize;
-            numEvaluations[step] = this.field.sub(domain[numIndex], 1n);
-
-            let x = domain[step];
-            denEvaluations[step] = this.field.sub(x, this.xAtLastStep);
-        }
+        const xToTheSteps = this.field.pluckVector(domain, traceLength, domainSize);
+        const numEvaluations = this.field.subVectorElements(xToTheSteps, this.field.one);
+        const denEvaluations  = this.field.subVectorElements(domain, this.xAtLastStep);
 
         return { numerators: numEvaluations, denominators: denEvaluations };
     }

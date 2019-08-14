@@ -17,7 +17,7 @@ class ZeroPolynomial {
     // --------------------------------------------------------------------------------------------
     evaluateAt(x) {
         const xToTheSteps = this.field.exp(x, this.traceLength);
-        const numValue = this.field.sub(xToTheSteps, 1n);
+        const numValue = this.field.sub(xToTheSteps, this.field.one);
         const denValue = this.field.sub(x, this.xAtLastStep);
         const z = this.field.div(numValue, denValue);
         return z;
@@ -25,15 +25,9 @@ class ZeroPolynomial {
     evaluateAll(domain) {
         const domainSize = domain.length;
         const traceLength = Number.parseInt(this.traceLength.toString(10), 10);
-        const numEvaluations = new Array(domainSize);
-        const denEvaluations = new Array(domainSize);
-        for (let step = 0; step < domainSize; step++) {
-            // calculate position of x^steps, and then just look it up
-            let numIndex = (step * traceLength) % domainSize;
-            numEvaluations[step] = this.field.sub(domain[numIndex], 1n);
-            let x = domain[step];
-            denEvaluations[step] = this.field.sub(x, this.xAtLastStep);
-        }
+        const xToTheSteps = this.field.pluckVector(domain, traceLength, domainSize);
+        const numEvaluations = this.field.subVectorElements(xToTheSteps, this.field.one);
+        const denEvaluations = this.field.subVectorElements(domain, this.xAtLastStep);
         return { numerators: numEvaluations, denominators: denEvaluations };
     }
 }
