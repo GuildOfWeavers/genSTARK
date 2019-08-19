@@ -2,7 +2,6 @@
 // ================================================================================================
 import { StarkProof, FriComponent, HashAlgorithm } from "@guildofweavers/genstark";
 import { FiniteField, Matrix, Vector } from '@guildofweavers/air-script';
-import { getHashDigestSize } from '@guildofweavers/merkle';
 import * as utils from './utils';
 
 // INTERFACES
@@ -69,10 +68,9 @@ export class Serializer {
 
     // PROOF SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    serializeProof(proof: StarkProof, hashAlgorithm: HashAlgorithm): Buffer {
-        const nodeSize = getHashDigestSize(hashAlgorithm);
-
-        const size = utils.sizeOf(proof, hashAlgorithm);
+    serializeProof(proof: StarkProof, hashDigestSize: number): Buffer {
+        
+        const size = utils.sizeOf(proof, hashDigestSize);
         const buffer = Buffer.allocUnsafe(size.total);
         let offset = 0;
 
@@ -94,8 +92,8 @@ export class Serializer {
         for (let i = 0; i < proof.ldProof.components.length; i++) {
             let component = proof.ldProof.components[i];
             offset += component.columnRoot.copy(buffer, offset);
-            offset = utils.writeMerkleProof(buffer, offset, component.columnProof, nodeSize);
-            offset = utils.writeMerkleProof(buffer, offset, component.polyProof, nodeSize);
+            offset = utils.writeMerkleProof(buffer, offset, component.columnProof, hashDigestSize);
+            offset = utils.writeMerkleProof(buffer, offset, component.polyProof, hashDigestSize);
         }
         offset = utils.writeArray(buffer, offset, proof.ldProof.remainder);
 
@@ -103,8 +101,8 @@ export class Serializer {
         return buffer;
     }
 
-    parseProof(buffer: Buffer, hashAlgorithm: HashAlgorithm): StarkProof {
-        const nodeSize = getHashDigestSize(hashAlgorithm);
+    parseProof(buffer: Buffer, hashDigestSize: number): StarkProof {
+        
         let offset = 0;
 
         // values
@@ -113,28 +111,28 @@ export class Serializer {
         const valueInfo = utils.readArray(buffer, offset, valueSize); offset = valueInfo.offset;
 
         // evProof
-        const evRoot = Buffer.allocUnsafe(nodeSize);
-        offset += buffer.copy(evRoot, 0, offset, offset + nodeSize);
+        const evRoot = Buffer.allocUnsafe(hashDigestSize);
+        offset += buffer.copy(evRoot, 0, offset, offset + hashDigestSize);
         const evDepth = buffer.readUInt8(offset); offset += 1;
-        const evNodeInfo = utils.readMatrix(buffer, offset, nodeSize); offset = evNodeInfo.offset;
+        const evNodeInfo = utils.readMatrix(buffer, offset, hashDigestSize); offset = evNodeInfo.offset;
 
         // lcProof
-        const lcRoot = Buffer.allocUnsafe(nodeSize);
-        offset += buffer.copy(lcRoot, 0, offset, offset + nodeSize);
+        const lcRoot = Buffer.allocUnsafe(hashDigestSize);
+        offset += buffer.copy(lcRoot, 0, offset, offset + hashDigestSize);
         const lcDepth = buffer.readUInt8(offset); offset += 1;
-        const lcNodeInfo = utils.readMatrix(buffer, offset, nodeSize); offset = lcNodeInfo.offset;
+        const lcNodeInfo = utils.readMatrix(buffer, offset, hashDigestSize); offset = lcNodeInfo.offset;
 
         // ldProof
         const componentCount = buffer.readUInt8(offset); offset += 1;
         const components = new Array<FriComponent>(componentCount);
         for (let i = 0; i < componentCount; i++) {
-            let columnRoot = Buffer.allocUnsafe(nodeSize);
-            offset += buffer.copy(columnRoot, 0, offset, offset + nodeSize);
-            let columnProofInfo = utils.readMerkleProof(buffer, offset, nodeSize); offset = columnProofInfo.offset;
-            let polyProofInfo = utils.readMerkleProof(buffer, offset, nodeSize); offset = polyProofInfo.offset;
+            let columnRoot = Buffer.allocUnsafe(hashDigestSize);
+            offset += buffer.copy(columnRoot, 0, offset, offset + hashDigestSize);
+            let columnProofInfo = utils.readMerkleProof(buffer, offset, hashDigestSize); offset = columnProofInfo.offset;
+            let polyProofInfo = utils.readMerkleProof(buffer, offset, hashDigestSize); offset = polyProofInfo.offset;
             components[i] = { columnRoot, columnProof: columnProofInfo.proof, polyProof: polyProofInfo.proof };
         }
-        const remainderInfo = utils.readArray(buffer, offset, nodeSize);
+        const remainderInfo = utils.readArray(buffer, offset, hashDigestSize);
         offset = remainderInfo.offset;
 
         // build and return the proof

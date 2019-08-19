@@ -12,7 +12,7 @@ const DEFAULT_EXE_QUERY_COUNT = 80;
 const DEFAULT_FRI_QUERY_COUNT = 40;
 const MAX_EXE_QUERY_COUNT = 128;
 const MAX_FRI_QUERY_COUNT = 64;
-const HASH_ALGORITHMS = ['sha256', 'blake2s256', 'wasmBlake2s256'];
+const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
 const DEFAULT_HASH_ALGORITHM = 'sha256';
 // CLASS DEFINITION
 // ================================================================================================
@@ -27,8 +27,8 @@ class Stark {
         const vOptions = validateSecurityOptions(security);
         this.air = air_script_1.parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: optimization });
         this.indexGenerator = new components_1.QueryIndexGenerator(this.air.extensionFactor, vOptions);
-        this.hashAlgorithm = vOptions.hashAlgorithm;
-        this.ldProver = new components_1.LowDegreeProver(this.air.field, this.indexGenerator, this.hashAlgorithm);
+        this.hash = merkle_1.createHash(vOptions.hashAlgorithm); // TODO: process WASM options
+        this.ldProver = new components_1.LowDegreeProver(this.air.field, this.indexGenerator, this.hash);
         this.serializer = new Serializer_1.Serializer(this.air);
         this.logger = logger || new utils_1.Logger();
     }
@@ -86,14 +86,13 @@ class Stark {
         const bEvaluations = bPoly.evaluateAll(pEvaluations, context.evaluationDomain);
         this.logger.log(label, 'Computed B(x) polynomials');
         // 8 ----- build merkle tree for evaluations of P(x) and S(x)
-        const hash = merkle_1.getHashFunction(this.hashAlgorithm);
         const hashedEvaluations = new Array(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
             let v = this.serializer.mergeValues(pEvaluations, context.sEvaluations, i);
-            hashedEvaluations[i] = hash(v);
+            hashedEvaluations[i] = this.hash.digest(v);
         }
         this.logger.log(label, 'Serialized evaluations of P(x) and S(x) polynomials');
-        const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hashAlgorithm);
+        const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hash);
         this.logger.log(label, 'Built evaluation merkle tree');
         // 9 ----- spot check evaluation tree at pseudo-random positions
         const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
@@ -110,9 +109,8 @@ class Stark {
         const lEvaluations = lCombination.computeMany(pEvaluations, context.sEvaluations, bEvaluations, dEvaluations);
         this.logger.log(label, 'Computed random linear combination of evaluations');
         // 11 ----- Compute low-degree proof
-        const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
-        const lEvaluations2 = utils_1.vectorToBuffers(lEvaluations, hashDigestSize);
-        const lTree = merkle_1.MerkleTree.create(lEvaluations2, this.hashAlgorithm);
+        const lEvaluations2 = utils_1.vectorToBuffers(lEvaluations, this.hash.digestSize);
+        const lTree = merkle_1.MerkleTree.create(lEvaluations2, this.hash);
         this.logger.log(label, 'Built liner combination merkle tree');
         const lcProof = lTree.proveBatch(positions);
         let ldProof;
@@ -164,14 +162,13 @@ class Stark {
         const pEvaluations = new Map();
         const sEvaluations = new Map();
         const hashedEvaluations = new Array(augmentedPositions.length);
-        const hash = merkle_1.getHashFunction(this.hashAlgorithm);
         for (let i = 0; i < proof.values.length; i++) {
             let mergedEvaluations = proof.values[i];
             let position = augmentedPositions[i];
             let [p, s] = this.serializer.parseValues(mergedEvaluations);
             pEvaluations.set(position, p);
             sEvaluations.set(position, s);
-            hashedEvaluations[i] = hash(mergedEvaluations);
+            hashedEvaluations[i] = this.hash.digest(mergedEvaluations);
         }
         this.logger.log(label, `Decoded evaluation spot checks`);
         // 4 ----- verify merkle proof for evaluation tree
@@ -181,7 +178,7 @@ class Stark {
                 nodes: proof.evProof.nodes,
                 depth: proof.evProof.depth
             };
-            if (!merkle_1.MerkleTree.verifyBatch(eRoot, augmentedPositions, evProof, this.hashAlgorithm)) {
+            if (!merkle_1.MerkleTree.verifyBatch(eRoot, augmentedPositions, evProof, this.hash)) {
                 throw new StarkError_1.StarkError(`Verification of evaluation Merkle proof failed`);
             }
         }
@@ -220,13 +217,12 @@ class Stark {
         this.logger.log(label, `Verified transition and boundary constraints`);
         // 7 ----- verify linear combination proof
         try {
-            const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
             const lcProof = {
-                values: utils_1.vectorToBuffers(this.air.field.newVectorFrom(lcValues), hashDigestSize),
+                values: utils_1.vectorToBuffers(this.air.field.newVectorFrom(lcValues), this.hash.digestSize),
                 nodes: proof.lcProof.nodes,
                 depth: proof.lcProof.depth
             };
-            if (!merkle_1.MerkleTree.verifyBatch(proof.lcProof.root, positions, lcProof, this.hashAlgorithm)) {
+            if (!merkle_1.MerkleTree.verifyBatch(proof.lcProof.root, positions, lcProof, this.hash)) {
                 throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`);
             }
         }
@@ -243,14 +239,14 @@ class Stark {
     // UTILITIES
     // --------------------------------------------------------------------------------------------
     sizeOf(proof) {
-        const size = utils_1.sizeOf(proof, this.hashAlgorithm);
+        const size = utils_1.sizeOf(proof, this.hash.digestSize);
         return size.total;
     }
     serialize(proof) {
-        return this.serializer.serializeProof(proof, this.hashAlgorithm);
+        return this.serializer.serializeProof(proof, this.hash.digestSize);
     }
     parse(buffer) {
-        return this.serializer.parseProof(buffer, this.hashAlgorithm);
+        return this.serializer.parseProof(buffer, this.hash.digestSize);
     }
     // HELPER METHODS
     // --------------------------------------------------------------------------------------------

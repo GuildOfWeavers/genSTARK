@@ -8,7 +8,7 @@ declare module '@guildofweavers/genstark' {
     // RE-EXPORTS
     // --------------------------------------------------------------------------------------------
     export { FiniteField, createPrimeField, Vector, Matrix } from '@guildofweavers/galois';
-    export { MerkleTree, BatchMerkleProof, HashAlgorithm, getHashDigestSize } from '@guildofweavers/merkle';
+    export { MerkleTree, BatchMerkleProof, HashAlgorithm, createHash, Hash } from '@guildofweavers/merkle';
 
     // STARK
     // --------------------------------------------------------------------------------------------

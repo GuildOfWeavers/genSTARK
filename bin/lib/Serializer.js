@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const merkle_1 = require("@guildofweavers/merkle");
 const utils = require("./utils");
 // CLASS DEFINITION
 // ================================================================================================
@@ -42,9 +41,8 @@ class Serializer {
     }
     // PROOF SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    serializeProof(proof, hashAlgorithm) {
-        const nodeSize = merkle_1.getHashDigestSize(hashAlgorithm);
-        const size = utils.sizeOf(proof, hashAlgorithm);
+    serializeProof(proof, hashDigestSize) {
+        const size = utils.sizeOf(proof, hashDigestSize);
         const buffer = Buffer.allocUnsafe(size.total);
         let offset = 0;
         // values
@@ -62,15 +60,14 @@ class Serializer {
         for (let i = 0; i < proof.ldProof.components.length; i++) {
             let component = proof.ldProof.components[i];
             offset += component.columnRoot.copy(buffer, offset);
-            offset = utils.writeMerkleProof(buffer, offset, component.columnProof, nodeSize);
-            offset = utils.writeMerkleProof(buffer, offset, component.polyProof, nodeSize);
+            offset = utils.writeMerkleProof(buffer, offset, component.columnProof, hashDigestSize);
+            offset = utils.writeMerkleProof(buffer, offset, component.polyProof, hashDigestSize);
         }
         offset = utils.writeArray(buffer, offset, proof.ldProof.remainder);
         // return the buffer
         return buffer;
     }
-    parseProof(buffer, hashAlgorithm) {
-        const nodeSize = merkle_1.getHashDigestSize(hashAlgorithm);
+    parseProof(buffer, hashDigestSize) {
         let offset = 0;
         // values
         const valueCount = this.getValueCount();
@@ -78,33 +75,33 @@ class Serializer {
         const valueInfo = utils.readArray(buffer, offset, valueSize);
         offset = valueInfo.offset;
         // evProof
-        const evRoot = Buffer.allocUnsafe(nodeSize);
-        offset += buffer.copy(evRoot, 0, offset, offset + nodeSize);
+        const evRoot = Buffer.allocUnsafe(hashDigestSize);
+        offset += buffer.copy(evRoot, 0, offset, offset + hashDigestSize);
         const evDepth = buffer.readUInt8(offset);
         offset += 1;
-        const evNodeInfo = utils.readMatrix(buffer, offset, nodeSize);
+        const evNodeInfo = utils.readMatrix(buffer, offset, hashDigestSize);
         offset = evNodeInfo.offset;
         // lcProof
-        const lcRoot = Buffer.allocUnsafe(nodeSize);
-        offset += buffer.copy(lcRoot, 0, offset, offset + nodeSize);
+        const lcRoot = Buffer.allocUnsafe(hashDigestSize);
+        offset += buffer.copy(lcRoot, 0, offset, offset + hashDigestSize);
         const lcDepth = buffer.readUInt8(offset);
         offset += 1;
-        const lcNodeInfo = utils.readMatrix(buffer, offset, nodeSize);
+        const lcNodeInfo = utils.readMatrix(buffer, offset, hashDigestSize);
         offset = lcNodeInfo.offset;
         // ldProof
         const componentCount = buffer.readUInt8(offset);
         offset += 1;
         const components = new Array(componentCount);
         for (let i = 0; i < componentCount; i++) {
-            let columnRoot = Buffer.allocUnsafe(nodeSize);
-            offset += buffer.copy(columnRoot, 0, offset, offset + nodeSize);
-            let columnProofInfo = utils.readMerkleProof(buffer, offset, nodeSize);
+            let columnRoot = Buffer.allocUnsafe(hashDigestSize);
+            offset += buffer.copy(columnRoot, 0, offset, offset + hashDigestSize);
+            let columnProofInfo = utils.readMerkleProof(buffer, offset, hashDigestSize);
             offset = columnProofInfo.offset;
-            let polyProofInfo = utils.readMerkleProof(buffer, offset, nodeSize);
+            let polyProofInfo = utils.readMerkleProof(buffer, offset, hashDigestSize);
             offset = polyProofInfo.offset;
             components[i] = { columnRoot, columnProof: columnProofInfo.proof, polyProof: polyProofInfo.proof };
         }
-        const remainderInfo = utils.readArray(buffer, offset, nodeSize);
+        const remainderInfo = utils.readArray(buffer, offset, hashDigestSize);
         offset = remainderInfo.offset;
         // build and return the proof
         return {

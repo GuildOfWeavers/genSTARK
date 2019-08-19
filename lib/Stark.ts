@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOptions, Logger as ILogger } from '@guildofweavers/genstark';
-import { MerkleTree, BatchMerkleProof, getHashFunction, getHashDigestSize } from '@guildofweavers/merkle';
+import { MerkleTree, BatchMerkleProof, createHash, Hash } from '@guildofweavers/merkle';
 import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
 import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
 import { Logger, sizeOf, vectorToBuffers } from './utils';
@@ -16,7 +16,7 @@ const DEFAULT_FRI_QUERY_COUNT = 40;
 const MAX_EXE_QUERY_COUNT = 128;
 const MAX_FRI_QUERY_COUNT = 64;
 
-const HASH_ALGORITHMS: HashAlgorithm[] = ['sha256', 'blake2s256', 'wasmBlake2s256'];
+const HASH_ALGORITHMS: HashAlgorithm[] = ['sha256', 'blake2s256'];
 const DEFAULT_HASH_ALGORITHM: HashAlgorithm = 'sha256';
 
 // CLASS DEFINITION
@@ -26,7 +26,7 @@ export class Stark {
     readonly air                : AirObject;
 
     readonly indexGenerator     : QueryIndexGenerator;
-    readonly hashAlgorithm      : HashAlgorithm;
+    readonly hash               : Hash;
 
     readonly ldProver           : LowDegreeProver;
     readonly serializer         : Serializer;
@@ -43,9 +43,9 @@ export class Stark {
         this.air = parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: optimization });
 
         this.indexGenerator = new QueryIndexGenerator(this.air.extensionFactor, vOptions);
-        this.hashAlgorithm = vOptions.hashAlgorithm;
+        this.hash = createHash(vOptions.hashAlgorithm); // TODO: process WASM options
         
-        this.ldProver = new LowDegreeProver(this.air.field, this.indexGenerator, this.hashAlgorithm);
+        this.ldProver = new LowDegreeProver(this.air.field, this.indexGenerator, this.hash);
         this.serializer = new Serializer(this.air);
         this.logger = logger || new Logger();
     }
@@ -113,15 +113,14 @@ export class Stark {
         this.logger.log(label, 'Computed B(x) polynomials');
 
         // 8 ----- build merkle tree for evaluations of P(x) and S(x)
-        const hash = getHashFunction(this.hashAlgorithm);
         const hashedEvaluations = new Array<Buffer>(evaluationDomainSize);
         for (let i = 0; i < evaluationDomainSize; i++) {
             let v = this.serializer.mergeValues(pEvaluations, context.sEvaluations, i);
-            hashedEvaluations[i] = hash(v);
+            hashedEvaluations[i] = this.hash.digest(v);
         }
         this.logger.log(label, 'Serialized evaluations of P(x) and S(x) polynomials');
 
-        const eTree = MerkleTree.create(hashedEvaluations, this.hashAlgorithm);
+        const eTree = MerkleTree.create(hashedEvaluations, this.hash);
         this.logger.log(label, 'Built evaluation merkle tree');
         
         // 9 ----- spot check evaluation tree at pseudo-random positions
@@ -141,9 +140,8 @@ export class Stark {
         this.logger.log(label, 'Computed random linear combination of evaluations');
 
         // 11 ----- Compute low-degree proof
-        const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
-        const lEvaluations2 = vectorToBuffers(lEvaluations, hashDigestSize);
-        const lTree = MerkleTree.create(lEvaluations2, this.hashAlgorithm);
+        const lEvaluations2 = vectorToBuffers(lEvaluations, this.hash.digestSize);
+        const lTree = MerkleTree.create(lEvaluations2, this.hash);
         this.logger.log(label, 'Built liner combination merkle tree');
         const lcProof = lTree.proveBatch(positions);
 
@@ -204,7 +202,6 @@ export class Stark {
         const pEvaluations = new Map<number, bigint[]>();
         const sEvaluations = new Map<number, bigint[]>();
         const hashedEvaluations = new Array<Buffer>(augmentedPositions.length);
-        const hash = getHashFunction(this.hashAlgorithm);
 
         for (let i = 0; i < proof.values.length; i++) {
             let mergedEvaluations = proof.values[i];
@@ -214,7 +211,7 @@ export class Stark {
             pEvaluations.set(position, p);
             sEvaluations.set(position, s);
 
-            hashedEvaluations[i] = hash(mergedEvaluations);
+            hashedEvaluations[i] = this.hash.digest(mergedEvaluations);
         }
         this.logger.log(label, `Decoded evaluation spot checks`);
 
@@ -225,7 +222,7 @@ export class Stark {
                 nodes   : proof.evProof.nodes,
                 depth   : proof.evProof.depth
             };
-            if (!MerkleTree.verifyBatch(eRoot, augmentedPositions, evProof, this.hashAlgorithm)) {
+            if (!MerkleTree.verifyBatch(eRoot, augmentedPositions, evProof, this.hash)) {
                 throw new StarkError(`Verification of evaluation Merkle proof failed`);
             }
         }
@@ -270,13 +267,12 @@ export class Stark {
 
         // 7 ----- verify linear combination proof
         try {
-            const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
             const lcProof: BatchMerkleProof = {
-                values  : vectorToBuffers(this.air.field.newVectorFrom(lcValues), hashDigestSize),
+                values  : vectorToBuffers(this.air.field.newVectorFrom(lcValues), this.hash.digestSize),
                 nodes   : proof.lcProof.nodes,
                 depth   : proof.lcProof.depth
             };
-            if (!MerkleTree.verifyBatch(proof.lcProof.root, positions, lcProof, this.hashAlgorithm)) {
+            if (!MerkleTree.verifyBatch(proof.lcProof.root, positions, lcProof, this.hash)) {
                 throw new StarkError(`Verification of linear combination Merkle proof failed`);
             }
         }
@@ -295,16 +291,16 @@ export class Stark {
     // UTILITIES
     // --------------------------------------------------------------------------------------------
     sizeOf(proof: StarkProof): number {
-        const size = sizeOf(proof, this.hashAlgorithm);
+        const size = sizeOf(proof, this.hash.digestSize);
         return size.total;
     }
 
     serialize(proof: StarkProof) {
-        return this.serializer.serializeProof(proof, this.hashAlgorithm);
+        return this.serializer.serializeProof(proof, this.hash.digestSize);
     }
 
     parse(buffer: Buffer): StarkProof {
-        return this.serializer.parseProof(buffer, this.hashAlgorithm);
+        return this.serializer.parseProof(buffer, this.hash.digestSize);
     }
 
     // HELPER METHODS
