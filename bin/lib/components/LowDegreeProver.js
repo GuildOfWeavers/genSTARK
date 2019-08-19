@@ -16,8 +16,9 @@ class LowDegreeProver {
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
     prove(lTree, values, domain, maxDegreePlus1) {
+        const componentCount = Math.min(Math.ceil(Math.log2(values.length) / 2) - 4, 0);
         const result = {
-            components: new Array(),
+            components: new Array(componentCount),
             remainder: []
         };
         this.fri(lTree, values, maxDegreePlus1, 0, domain, result);
@@ -133,14 +134,13 @@ class LowDegreeProver {
             polyPositions[i * 4 + 2] = positions[i] + columnLength * 2;
             polyPositions[i * 4 + 3] = positions[i] + columnLength * 3;
         }
-        // build this component of the proof
-        result.components.push({
+        // recursively build all other components
+        this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
+        result.components[depth] = {
             columnRoot: cTree.root,
             columnProof: cTree.proveBatch(positions),
             polyProof: lTree.proveBatch(polyPositions)
-        });
-        // recursively build all other components
-        this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
+        };
     }
     verifyRemainder(remainder, maxDegreePlus1, rootOfUnity) {
         // exclude points which should be skipped during evaluation

@@ -27,8 +27,10 @@ export class LowDegreeProver {
     // --------------------------------------------------------------------------------------------
     prove(lTree: MerkleTree, values: Vector, domain: Vector, maxDegreePlus1: number) {
 
+        const componentCount = Math.min(Math.ceil(Math.log2(values.length) / 2) - 4, 0);
+
         const result: LowDegreeProof = {
-            components  : new Array<FriComponent>(),
+            components  : new Array<FriComponent>(componentCount),
             remainder   : []
         };
 
@@ -160,6 +162,9 @@ export class LowDegreeProver {
         const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
         const cTree = MerkleTree.create(vectorToBuffers(column, hashDigestSize), this.hashAlgorithm);
 
+        // recursively build all other components
+        this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
+
         // compute spot check positions in the column and corresponding positions in the original values
         const columnLength = column.length;
         const positions = this.indexGenerator.getFriIndexes(cTree.root, columnLength);
@@ -171,15 +176,12 @@ export class LowDegreeProver {
             polyPositions[i * 4 + 3] = positions[i] + columnLength * 3;
         }
 
-        // build this component of the proof
-        result.components.push({
+        // build and add proof component to the result
+        result.components[depth] = {
             columnRoot  : cTree.root,
             columnProof : cTree.proveBatch(positions),
             polyProof   : lTree.proveBatch(polyPositions)
-        });
-
-        // recursively build all other components
-        this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
+        };
     }
 
     private verifyRemainder(remainder: Vector, maxDegreePlus1: number, rootOfUnity: bigint) {
