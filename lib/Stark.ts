@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOptions, Logger as ILogger } from '@guildofweavers/genstark';
-import { MerkleTree, BatchMerkleProof, createHash, Hash } from '@guildofweavers/merkle';
+import { MerkleTree, BatchMerkleProof, createHash, isWasmOptimized as isHashWasmOptimized, Hash, WasmOptions } from '@guildofweavers/merkle';
 import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
 import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
 import { Logger, sizeOf, vectorToBuffers } from './utils';
@@ -24,27 +24,44 @@ const DEFAULT_HASH_ALGORITHM: HashAlgorithm = 'sha256';
 export class Stark {
 
     readonly air                : AirObject;
-
-    readonly indexGenerator     : QueryIndexGenerator;
     readonly hash               : Hash;
 
+    readonly indexGenerator     : QueryIndexGenerator;
     readonly ldProver           : LowDegreeProver;
     readonly serializer         : Serializer;
     readonly logger             : ILogger;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(source: string, security?: Partial<SecurityOptions>, optimization?: Partial<OptimizationOptions> | null, logger?: ILogger) {
+    constructor(source: string, security?: Partial<SecurityOptions>, optimization?: boolean | Partial<OptimizationOptions>, logger?: ILogger) {
 
         if (typeof source !== 'string') throw new TypeError('Source script must be a string');
         if (!source.trim()) throw new TypeError('Source script cannot be an empty string');
 
-        const vOptions = validateSecurityOptions(security);
-        this.air = parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: optimization });
-
-        this.indexGenerator = new QueryIndexGenerator(this.air.extensionFactor, vOptions);
-        this.hash = createHash(vOptions.hashAlgorithm); // TODO: process WASM options
+        const sOptions = validateSecurityOptions(security);
         
+        if (optimization) {
+            const wasmOptions = buildWasmOptions(optimization);
+
+            // instantiate AIR object
+            this.air = parseScript(source, undefined, { extensionFactor: sOptions.extensionFactor, wasmOptions });
+            if (!this.air.field.isOptimized) {
+                console.warn(`WARNING: WebAssembly optimization is not available for prime fields with the specified modulus`);
+            }
+
+            // instantiate Hash object
+            const memory = new WebAssembly.Memory({ initial: 10 }); // TODO: enable shared memory
+            this.hash = createHash(sOptions.hashAlgorithm, { memory });
+            if (!this.hash.isOptimized) {
+                console.warn(`WARNING: WebAssembly optimization is not available for ${sOptions.hashAlgorithm} hash algorithm`);
+            }
+        }
+        else {
+            this.air = parseScript(source, undefined, { extensionFactor: sOptions.extensionFactor });
+            this.hash = createHash(sOptions.hashAlgorithm, false);
+        }
+
+        this.indexGenerator = new QueryIndexGenerator(this.air.extensionFactor, sOptions);
         this.ldProver = new LowDegreeProver(this.air.field, this.indexGenerator, this.hash);
         this.serializer = new Serializer(this.air);
         this.logger = logger || new Logger();
@@ -340,6 +357,19 @@ function validateSecurityOptions(options?: Partial<SecurityOptions>): SecurityOp
 
     const extensionFactor = (options ? options.extensionFactor : undefined);
     return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
+}
+
+function buildWasmOptions(options: Partial<OptimizationOptions> | boolean): WasmOptions {
+    if (typeof options === 'boolean') {
+        return {
+            memory : new WebAssembly.Memory({ initial: 10 })    // TODO: use defaults
+        }
+    }
+    else {
+        const initialMemory = options.initialMemory || 10; // TODO: use default
+        const memory = new WebAssembly.Memory({ initial: initialMemory, maximum: options.maximumMemory });
+        return { memory };
+    }
 }
 
 function validateAssertions(trace: Matrix, assertions: Assertion[]) {

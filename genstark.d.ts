@@ -42,10 +42,19 @@ declare module '@guildofweavers/genstark' {
          * Creates a STARK instance based on the provided parameters
          * @param source AirScript source for the STARK
          * @param security Security options for the STARK instance
-         * @param optimization WebAssembly optimization options; null turns optimization off
+         * @param optimization A flag indicating whether WebAssembly-based optimization should be enabled
          * @param logger Optional logger; defaults to console logging; set to null to disable
          */
-        constructor(source: string, security?: Partial<SecurityOptions>, optimization?: Partial<OptimizationOptions> | null, logger?: Logger);
+        constructor(source: string, security?: Partial<SecurityOptions>, optimization?: boolean, logger?: Logger);
+
+        /**
+         * Creates a STARK instance based on the provided parameters
+         * @param source AirScript source for the STARK
+         * @param security Security options for the STARK instance
+         * @param optimization WebAssembly optimization options
+         * @param logger Optional logger; defaults to console logging; set to null to disable
+         */
+        constructor(source: string, security?: Partial<SecurityOptions>, optimization?: Partial<OptimizationOptions>, logger?: Logger);
 
         /**
          * Generate a proof of computation for this STARK

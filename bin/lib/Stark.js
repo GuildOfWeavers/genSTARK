@@ -24,10 +24,26 @@ class Stark {
             throw new TypeError('Source script must be a string');
         if (!source.trim())
             throw new TypeError('Source script cannot be an empty string');
-        const vOptions = validateSecurityOptions(security);
-        this.air = air_script_1.parseScript(source, undefined, { extensionFactor: vOptions.extensionFactor, wasmOptions: optimization });
-        this.indexGenerator = new components_1.QueryIndexGenerator(this.air.extensionFactor, vOptions);
-        this.hash = merkle_1.createHash(vOptions.hashAlgorithm); // TODO: process WASM options
+        const sOptions = validateSecurityOptions(security);
+        if (optimization) {
+            const wasmOptions = buildWasmOptions(optimization);
+            // instantiate AIR object
+            this.air = air_script_1.parseScript(source, undefined, { extensionFactor: sOptions.extensionFactor, wasmOptions });
+            if (!this.air.field.isOptimized) {
+                console.warn(`WARNING: WebAssembly optimization is not available for prime fields with the specified modulus`);
+            }
+            // instantiate Hash object
+            const memory = new WebAssembly.Memory({ initial: 10 }); // TODO: enable shared memory
+            this.hash = merkle_1.createHash(sOptions.hashAlgorithm, { memory });
+            if (!this.hash.isOptimized) {
+                console.warn(`WARNING: WebAssembly optimization is not available for ${sOptions.hashAlgorithm} hash algorithm`);
+            }
+        }
+        else {
+            this.air = air_script_1.parseScript(source, undefined, { extensionFactor: sOptions.extensionFactor });
+            this.hash = merkle_1.createHash(sOptions.hashAlgorithm, false);
+        }
+        this.indexGenerator = new components_1.QueryIndexGenerator(this.air.extensionFactor, sOptions);
         this.ldProver = new components_1.LowDegreeProver(this.air.field, this.indexGenerator, this.hash);
         this.serializer = new Serializer_1.Serializer(this.air);
         this.logger = logger || new utils_1.Logger();
@@ -281,6 +297,18 @@ function validateSecurityOptions(options) {
     }
     const extensionFactor = (options ? options.extensionFactor : undefined);
     return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
+}
+function buildWasmOptions(options) {
+    if (typeof options === 'boolean') {
+        return {
+            memory: new WebAssembly.Memory({ initial: 10 }) // TODO: use defaults
+        };
+    }
+    else {
+        const initialMemory = options.initialMemory || 10; // TODO: use default
+        const memory = new WebAssembly.Memory({ initial: initialMemory, maximum: options.maximumMemory });
+        return { memory };
+    }
 }
 function validateAssertions(trace, assertions) {
     const registers = trace.rowCount;
