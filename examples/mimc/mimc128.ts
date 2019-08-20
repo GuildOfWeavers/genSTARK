@@ -31,7 +31,7 @@ define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`, { hashAlgorithm: 'blake2s256' }, true);
+}`, { hashAlgorithm: 'blake2s256' }, { initialMemory: 8192 });  // 512 MB
 
 // TESTING
 // ================================================================================================

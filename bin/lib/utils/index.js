@@ -17,6 +17,9 @@ exports.sizeOf = sizeof_1.sizeOf;
 var Logger_1 = require("./Logger");
 exports.Logger = Logger_1.Logger;
 exports.inline = inliners;
+// CONSTANTS
+// ================================================================================================
+const MASK_64B = 0xffffffffffffffffn;
 // PUBLIC FUNCTIONS
 // ================================================================================================
 function isPowerOf2(value) {
@@ -28,19 +31,6 @@ function isPowerOf2(value) {
     }
 }
 exports.isPowerOf2 = isPowerOf2;
-function vectorToBuffers(values, size) {
-    const result = new Array(values.length);
-    if (values.elementSize > size) {
-        throw Error('Cannot convert vector to buffer: vector elements are too large');
-    }
-    for (let i = 0; i < values.length; i++) {
-        let buffer = Buffer.alloc(size);
-        values.copyValue(i, buffer, 0);
-        result[i] = buffer;
-    }
-    return result;
-}
-exports.vectorToBuffers = vectorToBuffers;
 function buffersToBigInts(values) {
     const result = new Array(values.length);
     for (let i = 0; i < values.length; i++) {
@@ -50,6 +40,20 @@ function buffersToBigInts(values) {
     return result;
 }
 exports.buffersToBigInts = buffersToBigInts;
+function bigIntsToBuffers(values, size) {
+    const result = new Array(values.length);
+    const limbCount = size >> 3;
+    for (let i = 0; i < result.length; i++) {
+        let offset = 0, value = values[i], buffer = Buffer.allocUnsafe(size);
+        for (let limb = 0; limb < limbCount; limb++, offset += 8) {
+            buffer.writeBigUInt64LE(value & MASK_64B, offset);
+            value = value >> 64n;
+        }
+        result[i] = buffer;
+    }
+    return result;
+}
+exports.bigIntsToBuffers = bigIntsToBuffers;
 function readBigInt(buffer, offset, elementSize) {
     const blocks = elementSize >> 3;
     let value = 0n;

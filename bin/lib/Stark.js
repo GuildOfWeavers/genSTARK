@@ -12,6 +12,8 @@ const DEFAULT_EXE_QUERY_COUNT = 80;
 const DEFAULT_FRI_QUERY_COUNT = 40;
 const MAX_EXE_QUERY_COUNT = 128;
 const MAX_FRI_QUERY_COUNT = 64;
+const DEFAULT_INITIAL_MEMORY = 128; // 8 MB
+const DEFAULT_MAXIMUM_MEMORY = 32768; // 2 GB
 const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
 const DEFAULT_HASH_ALGORITHM = 'sha256';
 // CLASS DEFINITION
@@ -33,8 +35,8 @@ class Stark {
                 console.warn(`WARNING: WebAssembly optimization is not available for prime fields with the specified modulus`);
             }
             // instantiate Hash object
-            const memory = new WebAssembly.Memory({ initial: 10 }); // TODO: enable shared memory
-            this.hash = merkle_1.createHash(sOptions.hashAlgorithm, { memory });
+            const wasmOptions2 = buildWasmOptions(optimization); // TODO: use the same options as for AIR
+            this.hash = merkle_1.createHash(sOptions.hashAlgorithm, wasmOptions2);
             if (!this.hash.isOptimized) {
                 console.warn(`WARNING: WebAssembly optimization is not available for ${sOptions.hashAlgorithm} hash algorithm`);
             }
@@ -45,7 +47,7 @@ class Stark {
         }
         this.indexGenerator = new components_1.QueryIndexGenerator(this.air.extensionFactor, sOptions);
         this.ldProver = new components_1.LowDegreeProver(this.air.field, this.indexGenerator, this.hash);
-        this.serializer = new Serializer_1.Serializer(this.air);
+        this.serializer = new Serializer_1.Serializer(this.air, this.hash.digestSize);
         this.logger = logger || new utils_1.Logger();
     }
     // PROVER
@@ -125,8 +127,7 @@ class Stark {
         const lEvaluations = lCombination.computeMany(pEvaluations, context.sEvaluations, bEvaluations, dEvaluations);
         this.logger.log(label, 'Computed random linear combination of evaluations');
         // 11 ----- Compute low-degree proof
-        const lEvaluations2 = utils_1.vectorToBuffers(lEvaluations, this.hash.digestSize);
-        const lTree = merkle_1.MerkleTree.create(lEvaluations2, this.hash);
+        const lTree = merkle_1.MerkleTree.create(lEvaluations, this.hash);
         this.logger.log(label, 'Built liner combination merkle tree');
         const lcProof = lTree.proveBatch(positions);
         let ldProof;
@@ -234,7 +235,7 @@ class Stark {
         // 7 ----- verify linear combination proof
         try {
             const lcProof = {
-                values: utils_1.vectorToBuffers(this.air.field.newVectorFrom(lcValues), this.hash.digestSize),
+                values: utils_1.bigIntsToBuffers(lcValues, this.air.field.elementSize),
                 nodes: proof.lcProof.nodes,
                 depth: proof.lcProof.depth
             };
@@ -259,10 +260,10 @@ class Stark {
         return size.total;
     }
     serialize(proof) {
-        return this.serializer.serializeProof(proof, this.hash.digestSize);
+        return this.serializer.serializeProof(proof);
     }
     parse(buffer) {
-        return this.serializer.parseProof(buffer, this.hash.digestSize);
+        return this.serializer.parseProof(buffer);
     }
     // HELPER METHODS
     // --------------------------------------------------------------------------------------------
@@ -301,12 +302,16 @@ function validateSecurityOptions(options) {
 function buildWasmOptions(options) {
     if (typeof options === 'boolean') {
         return {
-            memory: new WebAssembly.Memory({ initial: 10 }) // TODO: use defaults
+            memory: new WebAssembly.Memory({
+                initial: DEFAULT_INITIAL_MEMORY,
+                maximum: DEFAULT_MAXIMUM_MEMORY
+            })
         };
     }
     else {
-        const initialMemory = options.initialMemory || 10; // TODO: use default
-        const memory = new WebAssembly.Memory({ initial: initialMemory, maximum: options.maximumMemory });
+        const initialMemory = options.initialMemory || DEFAULT_INITIAL_MEMORY;
+        const maximumMemory = options.maximumMemory || DEFAULT_MAXIMUM_MEMORY;
+        const memory = new WebAssembly.Memory({ initial: initialMemory, maximum: maximumMemory });
         return { memory };
     }
 }

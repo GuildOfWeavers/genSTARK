@@ -1,7 +1,6 @@
 // IMPORTS
 // ================================================================================================
 import * as inliners from './inliners';
-import { Vector } from '@guildofweavers/galois';
 
 // RE-EXPORTS
 // ================================================================================================
@@ -9,6 +8,10 @@ export { writeMerkleProof, readMerkleProof, writeMatrix, readMatrix, writeArray,
 export { sizeOf } from './sizeof';
 export { Logger } from './Logger';
 export const inline = inliners;
+
+// CONSTANTS
+// ================================================================================================
+const MASK_64B = 0xFFFFFFFFFFFFFFFFn;
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
@@ -21,25 +24,25 @@ export function isPowerOf2(value: number | bigint): boolean {
     }
 }
 
-export function vectorToBuffers(values: Vector, size: number): Buffer[] {
-    const result = new Array<Buffer>(values.length);
-    if (values.elementSize > size) {
-        throw Error('Cannot convert vector to buffer: vector elements are too large');
-    }
-
-    for (let i = 0; i < values.length; i++) {
-        let buffer = Buffer.alloc(size);
-        values.copyValue(i, buffer, 0);
-        result[i] = buffer;
-    }
-    return result;
-}
-
 export function buffersToBigInts(values: Buffer[]): bigint[] {
     const result = new Array<bigint>(values.length);
     for (let i = 0; i < values.length; i++) {
         let buffer = values[i];
         result[i] = readBigInt(buffer, 0, buffer.byteLength);
+    }
+    return result;
+}
+
+export function bigIntsToBuffers(values: bigint[], size: number): Buffer[] {
+    const result = new Array<Buffer>(values.length);
+    const limbCount = size >> 3;
+    for (let i = 0; i < result.length; i++) {
+        let offset = 0, value = values[i], buffer = Buffer.allocUnsafe(size);
+        for (let limb = 0; limb < limbCount; limb++, offset += 8) {
+            buffer.writeBigUInt64LE(value & MASK_64B, offset);
+            value = value >> 64n;
+        }
+        result[i] = buffer;
     }
     return result;
 }

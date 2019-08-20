@@ -4,7 +4,7 @@ import { LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
 import { FiniteField, Vector } from '@guildofweavers/air-script';
 import { MerkleTree, Hash } from '@guildofweavers/merkle';
 import { QueryIndexGenerator } from "./QueryIndexGenerator";
-import { vectorToBuffers, buffersToBigInts } from "../utils";
+import { buffersToBigInts } from "../utils";
 import { StarkError } from '../StarkError';
 
 // CLASS DEFINITION
@@ -159,7 +159,7 @@ export class LowDegreeProver {
         const column = this.field.evalQuarticBatch(xPolys, specialX);
 
         // put the resulting column into a merkle tree
-        const cTree = MerkleTree.create(vectorToBuffers(column, this.hash.digestSize), this.hash);
+        const cTree = MerkleTree.create(column, this.hash);
 
         // recursively build all other components
         this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
