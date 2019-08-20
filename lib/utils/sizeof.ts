@@ -1,17 +1,16 @@
 // IMPORTS
 // ================================================================================================
-import { StarkProof, BatchMerkleProof, HashAlgorithm } from '@guildofweavers/genstark';
-import { getHashDigestSize } from '@guildofweavers/merkle';
+import { StarkProof, BatchMerkleProof } from '@guildofweavers/genstark';
 
 // MODULE VARIABLES
 // ================================================================================================
 export const MAX_ARRAY_LENGTH = 256;
+export const MAX_MATRIX_COLUMN_LENGTH = 127;
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
-export function sizeOf(proof: StarkProof, hashAlgorithm: HashAlgorithm) {
+export function sizeOf(proof: StarkProof, hashDigestSize: number) {
 
-    const nodeSize = getHashDigestSize(hashAlgorithm);
     let size = 0;
     
     // evData
@@ -22,14 +21,14 @@ export function sizeOf(proof: StarkProof, hashAlgorithm: HashAlgorithm) {
     size += evData;
 
     // evProof
-    let evProof = nodeSize; // root
-    evProof += sizeOfMatrix(proof.evProof.nodes, nodeSize);
+    let evProof = hashDigestSize; // root
+    evProof += sizeOfMatrix(proof.evProof.nodes);
     evProof += 1; // evaluation proof depth
     size += evProof;
 
     // lcProof
-    let lcProof = nodeSize; // root;
-    lcProof += sizeOfMatrix(proof.lcProof.nodes, nodeSize);
+    let lcProof = hashDigestSize; // root;
+    lcProof += sizeOfMatrix(proof.lcProof.nodes);
     lcProof += 1; // linear combination proof depth
     size += lcProof;
 
@@ -37,51 +36,60 @@ export function sizeOf(proof: StarkProof, hashAlgorithm: HashAlgorithm) {
     let ldProof = 1; // ld component count
     for (let i = 0; i < proof.ldProof.components.length; i++) {
         let component = proof.ldProof.components[i];
-        ldProof += nodeSize; // column root
-        ldProof += sizeOfMerkleProof(component.columnProof, nodeSize);
-        ldProof += sizeOfMerkleProof(component.polyProof, nodeSize);
+        ldProof += hashDigestSize; // column root
+        ldProof += sizeOfMerkleProof(component.columnProof);
+        ldProof += sizeOfMerkleProof(component.polyProof);
     }
-    ldProof += sizeOfArray(proof.ldProof.remainder, nodeSize);
+    ldProof += sizeOfArray(proof.ldProof.remainder);
     size += ldProof;
 
     return { evData, evProof, lcProof, ldProof, total: size };
 }
 
-export function sizeOfMerkleProof(proof: BatchMerkleProof, nodeSize: number) {
+export function sizeOfMerkleProof(proof: BatchMerkleProof) {
     let size = 0;
-    size += sizeOfArray(proof.values, nodeSize);
-    size += sizeOfMatrix(proof.nodes, nodeSize);
+    size += sizeOfArray(proof.values);
+    size += sizeOfMatrix(proof.nodes);
     size += 1; // tree depth
     return size;
 }
 
 // HELPER FUNCTIONS
 // ================================================================================================
-function sizeOfArray(array: any[], elementSize: number): number {
-    if (array.length > MAX_ARRAY_LENGTH) {
+function sizeOfArray(array: any[]): number {
+    if (array.length === 0) {
+        throw new Error(`Array cannot be zero-length`);
+    }
+    else if (array.length > MAX_ARRAY_LENGTH) {
         throw new Error(`Array length (${array.length}) cannot exceed ${MAX_ARRAY_LENGTH}`);
     }
 
     let size = 1; // 1 byte for array length
-    size += array.length * elementSize;
+    for (let i = 0; i < array.length; i++) {
+        size += array[i].length;
+    }
     return size;
 }
 
-function sizeOfMatrix(matrix: any[][], elementSize: number): number {
+function sizeOfMatrix(matrix: any[][]): number {
 
     if (matrix.length > MAX_ARRAY_LENGTH) {
         throw new Error(`Matrix column count (${matrix.length}) cannot exceed ${MAX_ARRAY_LENGTH}`);
     }
 
     let size = 1;           // 1 byte for number of columns
-    size += matrix.length;  // 1 byte for length of each column
+    size += matrix.length;  // 1 byte for length and type of each column
 
     for (let i = 0; i < matrix.length; i++) {
-        let columnLength = matrix[i].length;
-        if (columnLength >= MAX_ARRAY_LENGTH) {
-            throw new Error(`Matrix column length (${columnLength}) cannot exceed ${MAX_ARRAY_LENGTH - 1}`);
+        let column = matrix[i];
+        let columnLength = column.length;
+        if (columnLength >= MAX_MATRIX_COLUMN_LENGTH) {
+            throw new Error(`Matrix column length (${columnLength}) cannot exceed ${MAX_MATRIX_COLUMN_LENGTH}`);
         }
-        size += (columnLength * elementSize);
+
+        for (let j = 0; j < columnLength; j++) {
+            size += column[j].length;
+        }
     }
 
     return size;

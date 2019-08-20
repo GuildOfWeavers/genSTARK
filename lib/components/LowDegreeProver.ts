@@ -1,25 +1,25 @@
 // IMPORTS
 // ================================================================================================
-import { HashAlgorithm, LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
+import { LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
 import { FiniteField, Vector } from '@guildofweavers/air-script';
-import { MerkleTree, getHashDigestSize } from '@guildofweavers/merkle';
+import { MerkleTree, Hash } from '@guildofweavers/merkle';
 import { QueryIndexGenerator } from "./QueryIndexGenerator";
-import { vectorToBuffers, buffersToBigInts } from "../utils";
+import { buffersToBigInts } from "../utils";
 import { StarkError } from '../StarkError';
 
 // CLASS DEFINITION
 // ================================================================================================
 export class LowDegreeProver {
 
-    readonly field              : FiniteField;
-    readonly hashAlgorithm      : HashAlgorithm;
-    readonly indexGenerator     : QueryIndexGenerator;
+    readonly field          : FiniteField;
+    readonly hash           : Hash;
+    readonly indexGenerator : QueryIndexGenerator;
 
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(field: FiniteField, indexGenerator: QueryIndexGenerator, hasAlgorithm: HashAlgorithm) {
+    constructor(field: FiniteField, indexGenerator: QueryIndexGenerator, hash: Hash) {
         this.field = field;
-        this.hashAlgorithm = hasAlgorithm;
+        this.hash = hash;
         this.indexGenerator = indexGenerator;
     }
 
@@ -27,8 +27,10 @@ export class LowDegreeProver {
     // --------------------------------------------------------------------------------------------
     prove(lTree: MerkleTree, values: Vector, domain: Vector, maxDegreePlus1: number) {
 
+        const componentCount = Math.min(Math.ceil(Math.log2(values.length) / 2) - 4, 0);
+
         const result: LowDegreeProof = {
-            components  : new Array<FriComponent>(),
+            components  : new Array<FriComponent>(componentCount),
             remainder   : []
         };
 
@@ -55,7 +57,7 @@ export class LowDegreeProver {
             let positions = this.indexGenerator.getFriIndexes(columnRoot, columnLength);
 
             // verify Merkle proof for the column
-            if (!MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
+            if (!MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hash)) {
                 throw new StarkError(`Verification of column Merkle proof failed at depth ${depth}`);
             }
 
@@ -69,7 +71,7 @@ export class LowDegreeProver {
             }
 
             // verify Merkle proof for polynomials
-            if (!MerkleTree.verifyBatch(lRoot, polyPositions, polyProof, this.hashAlgorithm)) {
+            if (!MerkleTree.verifyBatch(lRoot, polyPositions, polyProof, this.hash)) {
                 throw new StarkError(`Verification of polynomial Merkle proof failed at depth ${depth}`);
             }
 
@@ -121,7 +123,7 @@ export class LowDegreeProver {
         }
 
         // check that Merkle root matches up
-        const cTree = MerkleTree.create(proof.remainder, this.hashAlgorithm);
+        const cTree = MerkleTree.create(proof.remainder, this.hash);
         if (!cTree.root.equals(lRoot)) {
             throw new StarkError(`Remainder values do not match Merkle root of the last column`);
         }
@@ -140,7 +142,7 @@ export class LowDegreeProver {
         if (values.length <= 256) {
             const rootOfUnity = this.field.exp(domain.getValue(1), BigInt(4**depth));
             this.verifyRemainder(values, maxDegreePlus1, rootOfUnity);
-            result.remainder = lTree.values;
+            result.remainder = lTree.getLeaves();
             return;
         }
 
@@ -157,8 +159,10 @@ export class LowDegreeProver {
         const column = this.field.evalQuarticBatch(xPolys, specialX);
 
         // put the resulting column into a merkle tree
-        const hashDigestSize = getHashDigestSize(this.hashAlgorithm);
-        const cTree = MerkleTree.create(vectorToBuffers(column, hashDigestSize), this.hashAlgorithm);
+        const cTree = MerkleTree.create(column, this.hash);
+
+        // recursively build all other components
+        this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
 
         // compute spot check positions in the column and corresponding positions in the original values
         const columnLength = column.length;
@@ -171,15 +175,12 @@ export class LowDegreeProver {
             polyPositions[i * 4 + 3] = positions[i] + columnLength * 3;
         }
 
-        // build this component of the proof
-        result.components.push({
+        // build and add proof component to the result
+        result.components[depth] = {
             columnRoot  : cTree.root,
             columnProof : cTree.proveBatch(positions),
             polyProof   : lTree.proveBatch(polyPositions)
-        });
-
-        // recursively build all other components
-        this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
+        };
     }
 
     private verifyRemainder(remainder: Vector, maxDegreePlus1: number, rootOfUnity: bigint) {

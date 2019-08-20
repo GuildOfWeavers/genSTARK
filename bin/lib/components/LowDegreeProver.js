@@ -8,16 +8,17 @@ const StarkError_1 = require("../StarkError");
 class LowDegreeProver {
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(field, indexGenerator, hasAlgorithm) {
+    constructor(field, indexGenerator, hash) {
         this.field = field;
-        this.hashAlgorithm = hasAlgorithm;
+        this.hash = hash;
         this.indexGenerator = indexGenerator;
     }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
     prove(lTree, values, domain, maxDegreePlus1) {
+        const componentCount = Math.min(Math.ceil(Math.log2(values.length) / 2) - 4, 0);
         const result = {
-            components: new Array(),
+            components: new Array(componentCount),
             remainder: []
         };
         this.fri(lTree, values, maxDegreePlus1, 0, domain, result);
@@ -37,7 +38,7 @@ class LowDegreeProver {
             let columnLength = Math.floor(rouDegree / 4);
             let positions = this.indexGenerator.getFriIndexes(columnRoot, columnLength);
             // verify Merkle proof for the column
-            if (!merkle_1.MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hashAlgorithm)) {
+            if (!merkle_1.MerkleTree.verifyBatch(columnRoot, positions, columnProof, this.hash)) {
                 throw new StarkError_1.StarkError(`Verification of column Merkle proof failed at depth ${depth}`);
             }
             // compute the positions for the values in the polynomial
@@ -49,7 +50,7 @@ class LowDegreeProver {
                 polyPositions[i * 4 + 3] = positions[i] + columnLength * 3;
             }
             // verify Merkle proof for polynomials
-            if (!merkle_1.MerkleTree.verifyBatch(lRoot, polyPositions, polyProof, this.hashAlgorithm)) {
+            if (!merkle_1.MerkleTree.verifyBatch(lRoot, polyPositions, polyProof, this.hash)) {
                 throw new StarkError_1.StarkError(`Verification of polynomial Merkle proof failed at depth ${depth}`);
             }
             // For each y coordinate, get the x coordinates on the row, the values on
@@ -93,7 +94,7 @@ class LowDegreeProver {
             throw new StarkError_1.StarkError(`Remainder degree cannot be greater than number of remainder values`);
         }
         // check that Merkle root matches up
-        const cTree = merkle_1.MerkleTree.create(proof.remainder, this.hashAlgorithm);
+        const cTree = merkle_1.MerkleTree.create(proof.remainder, this.hash);
         if (!cTree.root.equals(lRoot)) {
             throw new StarkError_1.StarkError(`Remainder values do not match Merkle root of the last column`);
         }
@@ -108,7 +109,7 @@ class LowDegreeProver {
         if (values.length <= 256) {
             const rootOfUnity = this.field.exp(domain.getValue(1), BigInt(4 ** depth));
             this.verifyRemainder(values, maxDegreePlus1, rootOfUnity);
-            result.remainder = lTree.values;
+            result.remainder = lTree.getLeaves();
             return;
         }
         // break values into rows and columns and sample 4 values for each row
@@ -121,8 +122,9 @@ class LowDegreeProver {
         const specialX = this.field.prng(lTree.root);
         const column = this.field.evalQuarticBatch(xPolys, specialX);
         // put the resulting column into a merkle tree
-        const hashDigestSize = merkle_1.getHashDigestSize(this.hashAlgorithm);
-        const cTree = merkle_1.MerkleTree.create(utils_1.vectorToBuffers(column, hashDigestSize), this.hashAlgorithm);
+        const cTree = merkle_1.MerkleTree.create(column, this.hash);
+        // recursively build all other components
+        this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
         // compute spot check positions in the column and corresponding positions in the original values
         const columnLength = column.length;
         const positions = this.indexGenerator.getFriIndexes(cTree.root, columnLength);
@@ -133,14 +135,12 @@ class LowDegreeProver {
             polyPositions[i * 4 + 2] = positions[i] + columnLength * 2;
             polyPositions[i * 4 + 3] = positions[i] + columnLength * 3;
         }
-        // build this component of the proof
-        result.components.push({
+        // build and add proof component to the result
+        result.components[depth] = {
             columnRoot: cTree.root,
             columnProof: cTree.proveBatch(positions),
             polyProof: lTree.proveBatch(polyPositions)
-        });
-        // recursively build all other components
-        this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
+        };
     }
     verifyRemainder(remainder, maxDegreePlus1, rootOfUnity) {
         // exclude points which should be skipped during evaluation
