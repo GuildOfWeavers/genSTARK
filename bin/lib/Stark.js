@@ -12,8 +12,9 @@ const DEFAULT_EXE_QUERY_COUNT = 80;
 const DEFAULT_FRI_QUERY_COUNT = 40;
 const MAX_EXE_QUERY_COUNT = 128;
 const MAX_FRI_QUERY_COUNT = 64;
-const DEFAULT_INITIAL_MEMORY = 128; // 8 MB
-const DEFAULT_MAXIMUM_MEMORY = 32767; // 2 GB
+const WASM_PAGE_SIZE = 65536; // 64 KB
+const DEFAULT_INITIAL_MEMORY = 32 * 2 ** 20; // 32 MB
+const DEFAULT_MAXIMUM_MEMORY = 2 * 2 ** 30 - WASM_PAGE_SIZE; // 2 GB - one page
 const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
 const DEFAULT_HASH_ALGORITHM = 'sha256';
 // CLASS DEFINITION
@@ -300,14 +301,14 @@ function buildWasmOptions(options) {
     if (typeof options === 'boolean') {
         return {
             memory: new WebAssembly.Memory({
-                initial: DEFAULT_INITIAL_MEMORY,
-                maximum: DEFAULT_MAXIMUM_MEMORY
+                initial: Math.ceil(DEFAULT_INITIAL_MEMORY / WASM_PAGE_SIZE),
+                maximum: Math.ceil(DEFAULT_MAXIMUM_MEMORY / WASM_PAGE_SIZE)
             })
         };
     }
     else {
-        const initialMemory = options.initialMemory || DEFAULT_INITIAL_MEMORY;
-        const maximumMemory = options.maximumMemory || DEFAULT_MAXIMUM_MEMORY;
+        const initialMemory = Math.ceil((options.initialMemory || DEFAULT_INITIAL_MEMORY) / WASM_PAGE_SIZE);
+        const maximumMemory = Math.ceil((options.maximumMemory || DEFAULT_MAXIMUM_MEMORY) / WASM_PAGE_SIZE);
         const memory = new WebAssembly.Memory({ initial: initialMemory, maximum: maximumMemory });
         return { memory };
     }

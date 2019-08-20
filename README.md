@@ -53,35 +53,35 @@ There are a few more sophisticated examples in this repository:
 When you run the examples, you should get a nice log documenting each step. Here is an example output of running 128-bit MiMC STARK for 2<sup>13</sup> steps:
 ```
 Starting STARK computation
-Set up evaluation context in 6 ms
-Generated execution trace in 41 ms
+Set up evaluation context in 7 ms
+Generated execution trace in 39 ms
 Converted execution trace into polynomials and low-degree extended them in 47 ms
 Computed Q(x) polynomials in 254 ms
 Computed Z(x) polynomial in 3 ms
-Computed Z(x) inverses in 13 ms
-Computed D(x) polynomials in 4 ms
-Computed B(x) polynomials in 46 ms
-Serialized evaluations of P(x) and S(x) polynomials in 152 ms
-Built evaluation merkle tree in 75 ms
-Computed 80 evaluation spot checks in 3 ms
-Computed random linear combination of evaluations in 34 ms
-Built liner combination merkle tree in 116 ms
-Computed low-degree proof in 149 ms
-STARK computed in 949 ms
+Computed Z(x) inverses in 14 ms
+Computed D(x) polynomials in 5 ms
+Computed B(x) polynomials in 45 ms
+Serialized evaluations of P(x) and S(x) polynomials in 41 ms
+Built evaluation merkle tree in 48 ms
+Computed 80 evaluation spot checks in 5 ms
+Computed random linear combination of evaluations in 31 ms
+Built liner combination merkle tree in 46 ms
+Computed low-degree proof in 118 ms
+STARK computed in 707 ms
 --------------------
-Proof serialized in 8 ms; size: 211.99 KB
+Proof serialized in 10 ms; size: 181.3 KB
 --------------------
-Proof parsed in 5 ms
+Proof parsed in 9 ms
 --------------------
 Starting STARK verification
-Set up evaluation context in 2 ms
+Set up evaluation context in 1 ms
 Computed positions for evaluation spot checks in 2 ms
-Decoded evaluation spot checks in 1 ms
+Decoded evaluation spot checks in 2 ms
 Verified evaluation merkle proof in 5 ms
-Verified low-degree proof in 46 ms
-Verified transition and boundary constraints in 16 ms
-Verified liner combination merkle proof in 2 ms
-STARK verified in 78 ms
+Verified low-degree proof in 36 ms
+Verified transition and boundary constraints in 17 ms
+Verified liner combination merkle proof in 4 ms
+STARK verified in 69 ms
 --------------------
 ```
 
@@ -102,8 +102,10 @@ The meaning of the constructor parameters is as follows:
 | ------------------ | ----------- |
 | source             | [AirScript](https://github.com/GuildOfWeavers/AirScript) source defining transition function, transition constraints, and other properties of the STARK. |
 | security?          | An optional property specifying [security parameters](#Security-options) for the STARK. |
-| optimization?      | An optional property specifying [WASM optimization parameters](#Optimization-options) for the STARK.  Set this to `null` to turn WASM-optimization off. If you provide this parameter to STARKS over fields that don't support WASM-optimization, an error will be thrown.|
+| optimization?      | An optional property specifying [WASM optimization parameters](#Optimization-options) for the STARK. You can also set this to `true` to turn on WASM optimization with default parameters. |
 | logger?            | An optional logger. The default logger prints output to the console, but it can be replaced with anything that complies with the Logger interface. |
+
+**Note:** WASM-optimization is available for certain [finite fields](https://github.com/GuildOfWeavers/galois#wasm-optimization) and [hash functions](https://github.com/GuildOfWeavers/merkle#hash). If the field or the hash function you are using does not support WASM-optimization, a warning will be printed and its JavaScript equivalents will be used. In general, WASM optimization can speed up STARK proof time by 2x - 5x.
 
 ### Security options
 Security options parameter should have the following form:
@@ -113,17 +115,15 @@ Security options parameter should have the following form:
 | extensionFactor?   | Number by which the execution trace is "stretched." Must be a power of 2 at least 2x of the constraint degree, but cannot exceed 32. This property is optional, the default is smallest power of 2 that is greater than 2 * constraint degree. |
 | exeQueryCount? | Number of queries of the execution trace to include into the proof. This property is optional; the default is 80; the max is 128. |
 | friQueryCount? | Number of queries of the columns of low degree proof to include into the proof. This property is optional; the default is 40; the max is 64. |
-| hashAlgorithm?     | Hash algorithm to use when building Merkle trees for the proof. Currently, can be one of the following values: `sha256`, `blake2s256`, or `wasmBlake2s256`. This property is optional; the default is `sha256`. |
-
-**Note:** `wasmBlake2s256` is an experimental implementation of Blake2s algorithm in WebAssembly. On small inputs, it performs about 3x better than Node's native Blake2s implementation (and about 3.5x better than SHA256).
+| hashAlgorithm?     | Hash algorithm to use when building Merkle trees for the proof. Currently, can be one of the following values: `sha256`, `blake2s256`. This property is optional; the default is `sha256`. |
 
 ### Optimization options
 Optimization options parameter should have the following form:
 
 | Property           | Description |
 | ------------------ | ----------- |
-| initialMemory?     | Initial number of bytes to allocate for WASM optimization. |
-| maximumMemory?     | Maximum number of bytes to allocate for WASM optimization. |
+| initialMemory?     | Initial number of bytes to allocate for WASM optimization; the default is 32 MB. |
+| maximumMemory?     | Maximum number of bytes to allocate for WASM optimization; the default is 2 GB.  |
 
 ## Generating proofs
 Once you have a `Stark` object, you can start generating proofs using `Stark.prove()` method like so:
@@ -208,16 +208,16 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single threa
 
 | STARK               | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
 | ------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
-| MiMC                | 128 bits   | 3      | 1         | 2<sup>13</sup> | 750 ms     | 181 KB     |
-| MiMC                | 128 bits   | 3      | 1         | 2<sup>17</sup> | 11 sec     | 333 KB     |
+| MiMC*               | 128 bits   | 3      | 1         | 2<sup>13</sup> | 750 ms     | 181 KB     |
+| MiMC*               | 128 bits   | 3      | 1         | 2<sup>17</sup> | 11 sec     | 333 KB     |
 | MiMC                | 256 bits   | 3      | 1         | 2<sup>13</sup> | 3.8 sec    | 213 KB     |
 | MiMC                | 256 bits   | 3      | 1         | 2<sup>17</sup> | 64 sec     | 384 KB     |
-| Merkle Proof (d=8)  | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 600 ms     | 75 KB      |
-| Merkle Proof (d=16) | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.2 sec    | 96 KB     |
+| Merkle Proof (d=8)* | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 600 ms     | 75 KB      |
+| Merkle Proof (d=16)* | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.2 sec    | 96 KB     |
 
 Merkle proofs are based on a modified version of [Rescue](/examples/rescue) hash function, and in addition to 8 state registers require 1 public input register and 1 secret input register.
 
-At this point, 128-bit fields are able to take advantage of WASM-based optimization which makes arithmetic operations significantly faster (e.g. over 3x improvement over native JavaScript counterparts). Nevertheless, there is still opportunity to improve proof time by at least 10x by moving more operations out of JavaScript and leveraging SIMD and multithreading.
+**\*** Takes advantage of WebAssembly optimization.
 
 # References
 This library is largely based on Vitalik Buterin's [zk-STARK/MiMC tutorial](https://github.com/ethereum/research/tree/master/mimc_stark). Other super useful resources:
