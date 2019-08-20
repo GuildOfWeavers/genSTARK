@@ -208,12 +208,12 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single threa
 
 | STARK               | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
 | ------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
-| MiMC                | 128 bits   | 3      | 1         | 2<sup>13</sup> | 1 sec      | 212 KB     |
-| MiMC                | 128 bits   | 3      | 1         | 2<sup>17</sup> | 13.5 sec   | 377 KB     |
+| MiMC                | 128 bits   | 3      | 1         | 2<sup>13</sup> | 750 ms     | 181 KB     |
+| MiMC                | 128 bits   | 3      | 1         | 2<sup>17</sup> | 11 sec     | 333 KB     |
 | MiMC                | 256 bits   | 3      | 1         | 2<sup>13</sup> | 3.8 sec    | 213 KB     |
 | MiMC                | 256 bits   | 3      | 1         | 2<sup>17</sup> | 64 sec     | 384 KB     |
-| Merkle Proof (d=8)  | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 650 ms     | 88 KB      |
-| Merkle Proof (d=16) | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.3 sec    | 111 KB     |
+| Merkle Proof (d=8)  | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 600 ms     | 75 KB      |
+| Merkle Proof (d=16) | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.2 sec    | 96 KB     |
 
 Merkle proofs are based on a modified version of [Rescue](/examples/rescue) hash function, and in addition to 8 state registers require 1 public input register and 1 secret input register.
 

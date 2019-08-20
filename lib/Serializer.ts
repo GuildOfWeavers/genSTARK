@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { StarkProof, FriComponent, HashAlgorithm } from "@guildofweavers/genstark";
+import { StarkProof, FriComponent } from "@guildofweavers/genstark";
 import { FiniteField, Matrix, Vector } from '@guildofweavers/air-script';
 import * as utils from './utils';
 

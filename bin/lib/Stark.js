@@ -13,7 +13,7 @@ const DEFAULT_FRI_QUERY_COUNT = 40;
 const MAX_EXE_QUERY_COUNT = 128;
 const MAX_FRI_QUERY_COUNT = 64;
 const DEFAULT_INITIAL_MEMORY = 128; // 8 MB
-const DEFAULT_MAXIMUM_MEMORY = 32768; // 2 GB
+const DEFAULT_MAXIMUM_MEMORY = 32767; // 2 GB
 const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
 const DEFAULT_HASH_ALGORITHM = 'sha256';
 // CLASS DEFINITION
@@ -32,7 +32,7 @@ class Stark {
             // instantiate AIR object
             this.air = air_script_1.parseScript(source, undefined, { extensionFactor: sOptions.extensionFactor, wasmOptions });
             if (!this.air.field.isOptimized) {
-                console.warn(`WARNING: WebAssembly optimization is not available for prime fields with the specified modulus`);
+                console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
             }
             // instantiate Hash object
             const wasmOptions2 = buildWasmOptions(optimization); // TODO: use the same options as for AIR
@@ -104,11 +104,8 @@ class Stark {
         const bEvaluations = bPoly.evaluateAll(pEvaluations, context.evaluationDomain);
         this.logger.log(label, 'Computed B(x) polynomials');
         // 8 ----- build merkle tree for evaluations of P(x) and S(x)
-        const hashedEvaluations = new Array(evaluationDomainSize);
-        for (let i = 0; i < evaluationDomainSize; i++) {
-            let v = this.serializer.mergeValues(pEvaluations, context.sEvaluations, i);
-            hashedEvaluations[i] = this.hash.digest(v);
-        }
+        const eVectors = [...this.air.field.matrixRowsToVectors(pEvaluations), ...context.sEvaluations];
+        const hashedEvaluations = this.hash.mergeVectorRows(eVectors);
         this.logger.log(label, 'Serialized evaluations of P(x) and S(x) polynomials');
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hash);
         this.logger.log(label, 'Built evaluation merkle tree');
