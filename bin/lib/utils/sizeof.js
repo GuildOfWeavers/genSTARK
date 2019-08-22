@@ -26,15 +26,20 @@ function sizeOf(proof, hashDigestSize) {
     size += lcProof;
     // ldProof
     let ldProof = 1; // ld component count
+    const ldLevels = [];
     for (let i = 0; i < proof.ldProof.components.length; i++) {
         let component = proof.ldProof.components[i];
-        ldProof += hashDigestSize; // column root
-        ldProof += sizeOfMerkleProof(component.columnProof);
-        ldProof += sizeOfMerkleProof(component.polyProof);
+        let ldLevel = hashDigestSize; // column root
+        ldLevel += sizeOfMerkleProof(component.columnProof);
+        ldLevel += sizeOfMerkleProof(component.polyProof);
+        ldProof += ldLevel;
+        ldLevels.push(ldLevel);
     }
-    ldProof += sizeOfArray(proof.ldProof.remainder);
+    let ldRemainder = sizeOfArray(proof.ldProof.remainder);
+    ldLevels.push(ldRemainder);
+    ldProof += ldRemainder;
     size += ldProof;
-    return { evData, evProof, lcProof, ldProof, total: size };
+    return { evData, evProof, lcProof, ldProof: { levels: ldLevels, total: ldProof }, total: size };
 }
 exports.sizeOf = sizeOf;
 function sizeOfMerkleProof(proof) {
