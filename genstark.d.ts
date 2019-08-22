@@ -38,6 +38,9 @@ declare module '@guildofweavers/genstark' {
 
     export class Stark {
 
+        /** Estimated security level of the STARK (experimental) */
+        readonly securityLevel: number;
+
         /**
          * Creates a STARK instance based on the provided parameters
          * @param source AirScript source for the STARK

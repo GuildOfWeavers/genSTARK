@@ -4,7 +4,7 @@ import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOpti
 import { MerkleTree, BatchMerkleProof, createHash, Hash, WasmOptions } from '@guildofweavers/merkle';
 import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
 import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
-import { Logger, sizeOf, bigIntsToBuffers } from './utils';
+import { Logger, sizeOf, bigIntsToBuffers, powLog2 } from './utils';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -69,6 +69,25 @@ export class Stark {
         this.ldProver = new LowDegreeProver(this.air.field, this.indexGenerator, this.hash);
         this.serializer = new Serializer(this.air, this.hash.digestSize);
         this.logger = logger || new Logger();
+    }
+
+    // ACCESSORS
+    // --------------------------------------------------------------------------------------------
+    get securityLevel(): number {
+        const extensionFactor = this.air.extensionFactor;
+
+        // execution trace security
+        const exeQueryCount = this.indexGenerator.exeQueryCount;
+        const es = powLog2(extensionFactor / this.air.maxConstraintDegree, exeQueryCount);
+
+        // FRI proof security
+        const friQueryCount = this.indexGenerator.friQueryCount;
+        const fs = Math.log2(extensionFactor) * friQueryCount;
+
+        // collision resistance of hash function
+        const hs = this.hash.digestSize * 4;
+
+        return Math.floor(Math.min(es, fs, hs));
     }
 
     // PROVER

@@ -56,3 +56,12 @@ export function readBigInt(buffer: Buffer, offset: number, elementSize: number):
     }
     return value;
 }
+
+export function powLog2(base: number, exponent: number): number {
+    let twos = 0;
+    while (exponent % 2 === 0) {
+        twos++;
+        exponent = exponent / 2;
+    }
+    return (2**twos) * Math.log2(base**exponent);
+}
