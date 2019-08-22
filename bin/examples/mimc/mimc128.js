@@ -15,6 +15,13 @@ const roundConstants = new Array(64);
 for (let i = 0; i < 64; i++) {
     roundConstants[i] = (BigInt(i) ** 7n) ^ 42n;
 }
+// define security options for the STARK
+const securityOptions = {
+    hashAlgorithm: 'blake2s256',
+    extensionFactor: 16,
+    exeQueryCount: 40,
+    friQueryCount: 24
+};
 // create the STARK for MiMC computation
 const mimcStark = new index_1.Stark(`
 define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
@@ -30,7 +37,7 @@ define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`, { hashAlgorithm: 'blake2s256' }, { initialMemory: 512 * 2 ** 20 }); // 512 MB
+}`, securityOptions, { initialMemory: 512 * 2 ** 20 }); // 512 MB
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
@@ -56,4 +63,5 @@ console.log('-'.repeat(20));
 // verify the proof
 mimcStark.verify(assertions, proof);
 console.log('-'.repeat(20));
+console.log(`STARK security level: ${mimcStark.securityLevel}`);
 //# sourceMappingURL=mimc128.js.map

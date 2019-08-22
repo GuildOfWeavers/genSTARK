@@ -64,4 +64,13 @@ function readBigInt(buffer, offset, elementSize) {
     return value;
 }
 exports.readBigInt = readBigInt;
+function powLog2(base, exponent) {
+    let twos = 0;
+    while (exponent % 2 === 0) {
+        twos++;
+        exponent = exponent / 2;
+    }
+    return (2 ** twos) * Math.log2(base ** exponent);
+}
+exports.powLog2 = powLog2;
 //# sourceMappingURL=index.js.map

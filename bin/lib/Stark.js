@@ -51,6 +51,20 @@ class Stark {
         this.serializer = new Serializer_1.Serializer(this.air, this.hash.digestSize);
         this.logger = logger || new utils_1.Logger();
     }
+    // ACCESSORS
+    // --------------------------------------------------------------------------------------------
+    get securityLevel() {
+        const extensionFactor = this.air.extensionFactor;
+        // execution trace security
+        const exeQueryCount = this.indexGenerator.exeQueryCount;
+        const es = utils_1.powLog2(extensionFactor / this.air.maxConstraintDegree, exeQueryCount);
+        // FRI proof security
+        const friQueryCount = this.indexGenerator.friQueryCount;
+        const fs = Math.log2(extensionFactor) * friQueryCount;
+        // collision resistance of hash function
+        const hs = this.hash.digestSize * 4;
+        return Math.floor(Math.min(es, fs, hs));
+    }
     // PROVER
     // --------------------------------------------------------------------------------------------
     prove(assertions, initValues, publicInputs, secretInputs) {

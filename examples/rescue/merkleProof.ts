@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { Assertion } from '@guildofweavers/genstark';
+import { Assertion, SecurityOptions } from '@guildofweavers/genstark';
 import { Stark, createPrimeField } from '../../index';
 import { Rescue, MerkleTree, makeHashFunction } from './utils';
 
@@ -37,6 +37,14 @@ const { roundConstants } = rescue.groupConstants(keyStates);
 
 // STARK DEFINITION
 // ================================================================================================
+// define security options for the STARK
+const securityOptions: SecurityOptions = {
+    hashAlgorithm   : 'blake2s256',
+    extensionFactor : 16,
+    exeQueryCount   : 48,
+    friQueryCount   : 24
+};
+
 const merkleStark = new Stark(`
 define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
 
@@ -144,7 +152,7 @@ define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
         $k7: repeat [${roundConstants[6].join(', ')}];
         $k8: repeat [${roundConstants[7].join(', ')}];
     }
-}`, { hashAlgorithm: 'blake2s256' }, true);
+}`, securityOptions, true);
 
 // TESTING
 // ================================================================================================
@@ -178,6 +186,7 @@ console.log('-'.repeat(20));
 merkleStark.verify(assertions, sProof, [binaryIndex]);
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(merkleStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
+console.log(`Security level: ${merkleStark.securityLevel}`);
 
 // HELPER FUNCTIONS
 // ================================================================================================
