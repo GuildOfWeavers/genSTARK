@@ -111,7 +111,7 @@ export class LinearCombination {
         }
 
         // put all evaluations together
-        allEvaluations = [...psbEvaluations, ...psbEvaluations2, ...dVectors, ...dEvaluations2];
+        allEvaluations = [...dVectors, ...dEvaluations2, ...psbEvaluations, ...psbEvaluations2];
 
         // compute a linear combination of all evaluations
         this.coefficients = this.field.prng(this.seed, allEvaluations.length);
@@ -143,7 +143,7 @@ export class LinearCombination {
         }
 
         // put all evaluations together
-        allValues = this.field.newVectorFrom([...psbValues, ...psbValues2, ...dValues, ...dValues2]);
+        allValues = this.field.newVectorFrom([...dValues, ...dValues2, ...psbValues, ...psbValues2]);
 
         if (!this.coefficients) {
             this.coefficients = this.field.prng(this.seed, allValues.length);

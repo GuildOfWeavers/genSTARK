@@ -2,7 +2,7 @@
 // ================================================================================================
 import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOptions, Logger as ILogger } from '@guildofweavers/genstark';
 import { MerkleTree, BatchMerkleProof, createHash, Hash, WasmOptions } from '@guildofweavers/merkle';
-import { parseScript, AirObject, Matrix, ProofContext } from '@guildofweavers/air-script';
+import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
 import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
 import { Logger, sizeOf, bigIntsToBuffers, powLog2 } from './utils';
 import { Serializer } from './Serializer';
@@ -105,6 +105,7 @@ export class Stark {
         if (!Array.isArray(initValues)) throw new TypeError('Initialization values parameter must be an array');
 
         // 1 ----- set up evaluation context
+        const field = this.air.field;
         const context = this.air.createContext(publicInputs || [], secretInputs || [], this.extensionFactor);
         const evaluationDomainSize = context.evaluationDomain.length;
         this.logger.log(label, 'Set up evaluation context');
@@ -121,13 +122,15 @@ export class Stark {
         this.logger.log(label, 'Generated execution trace');
         
         // 3 ----- compute P(x) polynomials and low-degree extend them
-        const pPolys = this.air.field.interpolateRoots(context.executionDomain, executionTrace);
-        const pEvaluations = this.air.field.evalPolysAtRoots(pPolys, context.evaluationDomain);
-        this.logger.log(label, 'Converted execution trace into polynomials and low-degree extended them');
+        const pPolys = field.interpolateRoots(context.executionDomain, executionTrace);
+        this.logger.log(label, 'Computed execution trace polynomials');
+
+        const pEvaluations = field.evalPolysAtRoots(pPolys, context.evaluationDomain);
+        this.logger.log(label, 'Low-degree extended execution trace polynomials');
 
         // 4 ----- build merkle tree for evaluations of P(x) and S(x)
         const sEvaluations = context.getSecretRegisterTraces();
-        const eVectors = [...this.air.field.matrixRowsToVectors(pEvaluations), ...sEvaluations];
+        const eVectors = [...field.matrixRowsToVectors(pEvaluations), ...sEvaluations];
         const hashedEvaluations = this.hash.mergeVectorRows(eVectors);
         this.logger.log(label, 'Serialized evaluations of P(x) and S(x) polynomials');
 
@@ -138,8 +141,8 @@ export class Stark {
         let qEvaluations: Matrix;
         try {
             const cEvaluations = context.evaluateTracePolynomials(pPolys);
-            const qPolys = this.air.field.interpolateRoots(context.compositionDomain, cEvaluations);
-            qEvaluations = this.air.field.evalPolysAtRoots(qPolys, context.evaluationDomain);
+            const qPolys = field.interpolateRoots(context.compositionDomain, cEvaluations);
+            qEvaluations = field.evalPolysAtRoots(qPolys, context.evaluationDomain);
         }
         catch (error) {
             throw new StarkError('Failed to evaluate transition constraints', error);
@@ -153,11 +156,11 @@ export class Stark {
 
         // 7 ----- compute D(x) = Q(x) / Z(x)
         // first, compute inverse of Z(x)
-        const zInverses = this.air.field.divVectorElements(zEvaluations.denominators, zEvaluations.numerators);
+        const zInverses = field.divVectorElements(zEvaluations.denominators, zEvaluations.numerators);
         this.logger.log(label, 'Computed Z(x) inverses');
 
         // then, multiply all values together to compute D(x)
-        const dEvaluations = this.air.field.mulMatrixRows(qEvaluations, zInverses);
+        const dEvaluations = field.mulMatrixRows(qEvaluations, zInverses);
         this.logger.log(label, 'Computed D(x) polynomials');
 
         // 8 ----- compute boundary constraints B(x)
@@ -221,6 +224,7 @@ export class Stark {
         const label = this.logger.start('Starting STARK verification');
         const eRoot = proof.evProof.root;
         const extensionFactor = this.extensionFactor;
+        const field = this.air.field;
 
         // 0 ----- validate parameters
         if (assertions.length < 1) throw new TypeError('At least one assertion must be provided');
@@ -289,7 +293,7 @@ export class Stark {
         const lcValues = new Array<bigint>(positions.length);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
-            let x = this.air.field.exp(context.rootOfUnity, BigInt(step));
+            let x = field.exp(context.rootOfUnity, BigInt(step));
 
             let pValues = pEvaluations.get(step)!;
             let nValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize)!;
@@ -298,7 +302,7 @@ export class Stark {
 
             // evaluate constraints and use the result to compute D(x) and B(x)
             let qValues = context.evaluateConstraintsAt(x, pValues, nValues, sValues);
-            let dValues = this.air.field.divVectorElements(this.air.field.newVectorFrom(qValues), zValue).toValues();
+            let dValues = field.divVectorElements(field.newVectorFrom(qValues), zValue).toValues();
             let bValues = bPoly.evaluateAt(pValues, x);
 
             // compute linear combination of all evaluations
@@ -309,7 +313,7 @@ export class Stark {
         // 7 ----- verify linear combination proof
         try {
             const lcProof: BatchMerkleProof = {
-                values  : bigIntsToBuffers(lcValues, this.air.field.elementSize),
+                values  : bigIntsToBuffers(lcValues, field.elementSize),
                 nodes   : proof.lcProof.nodes,
                 depth   : proof.lcProof.depth
             };
