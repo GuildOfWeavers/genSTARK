@@ -8,10 +8,11 @@ const StarkError_1 = require("../StarkError");
 class LowDegreeProver {
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(field, indexGenerator, hash) {
+    constructor(field, indexGenerator, hash, logger) {
         this.field = field;
         this.hash = hash;
         this.indexGenerator = indexGenerator;
+        this.log = logger;
     }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
@@ -110,6 +111,7 @@ class LowDegreeProver {
             const rootOfUnity = this.field.exp(domain.getValue(1), BigInt(4 ** depth));
             this.verifyRemainder(values, maxDegreePlus1, rootOfUnity);
             result.remainder = lTree.getLeaves();
+            this.log(`Computed FRI remainder of ${values.length} values`);
             return;
         }
         // break values into rows and columns and sample 4 values for each row
@@ -124,6 +126,7 @@ class LowDegreeProver {
         // put the resulting column into a merkle tree
         const cTree = merkle_1.MerkleTree.create(column, this.hash);
         // recursively build all other components
+        this.log(`Computed FRI layer at depth ${depth}`);
         this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
         // compute spot check positions in the column and corresponding positions in the original values
         const columnLength = column.length;

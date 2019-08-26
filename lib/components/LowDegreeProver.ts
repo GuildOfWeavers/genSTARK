@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { LowDegreeProof, FriComponent } from "@guildofweavers/genstark";
+import { LowDegreeProof, FriComponent, LogFunction } from "@guildofweavers/genstark";
 import { FiniteField, Vector } from '@guildofweavers/air-script';
 import { MerkleTree, Hash } from '@guildofweavers/merkle';
 import { QueryIndexGenerator } from "./QueryIndexGenerator";
@@ -14,13 +14,15 @@ export class LowDegreeProver {
     readonly field          : FiniteField;
     readonly hash           : Hash;
     readonly indexGenerator : QueryIndexGenerator;
+    readonly log            : LogFunction
 
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(field: FiniteField, indexGenerator: QueryIndexGenerator, hash: Hash) {
+    constructor(field: FiniteField, indexGenerator: QueryIndexGenerator, hash: Hash, logger: LogFunction) {
         this.field = field;
         this.hash = hash;
         this.indexGenerator = indexGenerator;
+        this.log = logger;
     }
 
     // PUBLIC METHODS
@@ -143,6 +145,7 @@ export class LowDegreeProver {
             const rootOfUnity = this.field.exp(domain.getValue(1), BigInt(4**depth));
             this.verifyRemainder(values, maxDegreePlus1, rootOfUnity);
             result.remainder = lTree.getLeaves();
+            this.log(`Computed FRI remainder of ${values.length} values`);
             return;
         }
 
@@ -162,6 +165,7 @@ export class LowDegreeProver {
         const cTree = MerkleTree.create(column, this.hash);
 
         // recursively build all other components
+        this.log(`Computed FRI layer at depth ${depth}`);
         this.fri(cTree, column, Math.floor(maxDegreePlus1 / 4), depth + 1, domain, result);
 
         // compute spot check positions in the column and corresponding positions in the original values

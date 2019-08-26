@@ -73,4 +73,7 @@ function powLog2(base, exponent) {
     return (2 ** twos) * Math.log2(base ** exponent);
 }
 exports.powLog2 = powLog2;
+function noop() { }
+exports.noop = noop;
+;
 //# sourceMappingURL=index.js.map

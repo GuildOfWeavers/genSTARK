@@ -135,8 +135,10 @@ declare module '@guildofweavers/genstark' {
     };
 
     export interface Logger {
-        start(message?: string) : symbol;
+        start(message?: string, prefix?: string) : symbol;
         log(label: symbol, message: string): void;
         done(label: symbol, message?: string): void;
     }
+
+    export type LogFunction = (message: string) => void;
 }

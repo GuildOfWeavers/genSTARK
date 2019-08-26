@@ -1,7 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { Matrix, FiniteField, Vector } from "@guildofweavers/galois";
-import { Assertion } from "@guildofweavers/genstark";
+import { FiniteField, Vector, Matrix, Assertion, LogFunction } from "@guildofweavers/genstark";
 import { EvaluationContext, ProofContext, VerificationContext, ConstraintSpecs } from "@guildofweavers/air-script";
 import { BoundaryConstraints } from "./BoundaryConstraints";
 import { ZeroPolynomial } from "./ZeroPolynomial";
@@ -11,33 +10,37 @@ import { StarkError } from "../StarkError";
 // ================================================================================================
 export class CompositionPolynomial {
     
-    readonly field                  : FiniteField;
-    
-    readonly combinationDegree      : number;
-    readonly compositionDegree      : number;
-    readonly constraintGroups       : { degree: number; indexes: number[]; }[];
+    private readonly field              : FiniteField;
+    private readonly combinationDegree  : number;
+    private readonly constraintGroups   : { degree: number; indexes: number[]; }[];
 
-    private readonly dCoefficients  : Vector;
-    private readonly bCoefficients  : Vector;
+    private readonly dCoefficients      : Vector;
+    private readonly bCoefficients      : Vector;
 
-    private readonly bPoly          : BoundaryConstraints;
-    private readonly zPoly          : ZeroPolynomial;
+    private readonly bPoly              : BoundaryConstraints;
+    private readonly zPoly              : ZeroPolynomial;
+
+    private readonly log                : LogFunction;
+
+    readonly compositionDegree          : number;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(constraints: ConstraintSpecs[], assertions: Assertion[], seed: Buffer, context: EvaluationContext) {
+    constructor(constraints: ConstraintSpecs[], assertions: Assertion[], seed: Buffer, context: EvaluationContext, logger: LogFunction) {
 
         this.field = context.field;
+        this.bPoly = new BoundaryConstraints(assertions, context);
+        this.zPoly = new ZeroPolynomial(context);
+        this.log = logger;
+
+        // degree of trace polynomial combination
         this.combinationDegree = getCombinationDegree(constraints, context.traceLength);
 
-        const zeroPolyDegree = context.traceLength;
-        this.compositionDegree = this.combinationDegree - zeroPolyDegree;
+        // degree of composition polynomial is deg(C(x)) = deg(Q(x)) - deg(Z(x))
+        this.compositionDegree = this.combinationDegree - context.traceLength;
 
         // group transition constraints together by their degree
         this.constraintGroups = groupTransitionConstraints(constraints, context.traceLength);
-
-        this.bPoly = new BoundaryConstraints(assertions, context);
-        this.zPoly = new ZeroPolynomial(context);
 
         // create coefficients needed for linear combination
         let dCoefficientCount = constraints.length;
@@ -64,7 +67,6 @@ export class CompositionPolynomial {
     // PROOF METHODS
     // --------------------------------------------------------------------------------------------
     evaluateAll(pPolys: Matrix, pEvaluations: Matrix, context: ProofContext) {
-        const field = context.field;
         
         // 1 ----- evaluate transition constraints over composition domain
         let qEvaluations: Matrix;
@@ -74,12 +76,12 @@ export class CompositionPolynomial {
         catch (error) {
             throw new StarkError('Failed to evaluate transition constraints', error);
         }
-        //this.logger.log(label, 'Computed Q(x) polynomials');
+        this.log('Computed transition constraint polynomials Q(x)');
 
         // 2 ----- adjusted transition constraint degrees
         const compositionFactor = context.evaluationDomain.length / context.compositionDomain.length;
-        const compositionRou = field.exp(context.rootOfUnity, BigInt(compositionFactor));
-        const qaEvaluations = field.matrixRowsToVectors(qEvaluations);
+        const compositionRou = this.field.exp(context.rootOfUnity, BigInt(compositionFactor));
+        const qaEvaluations = this.field.matrixRowsToVectors(qEvaluations);
 
         for (let { degree, indexes } of this.constraintGroups) {
             if (degree === this.combinationDegree) continue;
@@ -94,33 +96,34 @@ export class CompositionPolynomial {
                 qaEvaluations.push(this.field.mulVectorElements(qaEvaluations[i], powers));
             }
         }
-        //this.logger.log(label, 'Adjusted degrees of Q(x) polynomials');
+        this.log('Adjusted degrees of Q(x) polynomials');
 
         // 3 ----- merge transition constraints into a single polynomial
         // first, compute linear combination of adjusted evaluations
-        const qcEvaluations = field.combineManyVectors(qaEvaluations, this.dCoefficients);
-        // this.logger.log(label, 'Computed linear combination of Q(x) polynomials');
+        const qcEvaluations = this.field.combineManyVectors(qaEvaluations, this.dCoefficients);
+        this.log('Computed linear combination of Q(x) polynomials');
 
         // then, perform low-degree extension from composition domain to evaluation domain
-        const qcPoly = field.interpolateRoots(context.compositionDomain, qcEvaluations);
-        const qeEvaluations = field.evalPolyAtRoots(qcPoly, context.evaluationDomain);
-        //this.logger.log(label, 'Performed low degree extensions of Q(x) polynomial');
+        const qcPoly = this.field.interpolateRoots(context.compositionDomain, qcEvaluations);
+        const qeEvaluations = this.field.evalPolyAtRoots(qcPoly, context.evaluationDomain);
+        this.log('Performed low degree extensions of Q(x) polynomial');
 
         // 4 ----- compute D(x) = Q(x) / Z(x)
         const zEvaluations = this.zPoly.evaluateAll(context.evaluationDomain);
-        //this.logger.log(label, 'Computed Z(x) polynomial');
+        this.log('Computed Z(x) polynomial');
 
-        const zInverses = field.divVectorElements(zEvaluations.denominators, zEvaluations.numerators);
-        //this.logger.log(label, 'Computed Z(x) inverses');
+        const zInverses = this.field.divVectorElements(zEvaluations.denominators, zEvaluations.numerators);
+        this.log('Computed Z(x) inverses');
 
-        const dEvaluations = field.mulVectorElements(qeEvaluations, zInverses);
-        // this.logger.log(label, 'Computed D(x) polynomial');
+        const dEvaluations = this.field.mulVectorElements(qeEvaluations, zInverses);
+        this.log('Computed D(x) polynomial');
 
         // 5 ------- compute boundary constraints B(x)
         const bEvaluations = this.bPoly.evaluateAll(pEvaluations, context.evaluationDomain);
+        this.log('Computed boundary constraint polynomials B(x)');
 
         // 6 ------- Adjust degrees of boundary constraints
-        const baEvaluations = field.matrixRowsToVectors(bEvaluations);
+        const baEvaluations = this.field.matrixRowsToVectors(bEvaluations);
         const bIncrementalDegree = BigInt(this.compositionDegree - context.traceLength);
         if (bIncrementalDegree > 0n) {
             const powerSeed = this.field.exp(context.rootOfUnity, bIncrementalDegree);
@@ -131,11 +134,11 @@ export class CompositionPolynomial {
                 baEvaluations.push(this.field.mulVectorElements(baEvaluations[i], psbPowers));
             }
         }
-        //this.logger.log(label, 'Adjusted degrees of B(x) polynomials');
+        this.log('Adjusted degrees of B(x) polynomials');
 
         // 7 ----- Merge boundary constraints into a single polynomial
-        const bcEvaluations = field.combineManyVectors(baEvaluations, this.bCoefficients);
-        // this.logger.log(label, 'Computed linear combination of B(x) polynomials');
+        const bcEvaluations = this.field.combineManyVectors(baEvaluations, this.bCoefficients);
+        this.log('Computed linear combination of B(x) polynomials');
 
         return this.field.addVectorElements(dEvaluations, bcEvaluations);
     }
@@ -148,41 +151,39 @@ export class CompositionPolynomial {
         const qValues = context.evaluateConstraintsAt(x, pValues, nValues, sValues);
 
         // adjust transition constraint degrees
-        const qaValues = qValues.slice();
         for (let { degree, indexes } of this.constraintGroups) {
             if (degree === this.combinationDegree) continue;
 
             let constraintIncrementalDegree = BigInt(this.combinationDegree - degree);
             let power = this.field.exp(x, constraintIncrementalDegree);
             for (let i of indexes) {
-                qaValues.push(this.field.mul(qValues[i], power));
+                qValues.push(this.field.mul(qValues[i], power));
             }
         }
 
         // merge transition constraint evaluations into a single value
-        const qaVector = this.field.newVectorFrom(qaValues);
-        const cValue = this.field.combineVectors(qaVector, this.dCoefficients);
+        const qVector = this.field.newVectorFrom(qValues);
+        const qcValue = this.field.combineVectors(qVector, this.dCoefficients);
 
         // compute D(x) = Q(x) / Z(x)
         const zValue = this.zPoly.evaluateAt(x);
-        const dValue = this.field.div(cValue, zValue);
+        const dValue = this.field.div(qcValue, zValue);
 
         // evaluate boundary constraints at x
         const bValues = this.bPoly.evaluateAt(pValues, x);
 
         // adjust boundary constraint degrees
-        const baValues = bValues.slice();
         const bIncrementalDegree = BigInt(this.compositionDegree - context.traceLength);
         if (bIncrementalDegree > 0n) {
             let power = this.field.exp(x, bIncrementalDegree);
-            for (let bValue of bValues) {
-                baValues.push(this.field.mul(bValue, power));
+            for (let i = 0; i < this.bPoly.count; i++) {
+                bValues.push(this.field.mul(bValues[i], power));
             }
         }
 
         // merge boundary constraint evaluations into a single value
-        const baVector = this.field.newVectorFrom(baValues);
-        const bValue = this.field.combineVectors(baVector, this.bCoefficients);
+        const bVector = this.field.newVectorFrom(bValues);
+        const bValue = this.field.combineVectors(bVector, this.bCoefficients);
 
         return this.field.add(dValue, bValue);
     }
@@ -191,14 +192,12 @@ export class CompositionPolynomial {
 // HELPER FUNCTIONS
 // ================================================================================================
 function getCombinationDegree(constraints: ConstraintSpecs[], traceLength: number) {
-
     let maxConstraintDegree = 1;
     for (let constraint of constraints) {
         if (maxConstraintDegree < constraint.degree) {
             maxConstraintDegree = constraint.degree;
         }
     }
-
     return 2**Math.ceil(Math.log2(maxConstraintDegree)) * traceLength;
 }
 

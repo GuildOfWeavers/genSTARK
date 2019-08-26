@@ -65,3 +65,5 @@ export function powLog2(base: number, exponent: number): number {
     }
     return (2**twos) * Math.log2(base**exponent);
 }
+
+export function noop() {};
