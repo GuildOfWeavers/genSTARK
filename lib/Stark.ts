@@ -3,7 +3,7 @@
 import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOptions, Logger as ILogger } from '@guildofweavers/genstark';
 import { MerkleTree, BatchMerkleProof, createHash, Hash, WasmOptions } from '@guildofweavers/merkle';
 import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
-import { ZeroPolynomial, BoundaryConstraints, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
+import { CompositionPolynomial, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
 import { Logger, sizeOf, bigIntsToBuffers, powLog2 } from './utils';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
@@ -18,7 +18,7 @@ const MAX_FRI_QUERY_COUNT = 64;
 
 const WASM_PAGE_SIZE = 65536;                               // 64 KB
 const DEFAULT_INITIAL_MEMORY = 32 * 2**20;                  // 32 MB
-const DEFAULT_MAXIMUM_MEMORY = 2 * 2**30 - WASM_PAGE_SIZE;  // 2 GB - one page
+const DEFAULT_MAXIMUM_MEMORY = 2 * 2**30 - WASM_PAGE_SIZE;  // 2 GB less one page
 
 const HASH_ALGORITHMS: HashAlgorithm[] = ['sha256', 'blake2s256'];
 const DEFAULT_HASH_ALGORITHM: HashAlgorithm = 'sha256';
@@ -123,10 +123,10 @@ export class Stark {
         
         // 3 ----- compute P(x) polynomials and low-degree extend them
         const pPolys = field.interpolateRoots(context.executionDomain, executionTrace);
-        this.logger.log(label, 'Computed execution trace polynomials');
+        this.logger.log(label, 'Computed execution trace polynomials P(x)');
 
         const pEvaluations = field.evalPolysAtRoots(pPolys, context.evaluationDomain);
-        this.logger.log(label, 'Low-degree extended execution trace polynomials');
+        this.logger.log(label, 'Low-degree extended P(x) polynomials over evaluation domain');
 
         // 4 ----- build merkle tree for evaluations of P(x) and S(x)
         const sEvaluations = context.getSecretRegisterTraces();
@@ -137,38 +137,7 @@ export class Stark {
         const eTree = MerkleTree.create(hashedEvaluations, this.hash);
         this.logger.log(label, 'Built evaluation merkle tree');
 
-        // 5 ----- compute constraint polynomials Q(x) = C(P(x))
-        let qEvaluations: Matrix;
-        try {
-            const cEvaluations = context.evaluateTracePolynomials(pPolys);
-            const qPolys = field.interpolateRoots(context.compositionDomain, cEvaluations);
-            qEvaluations = field.evalPolysAtRoots(qPolys, context.evaluationDomain);
-        }
-        catch (error) {
-            throw new StarkError('Failed to evaluate transition constraints', error);
-        }
-        this.logger.log(label, 'Computed Q(x) polynomials');
-
-        // 6 ----- compute polynomial Z(x) separately as numerator and denominator
-        const zPoly = new ZeroPolynomial(context);
-        const zEvaluations = zPoly.evaluateAll(context.evaluationDomain);
-        this.logger.log(label, 'Computed Z(x) polynomial');
-
-        // 7 ----- compute D(x) = Q(x) / Z(x)
-        // first, compute inverse of Z(x)
-        const zInverses = field.divVectorElements(zEvaluations.denominators, zEvaluations.numerators);
-        this.logger.log(label, 'Computed Z(x) inverses');
-
-        // then, multiply all values together to compute D(x)
-        const dEvaluations = field.mulMatrixRows(qEvaluations, zInverses);
-        this.logger.log(label, 'Computed D(x) polynomials');
-
-        // 8 ----- compute boundary constraints B(x)
-        const bPoly = new BoundaryConstraints(assertions, context);
-        const bEvaluations = bPoly.evaluateAll(pEvaluations, context.evaluationDomain);
-        this.logger.log(label, 'Computed B(x) polynomials');
-        
-        // 9 ----- spot check evaluation tree at pseudo-random positions
+        // 5 ----- spot check evaluation tree at pseudo-random positions
         const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = new Array<Buffer>(augmentedPositions.length);
@@ -179,19 +148,23 @@ export class Stark {
         const eProof = eTree.proveBatch(augmentedPositions);
         this.logger.log(label, `Computed ${positions.length} evaluation spot checks`);
 
-        // 10 ---- compute random linear combination of evaluations
-        const lCombination = new LinearCombination(eTree.root, this.air.constraints, context);
-        const lEvaluations = lCombination.computeMany(pEvaluations, sEvaluations, bEvaluations, dEvaluations);
+        // 6 ----- compute composition polynomial D(x)
+        const cPoly = new CompositionPolynomial(this.air.constraints, assertions, eTree.root, context);
+        const cEvaluations = cPoly.evaluateAll(pPolys, pEvaluations, context);
+
+        // 7 ---- compute random linear combination of evaluations
+        const lCombination = new LinearCombination(eTree.root, cPoly.compositionDegree, cPoly.coefficientCount, context);
+        const lEvaluations = lCombination.computeMany(cEvaluations, pEvaluations, sEvaluations);
         this.logger.log(label, 'Computed random linear combination of evaluations');
 
-        // 11 ----- Compute low-degree proof
+        // 8 ----- Compute low-degree proof
         const lTree = MerkleTree.create(lEvaluations, this.hash);
         this.logger.log(label, 'Built liner combination merkle tree');
         const lcProof = lTree.proveBatch(positions);
 
         let ldProof;
         try {
-            ldProof = this.ldProver.prove(lTree, lEvaluations, context.evaluationDomain, lCombination.combinationDegree);
+            ldProof = this.ldProver.prove(lTree, lEvaluations, context.evaluationDomain, cPoly.compositionDegree);
         }
         catch (error) {
             throw new StarkError('Low degree proof failed', error);
@@ -233,9 +206,8 @@ export class Stark {
         const context = this.air.createContext(publicInputs || [], extensionFactor);
         const evaluationDomainSize = context.traceLength * extensionFactor;
 
-        const bPoly = new BoundaryConstraints(assertions, context);
-        const zPoly = new ZeroPolynomial(context);
-        const lCombination = new LinearCombination(eRoot, this.air.constraints, context);
+        const cPoly = new CompositionPolynomial(this.air.constraints, assertions, eRoot, context);
+        const lCombination = new LinearCombination(eRoot, cPoly.compositionDegree, cPoly.coefficientCount, context);
         this.logger.log(label, 'Set up evaluation context');
 
         // 2 ----- compute positions for evaluation spot-checks
@@ -282,7 +254,7 @@ export class Stark {
         // 5 ----- verify low-degree proof
         try {
             const G2 = context.rootOfUnity;
-            this.ldProver.verify(proof.lcProof.root, lCombination.combinationDegree, G2, proof.ldProof);
+            this.ldProver.verify(proof.lcProof.root, cPoly.compositionDegree, G2, proof.ldProof);
         }
         catch (error) {
             throw new StarkError('Verification of low degree failed', error);
@@ -298,15 +270,12 @@ export class Stark {
             let pValues = pEvaluations.get(step)!;
             let nValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize)!;
             let sValues = sEvaluations.get(step)!;
-            let zValue = zPoly.evaluateAt(x);
 
             // evaluate constraints and use the result to compute D(x) and B(x)
-            let qValues = context.evaluateConstraintsAt(x, pValues, nValues, sValues);
-            let dValues = field.divVectorElements(field.newVectorFrom(qValues), zValue).toValues();
-            let bValues = bPoly.evaluateAt(pValues, x);
+            let cValue = cPoly.evaluateAt(x, pValues, nValues, sValues, context);
 
             // compute linear combination of all evaluations
-            lcValues[i] = lCombination.computeOne(x, pValues, sValues, bValues, dValues);
+            lcValues[i] = lCombination.computeOne(x, cValue, pValues, sValues);
         }
         this.logger.log(label, `Verified transition and boundary constraints`);
 
