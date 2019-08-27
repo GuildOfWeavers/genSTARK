@@ -30,8 +30,8 @@ class CompositionPolynomial {
             bCoefficientCount = bCoefficientCount * 2;
         }
         const coefficients = this.field.prng(seed, dCoefficientCount + bCoefficientCount).toValues();
-        this.dCoefficients = this.field.newVectorFrom(coefficients.slice(0, bCoefficientCount));
-        this.bCoefficients = this.field.newVectorFrom(coefficients.slice(bCoefficientCount));
+        this.dCoefficients = this.field.newVectorFrom(coefficients.slice(0, dCoefficientCount));
+        this.bCoefficients = this.field.newVectorFrom(coefficients.slice(dCoefficientCount));
     }
     // PUBLIC ACCESSORS
     // --------------------------------------------------------------------------------------------
