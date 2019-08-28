@@ -174,6 +174,7 @@ const nodes = proof.slice(2);
 nodes.push(0n);
 // generate a proof
 const sProof = merkleStark.prove(assertions, initValues, [binaryIndex], [nodes]);
+console.log(`Proof size: ${Math.round(merkleStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
 console.log('-'.repeat(20));
 // verify the proof
 merkleStark.verify(assertions, sProof, [binaryIndex]);

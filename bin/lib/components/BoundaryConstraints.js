@@ -61,8 +61,8 @@ class BoundaryConstraints {
             iPolys.push(c.iPoly);
             zPolys.push(c.zPoly);
         }
-        const iPolyMatrix = this.field.vectorsToMatrix(iPolys);
-        const zPolyMatrix = this.field.vectorsToMatrix(zPolys);
+        const iPolyMatrix = this.field.newMatrixFromVectors(iPolys);
+        const zPolyMatrix = this.field.newMatrixFromVectors(zPolys);
         const iValues = this.field.evalPolysAtRoots(iPolyMatrix, domain);
         const zValues = this.field.evalPolysAtRoots(zPolyMatrix, domain);
         // B(x) = (P(x) - I(x)) / Z(x)

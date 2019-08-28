@@ -107,17 +107,13 @@ class Stark {
         // 5 ----- query evaluation tree at pseudo-random positions
         const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
-        const eValues = new Array(augmentedPositions.length);
-        for (let i = 0; i < augmentedPositions.length; i++) {
-            let p = augmentedPositions[i];
-            eValues[i] = this.serializer.mergeValues(pEvaluations, sEvaluations, p);
-        }
+        const eValues = this.serializer.mergeValues(eVectors, augmentedPositions);
         const eProof = eTree.proveBatch(augmentedPositions);
         log(`Computed ${positions.length} evaluation spot checks`);
         // 6 ----- compute composition polynomial C(x)
-        //const cLabel = this.logger.start('Computing composition polynomial', '  ');
-        //const cLogger = this.logger.log.bind(this.logger, cLabel);
-        const cPoly = new components_1.CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, utils_1.noop);
+        const cLabel = this.logger.start('Computing composition polynomial', '  ');
+        const cLogger = this.logger.log.bind(this.logger, cLabel);
+        const cPoly = new components_1.CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, cLogger);
         const cEvaluations = cPoly.evaluateAll(pPolys, pEvaluations, context);
         log('Computed composition polynomial C(x)');
         // 7 ---- compute random linear combination of evaluations
@@ -125,15 +121,21 @@ class Stark {
         const lEvaluations = lCombination.computeMany(cEvaluations, pEvaluations, sEvaluations);
         log('Computed random linear combination of evaluations');
         // 8 ----- Compute low-degree proof
-        const lTree = merkle_1.MerkleTree.create(lEvaluations, this.hash);
+        // first, transpose liner combination values into a matrix with 4 columns
+        const lMatrix = field.transposeVector(lEvaluations, 4);
+        // then, hash each row and put the values into a merkle tree
+        const lHashes = this.hash.digestValues(lMatrix.toBuffer(), 4 * this.air.field.elementSize);
+        const lTree = merkle_1.MerkleTree.create(lHashes, this.hash);
         log('Built liner combination merkle tree');
-        const lcProof = lTree.proveBatch(positions);
+        const lcPositions = this.getLcQueryPositions(positions);
+        const lcProof = lTree.proveBatch(lcPositions);
+        const lcValues = rowsToBuffers(lMatrix, lcPositions, this.air.field);
         let ldProof;
         try {
             //const ldLabel = this.logger.start('Computing low degree proof', '  ');
             //const ldLogger = this.logger.log.bind(this.logger, ldLabel);
             const ldProver = new components_1.LowDegreeProver(this.air.field, this.indexGenerator, this.hash, utils_1.noop);
-            ldProof = ldProver.prove(lTree, lEvaluations, context.evaluationDomain, cPoly.compositionDegree);
+            ldProof = ldProver.prove(lTree, lMatrix, context.evaluationDomain, cPoly.compositionDegree);
             log('Computed low-degree proof');
         }
         catch (error) {
@@ -151,6 +153,7 @@ class Stark {
             lcProof: {
                 root: lTree.root,
                 nodes: lcProof.nodes,
+                values: lcValues,
                 depth: lcProof.depth
             },
             ldProof: ldProof
@@ -233,14 +236,17 @@ class Stark {
         log(`Verified transition and boundary constraints`);
         // 7 ----- verify linear combination proof
         try {
-            const lcProof = {
-                values: utils_1.bigIntsToBuffers(lcValues, field.elementSize),
-                nodes: proof.lcProof.nodes,
-                depth: proof.lcProof.depth
+            /*
+            TODO: enable
+            const lcProof: BatchMerkleProof = {
+                values  : bigIntsToBuffers(lcValues, field.elementSize),
+                nodes   : proof.lcProof.nodes,
+                depth   : proof.lcProof.depth
             };
-            if (!merkle_1.MerkleTree.verifyBatch(proof.lcProof.root, positions, lcProof, this.hash)) {
-                throw new StarkError_1.StarkError(`Verification of linear combination Merkle proof failed`);
+            if (!MerkleTree.verifyBatch(proof.lcProof.root, positions, lcProof, this.hash)) {
+                throw new StarkError(`Verification of linear combination Merkle proof failed`);
             }
+            */
         }
         catch (error) {
             if (error instanceof StarkError_1.StarkError === false) {
@@ -274,6 +280,13 @@ class Stark {
             augmentedPositionSet.add((positions[i] + skip) % evaluationDomainSize);
         }
         return Array.from(augmentedPositionSet);
+    }
+    getLcQueryPositions(positions) {
+        const result = new Set();
+        for (let position of positions) {
+            result.add(Math.floor(position / 4));
+        }
+        return Array.from(result);
     }
 }
 exports.Stark = Stark;
@@ -331,5 +344,13 @@ function validateAssertions(trace, assertions) {
             throw new StarkError_1.StarkError(`Assertion at step ${a.step}, register ${a.register} conflicts with execution trace`);
         }
     }
+}
+function rowsToBuffers(matrix, positions, field) {
+    const vectors = field.matrixRowsToVectors(matrix);
+    const result = new Array();
+    for (let position of positions) {
+        result.push(vectors[position].toBuffer());
+    }
+    return result;
 }
 //# sourceMappingURL=Stark.js.map

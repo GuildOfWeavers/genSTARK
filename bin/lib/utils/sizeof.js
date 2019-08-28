@@ -22,7 +22,8 @@ function sizeOf(proof, hashDigestSize) {
     // lcProof
     let lcProof = hashDigestSize; // root;
     lcProof += sizeOfMatrix(proof.lcProof.nodes);
-    lcProof += 1; // linear combination proof depth
+    lcProof += sizeOfArray(proof.lcProof.values);
+    lcProof += 1; // lc proof depth
     size += lcProof;
     // ldProof
     let ldProof = 1; // ld component count

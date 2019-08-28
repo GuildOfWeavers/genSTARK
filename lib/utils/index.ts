@@ -1,5 +1,6 @@
 // IMPORTS
 // ================================================================================================
+import { Vector } from '@guildofweavers/galois';
 import * as inliners from './inliners';
 
 // RE-EXPORTS
@@ -13,7 +14,7 @@ export const inline = inliners;
 // ================================================================================================
 const MASK_64B = 0xFFFFFFFFFFFFFFFFn;
 
-// PUBLIC FUNCTIONS
+// MATH
 // ================================================================================================
 export function isPowerOf2(value: number | bigint): boolean {
     if (typeof value === 'bigint') {
@@ -23,7 +24,17 @@ export function isPowerOf2(value: number | bigint): boolean {
         return (value !== 0) && (value & (value - 1)) === 0;
     }
 }
+export function powLog2(base: number, exponent: number): number {
+    let twos = 0;
+    while (exponent % 2 === 0) {
+        twos++;
+        exponent = exponent / 2;
+    }
+    return (2**twos) * Math.log2(base**exponent);
+}
 
+// BIGINT-BUFFER CONVERSIONS
+// ================================================================================================
 export function buffersToBigInts(values: Buffer[]): bigint[] {
     const result = new Array<bigint>(values.length);
     for (let i = 0; i < values.length; i++) {
@@ -57,13 +68,6 @@ export function readBigInt(buffer: Buffer, offset: number, elementSize: number):
     return value;
 }
 
-export function powLog2(base: number, exponent: number): number {
-    let twos = 0;
-    while (exponent % 2 === 0) {
-        twos++;
-        exponent = exponent / 2;
-    }
-    return (2**twos) * Math.log2(base**exponent);
-}
-
+// OTHER
+// ================================================================================================
 export function noop() {};

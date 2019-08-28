@@ -1,7 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// IMPORTS
-// ================================================================================================
 const inliners = require("./inliners");
 // RE-EXPORTS
 // ================================================================================================
@@ -20,7 +18,7 @@ exports.inline = inliners;
 // CONSTANTS
 // ================================================================================================
 const MASK_64B = 0xffffffffffffffffn;
-// PUBLIC FUNCTIONS
+// MATH
 // ================================================================================================
 function isPowerOf2(value) {
     if (typeof value === 'bigint') {
@@ -31,6 +29,17 @@ function isPowerOf2(value) {
     }
 }
 exports.isPowerOf2 = isPowerOf2;
+function powLog2(base, exponent) {
+    let twos = 0;
+    while (exponent % 2 === 0) {
+        twos++;
+        exponent = exponent / 2;
+    }
+    return (2 ** twos) * Math.log2(base ** exponent);
+}
+exports.powLog2 = powLog2;
+// BIGINT-BUFFER CONVERSIONS
+// ================================================================================================
 function buffersToBigInts(values) {
     const result = new Array(values.length);
     for (let i = 0; i < values.length; i++) {
@@ -64,15 +73,8 @@ function readBigInt(buffer, offset, elementSize) {
     return value;
 }
 exports.readBigInt = readBigInt;
-function powLog2(base, exponent) {
-    let twos = 0;
-    while (exponent % 2 === 0) {
-        twos++;
-        exponent = exponent / 2;
-    }
-    return (2 ** twos) * Math.log2(base ** exponent);
-}
-exports.powLog2 = powLog2;
+// OTHER
+// ================================================================================================
 function noop() { }
 exports.noop = noop;
 ;

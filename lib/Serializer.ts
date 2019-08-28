@@ -32,22 +32,18 @@ export class Serializer {
 
     // EVALUATION SERIALIZER/PARSER
     // --------------------------------------------------------------------------------------------
-    mergeValues(pValues: Matrix, sValues: Vector[], position: number): Buffer {
-        const valueSize = this.fieldElementSize;
-        const valueCount = this.getValueCount();
-        const buffer = Buffer.allocUnsafe(valueCount * valueSize);
-
-        let offset = 0;
-
-        for (let register = 0; register < this.stateWidth; register++) {
-            offset += pValues.copyValue(register, position, buffer, offset);
+    mergeValues(values: Vector[], positions: number[]): Buffer[] {
+        const bufferSize = values.length * this.fieldElementSize;    
+        const result: Buffer[] = [];
+        for (let position of positions) {
+            let buffer = Buffer.allocUnsafe(bufferSize), offset = 0;
+            for (let vector of values) {
+                offset += vector.copyValue(position, buffer, offset);
+            }
+            result.push(buffer);
         }
-
-        for (let register = 0; register < this.secretInputCount; register++) {
-            offset += sValues[register].copyValue(position, buffer, offset);
-        }
-
-        return buffer;
+    
+        return result;
     }
 
     parseValues(buffer: Buffer): [bigint[], bigint[]] {
@@ -87,15 +83,17 @@ export class Serializer {
         // lcProof
         offset += proof.lcProof.root.copy(buffer, offset);
         offset = buffer.writeUInt8(proof.lcProof.depth, offset);
-        offset = utils.writeMatrix(buffer, offset, proof.lcProof.nodes, this.fieldElementSize);
+        offset = utils.writeMatrix(buffer, offset, proof.lcProof.nodes, this.hashDigestSize);
+        offset = utils.writeArray(buffer, offset, proof.lcProof.values);
 
         // ldProof
+        const ldLeafSize = this.fieldElementSize * 4;
         offset = buffer.writeUInt8(proof.ldProof.components.length, offset);
         for (let i = 0; i < proof.ldProof.components.length; i++) {
             let component = proof.ldProof.components[i];
             offset += component.columnRoot.copy(buffer, offset);
-            offset = utils.writeMerkleProof(buffer, offset, component.columnProof, this.fieldElementSize);
-            offset = utils.writeMerkleProof(buffer, offset, component.polyProof, this.fieldElementSize);
+            offset = utils.writeMerkleProof(buffer, offset, component.columnProof, ldLeafSize);
+            offset = utils.writeMerkleProof(buffer, offset, component.polyProof, ldLeafSize);
         }
         offset = utils.writeArray(buffer, offset, proof.ldProof.remainder);
 
@@ -125,16 +123,19 @@ export class Serializer {
         const lcDepth = buffer.readUInt8(offset); offset += 1;
         const lcNodeInfo = utils.readMatrix(buffer, offset, this.fieldElementSize, this.hashDigestSize);
         offset = lcNodeInfo.offset;
+        const lcValues = utils.readArray(buffer, offset, this.fieldElementSize * 4);
+        offset = lcValues.offset;
 
         // ldProof
+        const ldLeafSize = this.fieldElementSize * 4;
         const componentCount = buffer.readUInt8(offset); offset += 1;
         const components = new Array<FriComponent>(componentCount);
         for (let i = 0; i < componentCount; i++) {
             let columnRoot = Buffer.allocUnsafe(this.hashDigestSize);
             offset += buffer.copy(columnRoot, 0, offset, offset + this.hashDigestSize);
-            let columnProofInfo = utils.readMerkleProof(buffer, offset, this.fieldElementSize, this.hashDigestSize);
+            let columnProofInfo = utils.readMerkleProof(buffer, offset, ldLeafSize, this.hashDigestSize);
             offset = columnProofInfo.offset;
-            let polyProofInfo = utils.readMerkleProof(buffer, offset, this.fieldElementSize, this.hashDigestSize);
+            let polyProofInfo = utils.readMerkleProof(buffer, offset, ldLeafSize, this.hashDigestSize);
             offset = polyProofInfo.offset;
             components[i] = { columnRoot, columnProof: columnProofInfo.proof, polyProof: polyProofInfo.proof };
         }
@@ -152,6 +153,7 @@ export class Serializer {
             lcProof: {
                 root    : lcRoot,
                 nodes   : lcNodeInfo.matrix,
+                values  : lcValues.values,
                 depth   : lcDepth,
             },
             ldProof     : { components, remainder: remainderInfo.values }

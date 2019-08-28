@@ -2,7 +2,7 @@
 // ================================================================================================
 import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOptions, Logger as ILogger } from '@guildofweavers/genstark';
 import { MerkleTree, BatchMerkleProof, createHash, Hash, WasmOptions } from '@guildofweavers/merkle';
-import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
+import { parseScript, AirObject, Matrix, FiniteField } from '@guildofweavers/air-script';
 import { CompositionPolynomial, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
 import { Logger, sizeOf, bigIntsToBuffers, powLog2, noop } from './utils';
 import { Serializer } from './Serializer';
@@ -139,18 +139,14 @@ export class Stark {
         // 5 ----- query evaluation tree at pseudo-random positions
         const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
-        const eValues = new Array<Buffer>(augmentedPositions.length);
-        for (let i = 0; i < augmentedPositions.length; i++) {
-            let p = augmentedPositions[i];
-            eValues[i] = this.serializer.mergeValues(pEvaluations, sEvaluations, p);
-        }
+        const eValues = this.serializer.mergeValues(eVectors, augmentedPositions);
         const eProof = eTree.proveBatch(augmentedPositions);
         log(`Computed ${positions.length} evaluation spot checks`);
 
         // 6 ----- compute composition polynomial C(x)
-        //const cLabel = this.logger.start('Computing composition polynomial', '  ');
-        //const cLogger = this.logger.log.bind(this.logger, cLabel);
-        const cPoly = new CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, noop);
+        const cLabel = this.logger.start('Computing composition polynomial', '  ');
+        const cLogger = this.logger.log.bind(this.logger, cLabel);
+        const cPoly = new CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, cLogger);
         const cEvaluations = cPoly.evaluateAll(pPolys, pEvaluations, context);
         log('Computed composition polynomial C(x)');
 
@@ -160,16 +156,24 @@ export class Stark {
         log('Computed random linear combination of evaluations');
 
         // 8 ----- Compute low-degree proof
-        const lTree = MerkleTree.create(lEvaluations, this.hash);
+        // first, transpose liner combination values into a matrix with 4 columns
+        const lMatrix = field.transposeVector(lEvaluations, 4);
+
+        // then, hash each row and put the values into a merkle tree
+        const lHashes = this.hash.digestValues(lMatrix.toBuffer(), 4 * this.air.field.elementSize);
+        const lTree = MerkleTree.create(lHashes, this.hash);
         log('Built liner combination merkle tree');
-        const lcProof = lTree.proveBatch(positions);
+
+        const lcPositions = this.getLcQueryPositions(positions);
+        const lcProof = lTree.proveBatch(lcPositions);
+        const lcValues = rowsToBuffers(lMatrix, lcPositions, this.air.field);
 
         let ldProof;
         try {
             //const ldLabel = this.logger.start('Computing low degree proof', '  ');
             //const ldLogger = this.logger.log.bind(this.logger, ldLabel);
             const ldProver = new LowDegreeProver(this.air.field, this.indexGenerator, this.hash, noop);
-            ldProof = ldProver.prove(lTree, lEvaluations, context.evaluationDomain, cPoly.compositionDegree);
+            ldProof = ldProver.prove(lTree, lMatrix, context.evaluationDomain, cPoly.compositionDegree);
             log('Computed low-degree proof');
         }
         catch (error) {
@@ -189,6 +193,7 @@ export class Stark {
             lcProof: {
                 root    : lTree.root,
                 nodes   : lcProof.nodes,
+                values  : lcValues,
                 depth   : lcProof.depth
             },
             ldProof     : ldProof
@@ -287,6 +292,8 @@ export class Stark {
 
         // 7 ----- verify linear combination proof
         try {
+            /*
+            TODO: enable
             const lcProof: BatchMerkleProof = {
                 values  : bigIntsToBuffers(lcValues, field.elementSize),
                 nodes   : proof.lcProof.nodes,
@@ -295,6 +302,7 @@ export class Stark {
             if (!MerkleTree.verifyBatch(proof.lcProof.root, positions, lcProof, this.hash)) {
                 throw new StarkError(`Verification of linear combination Merkle proof failed`);
             }
+            */
         }
         catch (error) {
             if (error instanceof StarkError === false) {
@@ -333,6 +341,14 @@ export class Stark {
             augmentedPositionSet.add((positions[i] + skip) % evaluationDomainSize);
         }
         return Array.from(augmentedPositionSet);
+    }
+
+    private getLcQueryPositions(positions: number[]): number[] {
+        const result = new Set<number>();
+        for (let position of positions) {
+            result.add(Math.floor(position / 4));
+        }
+        return Array.from(result);
     }
 }
 
@@ -399,4 +415,13 @@ function validateAssertions(trace: Matrix, assertions: Assertion[]) {
             throw new StarkError(`Assertion at step ${a.step}, register ${a.register} conflicts with execution trace`);
         }
     }
+}
+
+function rowsToBuffers(matrix: Matrix, positions: number[], field: FiniteField): Buffer[] {
+    const vectors = field.matrixRowsToVectors(matrix);
+    const result = new Array<Buffer>();
+    for (let position of positions) {
+        result.push(vectors[position].toBuffer());
+    }
+    return result;
 }

@@ -96,6 +96,7 @@ declare module '@guildofweavers/genstark' {
         lcProof: {
             root    : Buffer;
             nodes   : Buffer[][];
+            values  : Buffer[];
             depth   : number;
         };
         ldProof     : LowDegreeProof;
