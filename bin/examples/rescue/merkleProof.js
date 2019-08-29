@@ -5,7 +5,7 @@ const utils_1 = require("./utils");
 // STARK PARAMETERS
 // ================================================================================================
 const field = index_1.createPrimeField(2n ** 128n - 9n * 2n ** 32n + 1n);
-const treeDepth = 16;
+const treeDepth = 8;
 const roundSteps = 32;
 const alpha = 3n;
 const invAlpha = -113427455640312821154458202464371168597n;
@@ -151,22 +151,16 @@ define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
 // generate a random merkle tree
 const values = field.prng(42n, 2 ** treeDepth);
 const hash = utils_1.makeHashFunction(rescue, keyStates);
-//const tree = new MerkleTree(values.toValues(), hash);
+const tree = new utils_1.MerkleTree(values.toValues(), hash);
 // generate a proof for index 42
 const index = 42;
-const proof = [
-    218173473331846227794150840306449604984n, 282061330589628257327291826752957759173n, 232878052591195498310488138067755967034n, 132731620294699787567741097254177172011n,
-    244919427578065558469267296656405736890n, 38427476722782387323133224737235502825n, 277744456914925446425435985410188947291n, 75589075930388509647247423865161291409n,
-    46603622352666255757732509032609595363n, 161000890026737018975199107831419079109n, 62906203508105532701209767705815043990n, 209240034521212511367705226193913272794n,
-    323465214809211501797188759126706226367n, 117644105004276066143738043679450557532n, 323369528603850555791564703833831409836n, 21315779958243196577286215759417386189n,
-    122976380629335995235446329608594992033n
-];
+const proof = tree.prove(index);
 //console.log(MerkleTree.verify(tree.root, index, proof, hash));
 // set up inputs and assertions for the STARK
 const binaryIndex = toBinaryArray(index, treeDepth);
 const initValues = [proof[0], proof[1], 0n, 0n, proof[1], proof[0], 0n, 0n];
 const assertions = [
-    { step: roundSteps * treeDepth - 1, register: 0, value: 251163343560800721214244434683451861900n }
+    { step: roundSteps * treeDepth - 1, register: 0, value: tree.root }
 ];
 // remove first 2 elements since they are already in initValues
 const nodes = proof.slice(2);
@@ -174,7 +168,6 @@ const nodes = proof.slice(2);
 nodes.push(0n);
 // generate a proof
 const sProof = merkleStark.prove(assertions, initValues, [binaryIndex], [nodes]);
-console.log(`Proof size: ${Math.round(merkleStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
 console.log('-'.repeat(20));
 // verify the proof
 merkleStark.verify(assertions, sProof, [binaryIndex]);

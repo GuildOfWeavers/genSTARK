@@ -78,6 +78,7 @@ class Serializer {
         // ldProof
         const ldLeafSize = this.fieldElementSize * 4;
         const lcRoot = Buffer.allocUnsafe(this.hashDigestSize);
+        offset += buffer.copy(lcRoot, 0, offset, offset + this.hashDigestSize);
         let lcProof = utils.readMerkleProof(buffer, offset, ldLeafSize, this.hashDigestSize);
         offset = lcProof.offset;
         const componentCount = buffer.readUInt8(offset);
@@ -97,7 +98,7 @@ class Serializer {
         offset += 1;
         const friRemainder = new Array(friRemainderLength);
         for (let i = 0; i < friRemainderLength; i++, offset += this.fieldElementSize) {
-            utils.readBigInt(buffer, offset, this.fieldElementSize);
+            friRemainder[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
         }
         // build and return the proof
         return {

@@ -53,36 +53,32 @@ There are a few more sophisticated examples in this repository:
 When you run the examples, you should get a nice log documenting each step. Here is an example output of running 128-bit MiMC STARK for 2<sup>13</sup> steps:
 ```
 Starting STARK computation
-Set up evaluation context in 7 ms
+Set up evaluation context in 10 ms
 Generated execution trace in 39 ms
-Converted execution trace into polynomials and low-degree extended them in 47 ms
-Computed Q(x) polynomials in 254 ms
-Computed Z(x) polynomial in 3 ms
-Computed Z(x) inverses in 14 ms
-Computed D(x) polynomials in 5 ms
-Computed B(x) polynomials in 45 ms
-Serialized evaluations of P(x) and S(x) polynomials in 41 ms
-Built evaluation merkle tree in 48 ms
-Computed 80 evaluation spot checks in 5 ms
-Computed random linear combination of evaluations in 31 ms
-Built liner combination merkle tree in 46 ms
-Computed low-degree proof in 118 ms
-STARK computed in 707 ms
+Computed execution trace polynomials P(x) in 6 ms
+Low-degree extended P(x) polynomials over evaluation domain in 95 ms
+Serialized evaluations of P(x) and S(x) polynomials in 82 ms
+Built evaluation merkle tree in 86 ms
+Computed 40 evaluation spot checks in 4 ms
+Computed composition polynomial C(x) in 450 ms
+Computed random linear combination of evaluations in 34 ms
+Computed low-degree proof in 238 ms
+STARK computed in 1047 ms
 --------------------
-Proof serialized in 10 ms; size: 181.3 KB
+Proof serialized in 7 ms; size: 86.12 KB
 --------------------
-Proof parsed in 9 ms
+Proof parsed in 6 ms
 --------------------
 Starting STARK verification
-Set up evaluation context in 1 ms
-Computed positions for evaluation spot checks in 2 ms
-Decoded evaluation spot checks in 2 ms
+Set up evaluation context in 2 ms
+Computed positions for evaluation spot checks in 1 ms
+Decoded evaluation spot checks in 1 ms
 Verified evaluation merkle proof in 5 ms
-Verified low-degree proof in 36 ms
-Verified transition and boundary constraints in 17 ms
-Verified liner combination merkle proof in 4 ms
-STARK verified in 69 ms
+Verified transition and boundary constraints in 12 ms
+Verified low-degree proof in 17 ms
+STARK verified in 40 ms
 --------------------
+STARK security level: 96
 ```
 
 # API
@@ -206,14 +202,14 @@ interface Assertion {
 # Performance
 Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single thread):
 
-| STARK               | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
-| ------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
-| MiMC*               | 128 bits   | 3      | 1         | 2<sup>13</sup> | 750 ms     | 181 KB     |
-| MiMC*               | 128 bits   | 3      | 1         | 2<sup>17</sup> | 11 sec     | 333 KB     |
-| MiMC                | 256 bits   | 3      | 1         | 2<sup>13</sup> | 3.8 sec    | 213 KB     |
-| MiMC                | 256 bits   | 3      | 1         | 2<sup>17</sup> | 64 sec     | 384 KB     |
-| Merkle Proof (d=8)* | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 600 ms     | 75 KB      |
-| Merkle Proof (d=16)* | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.2 sec    | 96 KB     |
+| STARK                | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
+| -------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
+| MiMC*                | 128 bits   | 3      | 1         | 2<sup>13</sup> | 1.1 sec    | 86 KB      |
+| MiMC*                | 128 bits   | 3      | 1         | 2<sup>17</sup> | 19 sec     | 137 KB     |
+| MiMC                 | 256 bits   | 3      | 1         | 2<sup>13</sup> | 9.2 sec    | 107 KB     |
+| MiMC                 | 256 bits   | 3      | 1         | 2<sup>17</sup> | 178 sec    | 162 KB     |
+| Merkle Proof (d=8)*  | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 530 ms     | 53 KB      |
+| Merkle Proof (d=16)* | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.1 sec    | 63 KB      |
 
 Merkle proofs are based on a modified version of [Rescue](/examples/rescue) hash function, and in addition to 8 state registers require 1 public input register and 1 secret input register.
 

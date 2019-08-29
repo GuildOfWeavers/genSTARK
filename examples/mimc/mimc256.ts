@@ -2,6 +2,7 @@
 // ================================================================================================
 import * as assert from 'assert';
 import { Stark } from '../../index';
+import { SecurityOptions } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -14,6 +15,14 @@ const roundConstants = new Array<bigint>(64);
 for (let i = 0; i < 64; i++) {
   roundConstants[i] = (BigInt(i)**7n) ^ 42n;
 }
+
+// define security options for the STARK
+const securityOptions: SecurityOptions = {
+    hashAlgorithm   : 'blake2s256',
+    extensionFactor : 16,
+    exeQueryCount   : 40,
+    friQueryCount   : 24
+};
 
 // create the STARK for MiMC computation
 const mimcStark = new Stark(`
@@ -30,7 +39,7 @@ define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`, { hashAlgorithm: 'blake2s256' }, true);
+}`, securityOptions, true);
 
 // TESTING
 // ================================================================================================
