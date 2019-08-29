@@ -7,17 +7,9 @@ exports.MAX_MATRIX_COLUMN_LENGTH = 127;
 // PUBLIC FUNCTIONS
 // ================================================================================================
 function sizeOf(proof, fieldElementSize, hashDigestSize) {
-    let size = 0;
-    // evData
-    let evData = 1; // length of values array
-    for (let value of proof.values) {
-        evData += value.byteLength;
-    }
-    size += evData;
+    let size = hashDigestSize; // evRoot
     // evProof
-    let evProof = hashDigestSize; // root
-    evProof += sizeOfMatrix(proof.evProof.nodes);
-    evProof += 1; // evaluation proof depth
+    let evProof = sizeOfMerkleProof(proof.evProof);
     size += evProof;
     // ldProof
     let ldProof = 1; // ld component count
@@ -38,7 +30,7 @@ function sizeOf(proof, fieldElementSize, hashDigestSize) {
     ldLevels.push(ldRemainder);
     ldProof += ldRemainder;
     size += ldProof;
-    return { evData, evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, total: size };
+    return { evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, total: size };
 }
 exports.sizeOf = sizeOf;
 function sizeOfMerkleProof(proof) {

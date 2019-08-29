@@ -11,19 +11,10 @@ export const MAX_MATRIX_COLUMN_LENGTH = 127;
 // ================================================================================================
 export function sizeOf(proof: StarkProof, fieldElementSize: number, hashDigestSize: number) {
 
-    let size = 0;
+    let size = hashDigestSize;  // evRoot
     
-    // evData
-    let evData = 1; // length of values array
-    for (let value of proof.values) {
-        evData += value.byteLength;
-    }
-    size += evData;
-
     // evProof
-    let evProof = hashDigestSize; // root
-    evProof += sizeOfMatrix(proof.evProof.nodes);
-    evProof += 1; // evaluation proof depth
+    let evProof = sizeOfMerkleProof(proof.evProof);
     size += evProof;
 
     // ldProof
@@ -43,12 +34,12 @@ export function sizeOf(proof: StarkProof, fieldElementSize: number, hashDigestSi
     }
     let ldRemainder = proof.ldProof.remainder.values.length * fieldElementSize;
     ldRemainder += 1; // 1 byte for remainder length
-    
+
     ldLevels.push(ldRemainder);
     ldProof += ldRemainder;
     size += ldProof;
 
-    return { evData, evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, total: size };
+    return { evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, total: size };
 }
 
 export function sizeOfMerkleProof(proof: BatchMerkleProof) {

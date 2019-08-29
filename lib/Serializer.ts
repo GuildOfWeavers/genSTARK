@@ -2,6 +2,7 @@
 // ================================================================================================
 import { StarkProof, FriComponent } from "@guildofweavers/genstark";
 import { FiniteField, Vector } from '@guildofweavers/air-script';
+import { MAX_ARRAY_LENGTH } from "./utils/sizeof";
 import * as utils from './utils';
 
 // INTERFACES
@@ -70,15 +71,13 @@ export class Serializer {
         
         const size = utils.sizeOf(proof, this.fieldElementSize, this.hashDigestSize);
         const buffer = Buffer.allocUnsafe(size.total);
-        let offset = 0;
 
-        // values
-        offset = utils.writeArray(buffer, offset, proof.values);
+        // root
+        let offset = proof.evRoot.copy(buffer, 0);
 
         // evProof
-        offset += proof.evProof.root.copy(buffer, offset);
-        offset = buffer.writeUInt8(proof.evProof.depth, offset);
-        offset = utils.writeMatrix(buffer, offset, proof.evProof.nodes, this.hashDigestSize);
+        const evLeafSize = this.getValueCount() * this.fieldElementSize;
+        offset = utils.writeMerkleProof(buffer, offset, proof.evProof, evLeafSize);
 
         // ldProof
         const ldLeafSize = this.fieldElementSize * 4;
@@ -103,19 +102,14 @@ export class Serializer {
 
     parseProof(buffer: Buffer): StarkProof {
         
-        let offset = 0;
-
-        // values
-        const valueCount = this.getValueCount();
-        const valueSize = valueCount * this.fieldElementSize;
-        const valueInfo = utils.readArray(buffer, offset, valueSize); offset = valueInfo.offset;
+        // root
+        const evRoot = Buffer.allocUnsafe(this.hashDigestSize);
+        let offset = buffer.copy(evRoot, 0, 0, this.hashDigestSize);
 
         // evProof
-        const evRoot = Buffer.allocUnsafe(this.hashDigestSize);
-        offset += buffer.copy(evRoot, 0, offset, offset + this.hashDigestSize);
-        const evDepth = buffer.readUInt8(offset); offset += 1;
-        const evNodeInfo = utils.readMatrix(buffer, offset, this.hashDigestSize, this.hashDigestSize);
-        offset = evNodeInfo.offset;
+        const evLeafSize = this.getValueCount() * this.fieldElementSize;
+        const evProof = utils.readMerkleProof(buffer, offset, evLeafSize, this.hashDigestSize);
+        offset = evProof.offset;
 
         // ldProof
         const ldLeafSize = this.fieldElementSize * 4;
@@ -135,7 +129,8 @@ export class Serializer {
             friComponents[i] = { columnRoot, columnProof: columnProofInfo.proof, polyProof: polyProofInfo.proof };
         }
 
-        const friRemainderLength = buffer.readUInt8(offset); offset += 1;
+        // for remainder array length, zero means 256
+        const friRemainderLength = buffer.readUInt8(offset) || MAX_ARRAY_LENGTH; offset += 1;
         const friRemainder = new Array<bigint>(friRemainderLength);
         for (let i = 0; i < friRemainderLength; i++, offset += this.fieldElementSize) {
             utils.readBigInt(buffer, offset, this.fieldElementSize);
@@ -143,12 +138,8 @@ export class Serializer {
 
         // build and return the proof
         return {
-            values      : valueInfo.values,
-            evProof: {
-                root    : evRoot,
-                nodes   : evNodeInfo.matrix,
-                depth   : evDepth
-            },
+            evRoot          : evRoot,
+            evProof         : evProof.proof,
             ldProof: {
                 lcRoot      : lcRoot,
                 lcProof     : lcProof.proof,

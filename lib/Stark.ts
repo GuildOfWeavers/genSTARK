@@ -4,7 +4,7 @@ import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOpti
 import { MerkleTree, BatchMerkleProof, createHash, Hash, WasmOptions } from '@guildofweavers/merkle';
 import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
 import { CompositionPolynomial, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
-import { Logger, sizeOf, powLog2, noop } from './utils';
+import { Logger, sizeOf, powLog2, noop, rehashMerkleProofValues } from './utils';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -141,12 +141,13 @@ export class Stark {
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         const eValues = this.serializer.mergeValues(eVectors, augmentedPositions);
         const eProof = eTree.proveBatch(augmentedPositions);
+        eProof.values = eValues;
         log(`Computed ${positions.length} evaluation spot checks`);
 
         // 6 ----- compute composition polynomial C(x)
-        const cLabel = this.logger.start('Computing composition polynomial', '  ');
-        const cLogger = this.logger.log.bind(this.logger, cLabel);
-        const cPoly = new CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, cLogger);
+        //const cLabel = this.logger.start('Computing composition polynomial', '  ');
+        //const cLogger = this.logger.log.bind(this.logger, cLabel);
+        const cPoly = new CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, noop);
         const cEvaluations = cPoly.evaluateAll(pPolys, pEvaluations, context);
         log('Computed composition polynomial C(x)');
 
@@ -172,13 +173,9 @@ export class Stark {
 
         // build and return the proof object
         return {
-            values      : eValues,
-            evProof: {
-                root    : eTree.root,
-                nodes   : eProof.nodes,
-                depth   : eProof.depth
-            },
-            ldProof     : ldProof
+            evRoot  : eTree.root,
+            evProof : eProof,
+            ldProof : ldProof
         };
     }
 
@@ -188,7 +185,7 @@ export class Stark {
 
         const label = this.logger.start('Starting STARK verification');
         const log = this.logger.log.bind(this.logger, label);
-        const eRoot = proof.evProof.root;
+        const eRoot = proof.evRoot;
         const extensionFactor = this.extensionFactor;
         const field = this.air.field;
 
@@ -211,27 +208,20 @@ export class Stark {
         // 3 ----- decode evaluation spot-checks
         const pEvaluations = new Map<number, bigint[]>();
         const sEvaluations = new Map<number, bigint[]>();
-        const hashedEvaluations = new Array<Buffer>(augmentedPositions.length);
 
-        for (let i = 0; i < proof.values.length; i++) {
-            let mergedEvaluations = proof.values[i];
+        for (let i = 0; i < proof.evProof.values.length; i++) {
+            let mergedEvaluations = proof.evProof.values[i];
             let position = augmentedPositions[i];
             let [p, s] = this.serializer.parseValues(mergedEvaluations);
             
             pEvaluations.set(position, p);
             sEvaluations.set(position, s);
-
-            hashedEvaluations[i] = this.hash.digest(mergedEvaluations);
         }
         log(`Decoded evaluation spot checks`);
 
         // 4 ----- verify merkle proof for evaluation tree
         try {
-            const evProof: BatchMerkleProof = {
-                values  : hashedEvaluations,
-                nodes   : proof.evProof.nodes,
-                depth   : proof.evProof.depth
-            };
+            const evProof = rehashMerkleProofValues(proof.evProof, this.hash);
             if (!MerkleTree.verifyBatch(eRoot, augmentedPositions, evProof, this.hash)) {
                 throw new StarkError(`Verification of evaluation Merkle proof failed`);
             }
@@ -254,10 +244,10 @@ export class Stark {
             let nValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize)!;
             let sValues = sEvaluations.get(step)!;
 
-            // evaluate constraints and use the result to compute D(x) and B(x)
+            // evaluate composition polynomial at x
             let cValue = cPoly.evaluateAt(x, pValues, nValues, sValues, context);
 
-            // compute linear combination of all evaluations
+            // combine composition polynomial evaluation with values of P(x) and S(x)
             lcValues[i] = lCombination.computeOne(x, cValue, pValues, sValues);
         }
         log(`Verified transition and boundary constraints`);
