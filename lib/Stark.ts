@@ -43,9 +43,7 @@ export class Stark {
         if (typeof source !== 'string') throw new TypeError('Source script must be a string');
         if (!source.trim()) throw new TypeError('Source script cannot be an empty string');
 
-        const sOptions = validateSecurityOptions(security);
-        this.extensionFactor = sOptions.extensionFactor || 16; // TODO
-        
+        let sOptions: SecurityOptions;
         if (optimization) {
             const wasmOptions = buildWasmOptions(optimization);
 
@@ -56,6 +54,7 @@ export class Stark {
             }
 
             // instantiate Hash object
+            sOptions = validateSecurityOptions(security, this.air.maxConstraintDegree);
             const wasmOptions2 = buildWasmOptions(optimization); // TODO: use the same options as for AIR
             this.hash = createHash(sOptions.hashAlgorithm, wasmOptions2);
             if (!this.hash.isOptimized) {
@@ -64,10 +63,12 @@ export class Stark {
         }
         else {
             this.air = parseScript(source);
+            sOptions = validateSecurityOptions(security, this.air.maxConstraintDegree);
             this.hash = createHash(sOptions.hashAlgorithm, false);
         }
 
-        this.indexGenerator = new QueryIndexGenerator(this.extensionFactor, sOptions);
+        this.extensionFactor = sOptions.extensionFactor;
+        this.indexGenerator = new QueryIndexGenerator(sOptions);
         this.serializer = new Serializer(this.air, this.hash.digestSize);
         this.logger = logger || new Logger();
     }
@@ -330,7 +331,7 @@ export class Stark {
 
 // HELPER FUNCTIONS
 // ================================================================================================
-function validateSecurityOptions(options?: Partial<SecurityOptions>): SecurityOptions {
+function validateSecurityOptions(options: Partial<SecurityOptions> | undefined, maxConstraintDegree: number): SecurityOptions {
 
     // execution trace spot checks
     const exeQueryCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_QUERY_COUNT;
@@ -350,7 +351,12 @@ function validateSecurityOptions(options?: Partial<SecurityOptions>): SecurityOp
         throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
     }
 
-    const extensionFactor = (options ? options.extensionFactor : undefined);
+    // extension factor
+    let extensionFactor = (options ? options.extensionFactor : undefined);
+    if (!extensionFactor) {
+        extensionFactor = 2**(Math.ceil(Math.log2(maxConstraintDegree)) + 1);
+    }
+
     return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
 }
 

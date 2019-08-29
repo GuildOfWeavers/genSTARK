@@ -27,8 +27,7 @@ class Stark {
             throw new TypeError('Source script must be a string');
         if (!source.trim())
             throw new TypeError('Source script cannot be an empty string');
-        const sOptions = validateSecurityOptions(security);
-        this.extensionFactor = sOptions.extensionFactor || 16; // TODO
+        let sOptions;
         if (optimization) {
             const wasmOptions = buildWasmOptions(optimization);
             // instantiate AIR object
@@ -37,6 +36,7 @@ class Stark {
                 console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
             }
             // instantiate Hash object
+            sOptions = validateSecurityOptions(security, this.air.maxConstraintDegree);
             const wasmOptions2 = buildWasmOptions(optimization); // TODO: use the same options as for AIR
             this.hash = merkle_1.createHash(sOptions.hashAlgorithm, wasmOptions2);
             if (!this.hash.isOptimized) {
@@ -45,9 +45,11 @@ class Stark {
         }
         else {
             this.air = air_script_1.parseScript(source);
+            sOptions = validateSecurityOptions(security, this.air.maxConstraintDegree);
             this.hash = merkle_1.createHash(sOptions.hashAlgorithm, false);
         }
-        this.indexGenerator = new components_1.QueryIndexGenerator(this.extensionFactor, sOptions);
+        this.extensionFactor = sOptions.extensionFactor;
+        this.indexGenerator = new components_1.QueryIndexGenerator(sOptions);
         this.serializer = new Serializer_1.Serializer(this.air, this.hash.digestSize);
         this.logger = logger || new utils_1.Logger();
     }
@@ -267,7 +269,7 @@ class Stark {
 exports.Stark = Stark;
 // HELPER FUNCTIONS
 // ================================================================================================
-function validateSecurityOptions(options) {
+function validateSecurityOptions(options, maxConstraintDegree) {
     // execution trace spot checks
     const exeQueryCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_QUERY_COUNT;
     if (exeQueryCount < 1 || exeQueryCount > MAX_EXE_QUERY_COUNT || !Number.isInteger(exeQueryCount)) {
@@ -283,7 +285,11 @@ function validateSecurityOptions(options) {
     if (!HASH_ALGORITHMS.includes(hashAlgorithm)) {
         throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
     }
-    const extensionFactor = (options ? options.extensionFactor : undefined);
+    // extension factor
+    let extensionFactor = (options ? options.extensionFactor : undefined);
+    if (!extensionFactor) {
+        extensionFactor = 2 ** (Math.ceil(Math.log2(maxConstraintDegree)) + 1);
+    }
     return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
 }
 function buildWasmOptions(options) {
