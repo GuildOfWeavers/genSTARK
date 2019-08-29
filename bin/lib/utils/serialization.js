@@ -102,9 +102,9 @@ exports.readMatrix = readMatrix;
 // BIG INTEGERS
 // ================================================================================================
 function readBigInt(buffer, offset, elementSize) {
-    const blocks = elementSize >> 3;
+    const limbCount = elementSize >> 3;
     let value = 0n;
-    for (let i = 0n; i < blocks; i++) {
+    for (let i = 0n; i < limbCount; i++) {
         value = (buffer.readBigUInt64LE(offset) << (64n * i)) | value;
         offset += 8;
     }

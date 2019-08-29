@@ -129,9 +129,9 @@ export function readMatrix(buffer: Buffer, offset: number, leafSize: number, nod
 // BIG INTEGERS
 // ================================================================================================
 export function readBigInt(buffer: Buffer, offset: number, elementSize: number): bigint {
-    const blocks = elementSize >> 3;
+    const limbCount = elementSize >> 3;
     let value = 0n;
-    for (let i = 0n; i < blocks; i++) {
+    for (let i = 0n; i < limbCount; i++) {
         value = (buffer.readBigUInt64LE(offset) << (64n * i)) | value;
         offset += 8;
     }

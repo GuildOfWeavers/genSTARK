@@ -185,14 +185,14 @@ export class Stark {
 
         const label = this.logger.start('Starting STARK verification');
         const log = this.logger.log.bind(this.logger, label);
-        const eRoot = proof.evRoot;
-        const extensionFactor = this.extensionFactor;
-        const field = this.air.field;
-
+        
         // 0 ----- validate parameters
         if (assertions.length < 1) throw new TypeError('At least one assertion must be provided');
         
         // 1 ----- set up evaluation context
+        const field = this.air.field;
+        const eRoot = proof.evRoot;
+        const extensionFactor = this.extensionFactor;
         const context = this.air.createContext(publicInputs || [], extensionFactor);
         const evaluationDomainSize = context.traceLength * extensionFactor;
 
