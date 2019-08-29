@@ -1,5 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// IMPORTS
+// ================================================================================================
 const inliners = require("./inliners");
 // RE-EXPORTS
 // ================================================================================================
@@ -40,29 +42,6 @@ function powLog2(base, exponent) {
 exports.powLog2 = powLog2;
 // BIGINT-BUFFER CONVERSIONS
 // ================================================================================================
-function buffersToBigInts(values) {
-    const result = new Array(values.length);
-    for (let i = 0; i < values.length; i++) {
-        let buffer = values[i];
-        result[i] = readBigInt(buffer, 0, buffer.byteLength);
-    }
-    return result;
-}
-exports.buffersToBigInts = buffersToBigInts;
-function bigIntsToBuffers(values, size) {
-    const result = new Array(values.length);
-    const limbCount = size >> 3;
-    for (let i = 0; i < result.length; i++) {
-        let offset = 0, value = values[i], buffer = Buffer.allocUnsafe(size);
-        for (let limb = 0; limb < limbCount; limb++, offset += 8) {
-            buffer.writeBigUInt64LE(value & MASK_64B, offset);
-            value = value >> 64n;
-        }
-        result[i] = buffer;
-    }
-    return result;
-}
-exports.bigIntsToBuffers = bigIntsToBuffers;
 function readBigInt(buffer, offset, elementSize) {
     const blocks = elementSize >> 3;
     let value = 0n;
@@ -73,6 +52,16 @@ function readBigInt(buffer, offset, elementSize) {
     return value;
 }
 exports.readBigInt = readBigInt;
+function writeBigInt(value, buffer, offset, elementSize) {
+    const limbCount = elementSize >> 3;
+    for (let i = 0; i < limbCount; i++) {
+        buffer.writeBigUInt64LE(value & MASK_64B, offset);
+        value = value >> 64n;
+        offset += 8;
+    }
+    return offset;
+}
+exports.writeBigInt = writeBigInt;
 // OTHER
 // ================================================================================================
 function noop() { }

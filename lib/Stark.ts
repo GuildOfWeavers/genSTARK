@@ -2,9 +2,9 @@
 // ================================================================================================
 import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOptions, Logger as ILogger } from '@guildofweavers/genstark';
 import { MerkleTree, BatchMerkleProof, createHash, Hash, WasmOptions } from '@guildofweavers/merkle';
-import { parseScript, AirObject, Matrix, FiniteField } from '@guildofweavers/air-script';
+import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
 import { CompositionPolynomial, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
-import { Logger, sizeOf, bigIntsToBuffers, powLog2, noop } from './utils';
+import { Logger, sizeOf, powLog2, noop } from './utils';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -156,24 +156,12 @@ export class Stark {
         log('Computed random linear combination of evaluations');
 
         // 8 ----- Compute low-degree proof
-        // first, transpose liner combination values into a matrix with 4 columns
-        const lMatrix = field.transposeVector(lEvaluations, 4);
-
-        // then, hash each row and put the values into a merkle tree
-        const lHashes = this.hash.digestValues(lMatrix.toBuffer(), 4 * this.air.field.elementSize);
-        const lTree = MerkleTree.create(lHashes, this.hash);
-        log('Built liner combination merkle tree');
-
-        const lcPositions = this.getLcQueryPositions(positions);
-        const lcProof = lTree.proveBatch(lcPositions);
-        const lcValues = rowsToBuffers(lMatrix, lcPositions, this.air.field);
-
         let ldProof;
         try {
             //const ldLabel = this.logger.start('Computing low degree proof', '  ');
             //const ldLogger = this.logger.log.bind(this.logger, ldLabel);
-            const ldProver = new LowDegreeProver(this.air.field, this.indexGenerator, this.hash, noop);
-            ldProof = ldProver.prove(lTree, lMatrix, context.evaluationDomain, cPoly.compositionDegree);
+            const ldProver = new LowDegreeProver(this.indexGenerator, this.hash, context, noop);
+            ldProof = ldProver.prove(lEvaluations, context.evaluationDomain, positions, cPoly.compositionDegree);
             log('Computed low-degree proof');
         }
         catch (error) {
@@ -189,12 +177,6 @@ export class Stark {
                 root    : eTree.root,
                 nodes   : eProof.nodes,
                 depth   : eProof.depth
-            },
-            lcProof: {
-                root    : lTree.root,
-                nodes   : lcProof.nodes,
-                values  : lcValues,
-                depth   : lcProof.depth
             },
             ldProof     : ldProof
         };
@@ -262,17 +244,7 @@ export class Stark {
         }
         log(`Verified evaluation merkle proof`);
 
-        // 5 ----- verify low-degree proof
-        try {
-            const ldProver = new LowDegreeProver(this.air.field, this.indexGenerator, this.hash, noop);
-            ldProver.verify(proof.lcProof.root, cPoly.compositionDegree, context.rootOfUnity, proof.ldProof);
-        }
-        catch (error) {
-            throw new StarkError('Verification of low degree failed', error);
-        }
-        log(`Verified low-degree proof`);
-
-        // 6 ----- compute linear combinations of C, P, and S values for all spot checks
+        // 5 ----- compute linear combinations of C, P, and S values for all spot checks
         const lcValues = new Array<bigint>(positions.length);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
@@ -290,27 +262,15 @@ export class Stark {
         }
         log(`Verified transition and boundary constraints`);
 
-        // 7 ----- verify linear combination proof
+        // 6 ----- verify low-degree proof
         try {
-            /*
-            TODO: enable
-            const lcProof: BatchMerkleProof = {
-                values  : bigIntsToBuffers(lcValues, field.elementSize),
-                nodes   : proof.lcProof.nodes,
-                depth   : proof.lcProof.depth
-            };
-            if (!MerkleTree.verifyBatch(proof.lcProof.root, positions, lcProof, this.hash)) {
-                throw new StarkError(`Verification of linear combination Merkle proof failed`);
-            }
-            */
+            const ldProver = new LowDegreeProver(this.indexGenerator, this.hash, context, noop);
+            ldProver.verify(proof.ldProof, lcValues, positions, cPoly.compositionDegree);
         }
         catch (error) {
-            if (error instanceof StarkError === false) {
-                error = new StarkError(`Verification of linear combination Merkle proof failed`, error);
-            }
-            throw error;
+            throw new StarkError('Verification of low degree failed', error);
         }
-        log(`Verified liner combination merkle proof`);
+        log(`Verified low-degree proof`);
 
         this.logger.done(label, 'STARK verified');
         return true;
@@ -319,7 +279,7 @@ export class Stark {
     // UTILITIES
     // --------------------------------------------------------------------------------------------
     sizeOf(proof: StarkProof): number {
-        const size = sizeOf(proof, this.hash.digestSize);
+        const size = sizeOf(proof, this.air.field.elementSize, this.hash.digestSize);
         return size.total;
     }
 
@@ -341,14 +301,6 @@ export class Stark {
             augmentedPositionSet.add((positions[i] + skip) % evaluationDomainSize);
         }
         return Array.from(augmentedPositionSet);
-    }
-
-    private getLcQueryPositions(positions: number[]): number[] {
-        const result = new Set<number>();
-        for (let position of positions) {
-            result.add(Math.floor(position / 4));
-        }
-        return Array.from(result);
     }
 }
 
@@ -415,13 +367,4 @@ function validateAssertions(trace: Matrix, assertions: Assertion[]) {
             throw new StarkError(`Assertion at step ${a.step}, register ${a.register} conflicts with execution trace`);
         }
     }
-}
-
-function rowsToBuffers(matrix: Matrix, positions: number[], field: FiniteField): Buffer[] {
-    const vectors = field.matrixRowsToVectors(matrix);
-    const result = new Array<Buffer>();
-    for (let position of positions) {
-        result.push(vectors[position].toBuffer());
-    }
-    return result;
 }

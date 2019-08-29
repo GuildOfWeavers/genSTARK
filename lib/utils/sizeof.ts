@@ -9,7 +9,7 @@ export const MAX_MATRIX_COLUMN_LENGTH = 127;
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
-export function sizeOf(proof: StarkProof, hashDigestSize: number) {
+export function sizeOf(proof: StarkProof, fieldElementSize: number, hashDigestSize: number) {
 
     let size = 0;
     
@@ -26,15 +26,12 @@ export function sizeOf(proof: StarkProof, hashDigestSize: number) {
     evProof += 1; // evaluation proof depth
     size += evProof;
 
-    // lcProof
-    let lcProof = hashDigestSize; // root;
-    lcProof += sizeOfMatrix(proof.lcProof.nodes);
-    lcProof += sizeOfArray(proof.lcProof.values);
-    lcProof += 1; // lc proof depth
-    size += lcProof;
-
     // ldProof
     let ldProof = 1; // ld component count
+    let lcProof = hashDigestSize; // lc root
+    lcProof += sizeOfMerkleProof(proof.ldProof.lcProof);
+    ldProof += lcProof;
+
     const ldLevels: number[] = [];
     for (let i = 0; i < proof.ldProof.components.length; i++) {
         let component = proof.ldProof.components[i];
@@ -44,12 +41,14 @@ export function sizeOf(proof: StarkProof, hashDigestSize: number) {
         ldProof += ldLevel;
         ldLevels.push(ldLevel);
     }
-    let ldRemainder = sizeOfArray(proof.ldProof.remainder);
+    let ldRemainder = proof.ldProof.remainder.values.length * fieldElementSize;
+    ldRemainder += 1; // 1 byte for remainder length
+    
     ldLevels.push(ldRemainder);
     ldProof += ldRemainder;
     size += ldProof;
 
-    return { evData, evProof, lcProof, ldProof: { levels: ldLevels, total: ldProof }, total: size };
+    return { evData, evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, total: size };
 }
 
 export function sizeOfMerkleProof(proof: BatchMerkleProof) {

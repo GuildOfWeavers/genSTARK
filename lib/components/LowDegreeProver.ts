@@ -1,10 +1,10 @@
 // IMPORTS
 // ================================================================================================
 import { LowDegreeProof, FriComponent, LogFunction } from "@guildofweavers/genstark";
-import { FiniteField, Vector, Matrix } from '@guildofweavers/air-script';
+import { FiniteField, Vector, Matrix, EvaluationContext } from '@guildofweavers/air-script';
 import { MerkleTree, Hash } from '@guildofweavers/merkle';
 import { QueryIndexGenerator } from "./QueryIndexGenerator";
-import { buffersToBigInts, readBigInt } from "../utils";
+import { readBigInt } from "../utils";
 import { StarkError } from '../StarkError';
 
 // CLASS DEFINITION
@@ -12,14 +12,16 @@ import { StarkError } from '../StarkError';
 export class LowDegreeProver {
 
     private readonly field          : FiniteField;
+    private readonly rootOfUnity    : bigint;
     private readonly idxGenerator   : QueryIndexGenerator;
     private readonly hash           : Hash;
     private readonly log            : LogFunction
 
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(field: FiniteField, idxGenerator: QueryIndexGenerator, hash: Hash, logger: LogFunction) {
-        this.field = field;
+    constructor(idxGenerator: QueryIndexGenerator, hash: Hash, context: EvaluationContext, logger: LogFunction) {
+        this.field = context.field;
+        this.rootOfUnity = context.rootOfUnity;
         this.hash = hash;
         this.idxGenerator = idxGenerator;
         this.log = logger;
@@ -27,49 +29,79 @@ export class LowDegreeProver {
 
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    prove(lTree: MerkleTree, values: Matrix, domain: Vector, maxDegreePlus1: number) {
+    prove(cEvaluations: Vector, domain: Vector, exeQueryPositions: number[], maxDegreePlus1: number) {
 
-        const valueCount = values.colCount * values.rowCount; // TODO: improve
-        const componentCount = Math.min(Math.ceil(Math.log2(valueCount) / 2) - 4, 0);
+        // transpose composition polynomial evaluations into a matrix with 4 columns
+        const values = this.field.transposeVector(cEvaluations, 4);
+        const componentCount = Math.min(Math.ceil(Math.log2(cEvaluations.length) / 2) - 4, 0);  // TODO: improve
 
-        const result: LowDegreeProof = {
+        // hash each row and put the result into a Merkle tree
+        const lHashes = this.hash.digestValues(values.toBuffer(), 4 * this.field.elementSize);
+        const lTree = MerkleTree.create(lHashes, this.hash);
+        this.log('Built liner combination merkle tree');
+
+        // build Merkle proofs but swap out hashed values for the un-hashed ones
+        const lcPositions = getAugmentedPositions(exeQueryPositions, cEvaluations.length);
+        const lcProof = lTree.proveBatch(lcPositions);
+        lcProof.values = values.rowsToBuffers(lcPositions);
+
+        const proof: LowDegreeProof = {
+            lcRoot      : lTree.root,
+            lcProof     : lcProof,
             components  : new Array<FriComponent>(componentCount),
             remainder   : []
         };
 
-        this.fri(lTree, values, maxDegreePlus1, 0, domain, result);
-        return result;
+        this.fri(lTree, values, maxDegreePlus1, 0, domain, proof);
+        return proof;
     }
 
-    verify(lRoot: Buffer, maxDegreePlus1: number, rootOfUnity: bigint, proof: LowDegreeProof) {
+    verify(proof: LowDegreeProof, lcValues: bigint[], exeQueryPositions: number[], maxDegreePlus1: number) {
 
-        let rouDegree = computeRootOfUnityDegree(rootOfUnity, this.field);
+        let rootOfUnity = this.rootOfUnity;
+        let columnLength = getRootOfUnityDegree(rootOfUnity, this.field);
 
         // powers of the given root of unity 1, p, p**2, p**3 such that p**4 = 1
         const quarticRootsOfUnity = [1n,
-            this.field.exp(rootOfUnity, BigInt(rouDegree) / 4n),
-            this.field.exp(rootOfUnity, BigInt(rouDegree) / 2n),
-            this.field.exp(rootOfUnity, BigInt(rouDegree) * 3n / 4n)];
+            this.field.exp(rootOfUnity, BigInt(columnLength) / 4n),
+            this.field.exp(rootOfUnity, BigInt(columnLength) / 2n),
+            this.field.exp(rootOfUnity, BigInt(columnLength) * 3n / 4n)];
 
-        // 1 ----- verify the recursive components of the proof
+        // 1 ----- check correctness of linear combination
+        const lcProof = proof.lcProof;
+        const lcPositions = getAugmentedPositions(exeQueryPositions, columnLength);
+        const lcChecks = this.parseColumnValues(lcProof.values, exeQueryPositions, lcPositions, columnLength);
+        lcProof.values = hashBuffers(lcProof.values, this.hash);    // TODO: don't mutate the proof
+        if (!MerkleTree.verifyBatch(proof.lcRoot, lcPositions, lcProof, this.hash)) {
+            throw new StarkError(`Verification of linear combination Merkle proof failed`);
+        }
+
+        for (let i = 0; i < lcValues.length; i++) {
+            if (lcValues[i] !== lcChecks[i]) {
+                throw new StarkError(`Verification of linear combination correctness failed`);
+            }
+        }
+
+        // 2 ----- verify the recursive components of the FRI proof
+        let lRoot = proof.lcRoot;
+        columnLength = Math.floor(columnLength / 4);
         for (let depth = 0; depth < proof.components.length; depth++) {
             let { columnRoot, columnProof, polyProof } = proof.components[depth];
 
             // calculate the pseudo-randomly sampled y indices
-            let columnLength = Math.floor(rouDegree / 4);
             let positions = this.idxGenerator.getFriIndexes(columnRoot, columnLength);
-            let augmentedPositions = getAugmentedPositions(positions, columnLength / 4);
+            let augmentedPositions = getAugmentedPositions(positions, columnLength);
 
             // verify Merkle proof for the column
-            let columnValues = parseColumnValues(columnProof.values, positions, augmentedPositions, columnLength / 4, this.field.elementSize);
+            let columnValues = this.parseColumnValues(columnProof.values, positions, augmentedPositions, columnLength);
             columnProof.values = hashBuffers(columnProof.values, this.hash);    // TODO: don't mutate the proof
             if (!MerkleTree.verifyBatch(columnRoot, augmentedPositions, columnProof, this.hash)) {
                 throw new StarkError(`Verification of column Merkle proof failed at depth ${depth}`);
             }
 
             // verify Merkle proof for polynomials
-            let ys = parsePolyValues(polyProof.values, this.field.elementSize);
-            polyProof.values = hashBuffers(polyProof.values, this.hash);
+            let ys = this.parsePolyValues(polyProof.values);
+            polyProof.values = hashBuffers(polyProof.values, this.hash);    // TODO: don't mutate the proof
             if (!MerkleTree.verifyBatch(lRoot, positions, polyProof, this.hash)) {
                 throw new StarkError(`Verification of polynomial Merkle proof failed at depth ${depth}`);
             }
@@ -104,15 +136,15 @@ export class LowDegreeProver {
             lRoot = columnRoot;
             rootOfUnity = this.field.exp(rootOfUnity, 4n);
             maxDegreePlus1 = Math.floor(maxDegreePlus1 / 4);
-            rouDegree = Math.floor(rouDegree / 4);
+            columnLength = Math.floor(columnLength / 4);
         }
 
-        // 2 ----- verify the remainder of the proof
+        // 3 ----- verify the remainder of the FRI proof
         if (maxDegreePlus1 > proof.remainder.length) {
             throw new StarkError(`Remainder degree is greater than number of remainder values`);
         }
 
-        const remainder = this.field.newVectorFrom(buffersToBigInts(proof.remainder));
+        const remainder = this.field.newVectorFrom(proof.remainder);
 
         // check that Merkle root matches up
         const rMatrix = this.field.transposeVector(remainder, 4);
@@ -137,7 +169,7 @@ export class LowDegreeProver {
             const tValues = this.field.transposeMatrix(values);
             const remainder = this.field.joinMatrixRows(tValues);
             this.verifyRemainder(remainder, maxDegreePlus1, rootOfUnity);
-            result.remainder = splitBuffer(remainder.toBuffer(), this.field.elementSize);
+            result.remainder = remainder.toValues();
             this.log(`Computed FRI remainder of ${remainder.length} values`);
             return;
         }
@@ -150,11 +182,12 @@ export class LowDegreeProver {
         const specialX = this.field.prng(lTree.root);
         const column = this.field.evalQuarticBatch(polys, specialX);
 
-        // break the column in 4 sets of values for the next level
+        // break the column in a matrix with 4 columns for the next layer of recursion
         const newValues = this.field.transposeVector(column, 4);
 
-        // put the resulting column into a merkle tree
-        const rowHashes = this.hash.digestValues(newValues.toBuffer(), 4 * this.field.elementSize);
+        // put the resulting matrix into a Merkle tree - 1 value per row
+        const valueRowSize = 4 * this.field.elementSize;
+        const rowHashes = this.hash.digestValues(newValues.toBuffer(), valueRowSize);
         const cTree = MerkleTree.create(rowHashes, this.hash);
 
         // recursively build all other components
@@ -163,14 +196,14 @@ export class LowDegreeProver {
 
         // compute spot check positions in the column and corresponding positions in the original values
         const positions = this.idxGenerator.getFriIndexes(cTree.root, column.length);
-        const augmentedPositions = getAugmentedPositions(positions, column.length / 4);
+        const augmentedPositions = getAugmentedPositions(positions, column.length);
 
-        // build merkle proofs and but swap out hashed values for the un-hashed ones
+        // build Merkle proofs but swap out hashed values for the un-hashed ones
         const columnProof = cTree.proveBatch(augmentedPositions);
-        columnProof.values = rowsToBuffers(newValues, augmentedPositions, this.field);
+        columnProof.values = newValues.rowsToBuffers(augmentedPositions);
 
         const polyProof = lTree.proveBatch(positions);
-        polyProof.values = rowsToBuffers(values, positions, this.field);
+        polyProof.values = values.rowsToBuffers(positions);
 
         // build and add proof component to the result
         result.components[depth] = { columnRoot: cTree.root, columnProof, polyProof };
@@ -206,11 +239,41 @@ export class LowDegreeProver {
             }
         }
     }
+
+    // PARSERS
+    // --------------------------------------------------------------------------------------------
+    private parsePolyValues(buffers: Buffer[]) {
+        const elementSize = this.field.elementSize;
+
+        const result: bigint[][] = [];
+        for (let buffer of buffers) {
+            let values = new Array<bigint>(4), offset = 0;;
+            for (let i = 0; i < 4; i++, offset += elementSize) {
+                values[i] = readBigInt(buffer, offset, elementSize);
+            }
+            result.push(values);
+        }
+        return result;
+    }
+
+    private parseColumnValues(buffers: Buffer[], positions: number[], augmentedPositions: number[], columnLength: number) {
+        const rowLength = columnLength / 4;
+        const elementSize = this.field.elementSize;
+
+        const result: bigint[] = [];
+        for (let position of positions) {
+            let idx = augmentedPositions.indexOf(position % rowLength);
+            let buffer = buffers[idx];
+            let offset = Math.floor(position / rowLength) * elementSize;
+            result.push(readBigInt(buffer, offset, elementSize));
+        }
+        return result;
+    }
 }
 
 // HELPER FUNCTIONS
 // ================================================================================================
-function computeRootOfUnityDegree(rootOfUnity: bigint, field: FiniteField): number {
+function getRootOfUnityDegree(rootOfUnity: bigint, field: FiniteField): number {
     let result = 1;
     while (rootOfUnity !== 1n) {
         result = result * 2;
@@ -219,53 +282,13 @@ function computeRootOfUnityDegree(rootOfUnity: bigint, field: FiniteField): numb
     return result;
 }
 
-function splitBuffer(buffer: Buffer, elementSize: number): Buffer[] {
-    const elementCount = buffer.byteLength / elementSize;
-    const result = new Array<Buffer>(elementCount);
-    for (let i = 0, offset = 0; i < elementCount; i++, offset += elementSize) {
-        result[i] = buffer.slice(offset, offset + elementSize)
-    }
-    return result;
-}
-
-function getAugmentedPositions(positions: number[], rowLength: number) {
+function getAugmentedPositions(positions: number[], columnLength: number): number[] {
+    const rowLength = columnLength / 4;
     const result = new Set<number>();
     for (let position of positions) {
         result.add(Math.floor(position % rowLength));
     }
     return Array.from(result);
-}
-
-function parsePolyValues(buffers: Buffer[], elementSize: number) {
-    const result: bigint[][] = [];
-    for (let buffer of buffers) {
-        let values = new Array<bigint>(4), offset = 0;;
-        for (let i = 0; i < 4; i++, offset += elementSize) {
-            values[i] = readBigInt(buffer, offset, elementSize);
-        }
-        result.push(values);
-    }
-    return result;
-}
-
-function parseColumnValues(buffers: Buffer[], positions: number[], augmentedPositions: number[], rowLength: number, elementSize: number) {
-    const result: bigint[] = [];
-    for (let position of positions) {
-        let idx = augmentedPositions.indexOf(position % rowLength);
-        let buffer = buffers[idx];
-        let offset = Math.floor(position / rowLength) * elementSize;
-        result.push(readBigInt(buffer, offset, elementSize));
-    }
-    return result;
-}
-
-function rowsToBuffers(matrix: Matrix, positions: number[], field: FiniteField): Buffer[] {
-    const vectors = field.matrixRowsToVectors(matrix);
-    const result = new Array<Buffer>();
-    for (let position of positions) {
-        result.push(vectors[position].toBuffer());
-    }
-    return result;
 }
 
 function hashBuffers(values: Buffer[], hash: Hash): Buffer[] {

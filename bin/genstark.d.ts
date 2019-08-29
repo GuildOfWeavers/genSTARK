@@ -93,12 +93,6 @@ declare module '@guildofweavers/genstark' {
             nodes   : Buffer[][];
             depth   : number;
         };
-        lcProof: {
-            root    : Buffer;
-            nodes   : Buffer[][];
-            values  : Buffer[];
-            depth   : number;
-        };
         ldProof     : LowDegreeProof;
     }
 
@@ -118,8 +112,10 @@ declare module '@guildofweavers/genstark' {
     // LOW DEGREE PROOF
     // --------------------------------------------------------------------------------------------
     export interface LowDegreeProof {
+        lcRoot      : Buffer;
+        lcProof     : BatchMerkleProof,
         components  : FriComponent[];
-        remainder   : Buffer[];
+        remainder   : bigint[];
     }
     
     export interface FriComponent {

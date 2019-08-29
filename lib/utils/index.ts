@@ -1,6 +1,5 @@
 // IMPORTS
 // ================================================================================================
-import { Vector } from '@guildofweavers/galois';
 import * as inliners from './inliners';
 
 // RE-EXPORTS
@@ -35,29 +34,6 @@ export function powLog2(base: number, exponent: number): number {
 
 // BIGINT-BUFFER CONVERSIONS
 // ================================================================================================
-export function buffersToBigInts(values: Buffer[]): bigint[] {
-    const result = new Array<bigint>(values.length);
-    for (let i = 0; i < values.length; i++) {
-        let buffer = values[i];
-        result[i] = readBigInt(buffer, 0, buffer.byteLength);
-    }
-    return result;
-}
-
-export function bigIntsToBuffers(values: bigint[], size: number): Buffer[] {
-    const result = new Array<Buffer>(values.length);
-    const limbCount = size >> 3;
-    for (let i = 0; i < result.length; i++) {
-        let offset = 0, value = values[i], buffer = Buffer.allocUnsafe(size);
-        for (let limb = 0; limb < limbCount; limb++, offset += 8) {
-            buffer.writeBigUInt64LE(value & MASK_64B, offset);
-            value = value >> 64n;
-        }
-        result[i] = buffer;
-    }
-    return result;
-}
-
 export function readBigInt(buffer: Buffer, offset: number, elementSize: number): bigint {
     const blocks = elementSize >> 3;
     let value = 0n;
@@ -66,6 +42,16 @@ export function readBigInt(buffer: Buffer, offset: number, elementSize: number):
         offset += 8;
     }
     return value;
+}
+
+export function writeBigInt(value: bigint, buffer: Buffer, offset: number, elementSize: number): number {
+    const limbCount = elementSize >> 3;
+    for (let i = 0; i < limbCount; i++) {
+        buffer.writeBigUInt64LE(value & MASK_64B, offset);
+        value = value >> 64n;
+        offset += 8;
+    }
+    return offset;
 }
 
 // OTHER
