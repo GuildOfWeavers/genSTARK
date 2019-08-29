@@ -9,54 +9,45 @@ export const MAX_MATRIX_COLUMN_LENGTH = 127;
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
-export function sizeOf(proof: StarkProof, hashDigestSize: number) {
+export function sizeOf(proof: StarkProof, fieldElementSize: number, hashDigestSize: number) {
 
-    let size = 0;
+    let size = hashDigestSize;  // evRoot
     
-    // evData
-    let evData = 1; // length of values array
-    for (let value of proof.values) {
-        evData += value.byteLength;
-    }
-    size += evData;
-
     // evProof
-    let evProof = hashDigestSize; // root
-    evProof += sizeOfMatrix(proof.evProof.nodes);
-    evProof += 1; // evaluation proof depth
-    size += evProof;
-
-    // lcProof
-    let lcProof = hashDigestSize; // root;
-    lcProof += sizeOfMatrix(proof.lcProof.nodes);
-    lcProof += 1; // linear combination proof depth
-    size += lcProof;
+    let evProof = sizeOfMerkleProof(proof.evProof);
+    size += evProof.total;
 
     // ldProof
     let ldProof = 1; // ld component count
-    const ldLevels: number[] = [];
-    for (let i = 0; i < proof.ldProof.components.length; i++) {
-        let component = proof.ldProof.components[i];
-        let ldLevel = hashDigestSize; // column root
-        ldLevel += sizeOfMerkleProof(component.columnProof);
-        ldLevel += sizeOfMerkleProof(component.polyProof);
-        ldProof += ldLevel;
-        ldLevels.push(ldLevel);
+
+    const lcProof = sizeOfMerkleProof(proof.ldProof.lcProof);
+    ldProof += lcProof.total + hashDigestSize; // + lc root
+
+    const ldLevels: any[] = [];
+    for (let component of proof.ldProof.components) {
+        ldProof += hashDigestSize; // column root
+        let column = sizeOfMerkleProof(component.columnProof);
+        ldProof += column.total;
+
+        let poly = sizeOfMerkleProof(component.polyProof);
+        ldProof += poly.total;
+
+        ldLevels.push({ column, poly, total: column.total + poly.total + hashDigestSize });
     }
-    let ldRemainder = sizeOfArray(proof.ldProof.remainder);
-    ldLevels.push(ldRemainder);
+    let ldRemainder = proof.ldProof.remainder.length * fieldElementSize;
+    ldRemainder += 1; // 1 byte for remainder length
+
+    ldLevels.push({ total: ldRemainder });
     ldProof += ldRemainder;
     size += ldProof;
 
-    return { evData, evProof, lcProof, ldProof: { levels: ldLevels, total: ldProof }, total: size };
+    return { evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, total: size };
 }
 
 export function sizeOfMerkleProof(proof: BatchMerkleProof) {
-    let size = 0;
-    size += sizeOfArray(proof.values);
-    size += sizeOfMatrix(proof.nodes);
-    size += 1; // tree depth
-    return size;
+    const values = sizeOfArray(proof.values);
+    const nodes = sizeOfMatrix(proof.nodes);
+    return { values, nodes, total: values + nodes + 1 }; // +1 for tree depth
 }
 
 // HELPER FUNCTIONS

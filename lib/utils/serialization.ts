@@ -3,6 +3,10 @@
 import { BatchMerkleProof } from '@guildofweavers/genstark';
 import { MAX_ARRAY_LENGTH } from './sizeof';
 
+// MODULE VARIABLES
+// ================================================================================================
+const MASK_64B = 0xFFFFFFFFFFFFFFFFn;
+
 // INTERFACES
 // ================================================================================================
 const enum ColumnType {
@@ -120,4 +124,26 @@ export function readMatrix(buffer: Buffer, offset: number, leafSize: number, nod
     }
 
     return { matrix, offset };
+}
+
+// BIG INTEGERS
+// ================================================================================================
+export function readBigInt(buffer: Buffer, offset: number, elementSize: number): bigint {
+    const limbCount = elementSize >> 3;
+    let value = 0n;
+    for (let i = 0n; i < limbCount; i++) {
+        value = (buffer.readBigUInt64LE(offset) << (64n * i)) | value;
+        offset += 8;
+    }
+    return value;
+}
+
+export function writeBigInt(value: bigint, buffer: Buffer, offset: number, elementSize: number): number {
+    const limbCount = elementSize >> 3;
+    for (let i = 0; i < limbCount; i++) {
+        buffer.writeBigUInt64LE(value & MASK_64B, offset);
+        value = value >> 64n;
+        offset += 8;
+    }
+    return offset;
 }

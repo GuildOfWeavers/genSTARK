@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const sizeof_1 = require("./utils/sizeof");
 const utils = require("./utils");
 // CLASS DEFINITION
 // ================================================================================================
@@ -12,112 +13,78 @@ class Serializer {
         this.secretInputCount = config.secretInputCount;
         this.hashDigestSize = hashDigestSize;
     }
-    // EVALUATION SERIALIZER/PARSER
-    // --------------------------------------------------------------------------------------------
-    mergeValues(pValues, sValues, position) {
-        const valueSize = this.fieldElementSize;
-        const valueCount = this.getValueCount();
-        const buffer = Buffer.allocUnsafe(valueCount * valueSize);
-        let offset = 0;
-        for (let register = 0; register < this.stateWidth; register++) {
-            offset += pValues.copyValue(register, position, buffer, offset);
-        }
-        for (let register = 0; register < this.secretInputCount; register++) {
-            offset += sValues[register].copyValue(position, buffer, offset);
-        }
-        return buffer;
-    }
-    parseValues(buffer) {
-        const elementSize = this.fieldElementSize;
-        let offset = 0;
-        const pValues = new Array(this.stateWidth);
-        for (let i = 0; i < this.stateWidth; i++, offset += elementSize) {
-            pValues[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
-        }
-        const sValues = new Array(this.secretInputCount);
-        for (let i = 0; i < this.secretInputCount; i++, offset += elementSize) {
-            sValues[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
-        }
-        return [pValues, sValues];
-    }
-    // PROOF SERIALIZER/PARSER
+    // PROOF SERIALIZER
     // --------------------------------------------------------------------------------------------
     serializeProof(proof) {
-        const size = utils.sizeOf(proof, this.hashDigestSize);
+        const size = utils.sizeOf(proof, this.fieldElementSize, this.hashDigestSize);
         const buffer = Buffer.allocUnsafe(size.total);
-        let offset = 0;
-        // values
-        offset = utils.writeArray(buffer, offset, proof.values);
+        // root
+        let offset = proof.evRoot.copy(buffer, 0);
         // evProof
-        offset += proof.evProof.root.copy(buffer, offset);
-        offset = buffer.writeUInt8(proof.evProof.depth, offset);
-        offset = utils.writeMatrix(buffer, offset, proof.evProof.nodes, this.hashDigestSize);
-        // lcProof
-        offset += proof.lcProof.root.copy(buffer, offset);
-        offset = buffer.writeUInt8(proof.lcProof.depth, offset);
-        offset = utils.writeMatrix(buffer, offset, proof.lcProof.nodes, this.fieldElementSize);
+        const evLeafSize = this.getValueCount() * this.fieldElementSize;
+        offset = utils.writeMerkleProof(buffer, offset, proof.evProof, evLeafSize);
         // ldProof
+        const ldLeafSize = this.fieldElementSize * 4;
+        offset += proof.ldProof.lcRoot.copy(buffer, offset);
+        offset = utils.writeMerkleProof(buffer, offset, proof.ldProof.lcProof, ldLeafSize);
         offset = buffer.writeUInt8(proof.ldProof.components.length, offset);
-        for (let i = 0; i < proof.ldProof.components.length; i++) {
-            let component = proof.ldProof.components[i];
+        for (let component of proof.ldProof.components) {
             offset += component.columnRoot.copy(buffer, offset);
-            offset = utils.writeMerkleProof(buffer, offset, component.columnProof, this.fieldElementSize);
-            offset = utils.writeMerkleProof(buffer, offset, component.polyProof, this.fieldElementSize);
+            offset = utils.writeMerkleProof(buffer, offset, component.columnProof, ldLeafSize);
+            offset = utils.writeMerkleProof(buffer, offset, component.polyProof, ldLeafSize);
         }
-        offset = utils.writeArray(buffer, offset, proof.ldProof.remainder);
+        offset = buffer.writeUInt8(proof.ldProof.remainder.length, offset);
+        for (let value of proof.ldProof.remainder) {
+            offset = utils.writeBigInt(value, buffer, offset, this.fieldElementSize);
+        }
         // return the buffer
         return buffer;
     }
+    // PROOF PARSER
+    // --------------------------------------------------------------------------------------------
     parseProof(buffer) {
-        let offset = 0;
-        // values
-        const valueCount = this.getValueCount();
-        const valueSize = valueCount * this.fieldElementSize;
-        const valueInfo = utils.readArray(buffer, offset, valueSize);
-        offset = valueInfo.offset;
-        // evProof
+        // root
         const evRoot = Buffer.allocUnsafe(this.hashDigestSize);
-        offset += buffer.copy(evRoot, 0, offset, offset + this.hashDigestSize);
-        const evDepth = buffer.readUInt8(offset);
-        offset += 1;
-        const evNodeInfo = utils.readMatrix(buffer, offset, this.hashDigestSize, this.hashDigestSize);
-        offset = evNodeInfo.offset;
-        // lcProof
+        let offset = buffer.copy(evRoot, 0, 0, this.hashDigestSize);
+        // evProof
+        const evLeafSize = this.getValueCount() * this.fieldElementSize;
+        const evProof = utils.readMerkleProof(buffer, offset, evLeafSize, this.hashDigestSize);
+        offset = evProof.offset;
+        // ldProof
+        const ldLeafSize = this.fieldElementSize * 4;
         const lcRoot = Buffer.allocUnsafe(this.hashDigestSize);
         offset += buffer.copy(lcRoot, 0, offset, offset + this.hashDigestSize);
-        const lcDepth = buffer.readUInt8(offset);
-        offset += 1;
-        const lcNodeInfo = utils.readMatrix(buffer, offset, this.fieldElementSize, this.hashDigestSize);
-        offset = lcNodeInfo.offset;
-        // ldProof
+        let lcProof = utils.readMerkleProof(buffer, offset, ldLeafSize, this.hashDigestSize);
+        offset = lcProof.offset;
         const componentCount = buffer.readUInt8(offset);
         offset += 1;
-        const components = new Array(componentCount);
+        const friComponents = new Array(componentCount);
         for (let i = 0; i < componentCount; i++) {
             let columnRoot = Buffer.allocUnsafe(this.hashDigestSize);
             offset += buffer.copy(columnRoot, 0, offset, offset + this.hashDigestSize);
-            let columnProofInfo = utils.readMerkleProof(buffer, offset, this.fieldElementSize, this.hashDigestSize);
+            let columnProofInfo = utils.readMerkleProof(buffer, offset, ldLeafSize, this.hashDigestSize);
             offset = columnProofInfo.offset;
-            let polyProofInfo = utils.readMerkleProof(buffer, offset, this.fieldElementSize, this.hashDigestSize);
+            let polyProofInfo = utils.readMerkleProof(buffer, offset, ldLeafSize, this.hashDigestSize);
             offset = polyProofInfo.offset;
-            components[i] = { columnRoot, columnProof: columnProofInfo.proof, polyProof: polyProofInfo.proof };
+            friComponents[i] = { columnRoot, columnProof: columnProofInfo.proof, polyProof: polyProofInfo.proof };
         }
-        const remainderInfo = utils.readArray(buffer, offset, this.fieldElementSize);
-        offset = remainderInfo.offset;
+        // for remainder array length, zero means 256
+        const friRemainderLength = buffer.readUInt8(offset) || sizeof_1.MAX_ARRAY_LENGTH;
+        offset += 1;
+        const friRemainder = new Array(friRemainderLength);
+        for (let i = 0; i < friRemainderLength; i++, offset += this.fieldElementSize) {
+            friRemainder[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
+        }
         // build and return the proof
         return {
-            values: valueInfo.values,
-            evProof: {
-                root: evRoot,
-                nodes: evNodeInfo.matrix,
-                depth: evDepth
-            },
-            lcProof: {
-                root: lcRoot,
-                nodes: lcNodeInfo.matrix,
-                depth: lcDepth,
-            },
-            ldProof: { components, remainder: remainderInfo.values }
+            evRoot: evRoot,
+            evProof: evProof.proof,
+            ldProof: {
+                lcRoot: lcRoot,
+                lcProof: lcProof.proof,
+                components: friComponents,
+                remainder: friRemainder
+            }
         };
     }
     // PRIVATE METHODS

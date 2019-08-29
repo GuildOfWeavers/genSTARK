@@ -6,8 +6,8 @@ const crypto = require("crypto");
 // CLASS DEFINITION
 // ================================================================================================
 class QueryIndexGenerator {
-    constructor(extensionFactor, options) {
-        this.extensionFactor = extensionFactor;
+    constructor(options) {
+        this.extensionFactor = options.extensionFactor;
         this.exeQueryCount = options.exeQueryCount;
         this.friQueryCount = options.friQueryCount;
     }

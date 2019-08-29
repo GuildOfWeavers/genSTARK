@@ -38,7 +38,7 @@ const { roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
 // define security options for the STARK
-const securityOptions: SecurityOptions = {
+const securityOptions: Partial<SecurityOptions> = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 16,
     exeQueryCount   : 48,

@@ -1,6 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const sizeof_1 = require("./sizeof");
+// MODULE VARIABLES
+// ================================================================================================
+const MASK_64B = 0xffffffffffffffffn;
 // MERKLE PROOFS
 // ================================================================================================
 function writeMerkleProof(buffer, offset, proof, leafSize) {
@@ -96,4 +99,26 @@ function readMatrix(buffer, offset, leafSize, nodeSize) {
     return { matrix, offset };
 }
 exports.readMatrix = readMatrix;
+// BIG INTEGERS
+// ================================================================================================
+function readBigInt(buffer, offset, elementSize) {
+    const limbCount = elementSize >> 3;
+    let value = 0n;
+    for (let i = 0n; i < limbCount; i++) {
+        value = (buffer.readBigUInt64LE(offset) << (64n * i)) | value;
+        offset += 8;
+    }
+    return value;
+}
+exports.readBigInt = readBigInt;
+function writeBigInt(value, buffer, offset, elementSize) {
+    const limbCount = elementSize >> 3;
+    for (let i = 0; i < limbCount; i++) {
+        buffer.writeBigUInt64LE(value & MASK_64B, offset);
+        value = value >> 64n;
+        offset += 8;
+    }
+    return offset;
+}
+exports.writeBigInt = writeBigInt;
 //# sourceMappingURL=serialization.js.map

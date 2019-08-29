@@ -14,6 +14,13 @@ const roundConstants = new Array(64);
 for (let i = 0; i < 64; i++) {
     roundConstants[i] = (BigInt(i) ** 7n) ^ 42n;
 }
+// define security options for the STARK
+const securityOptions = {
+    hashAlgorithm: 'blake2s256',
+    extensionFactor: 16,
+    exeQueryCount: 40,
+    friQueryCount: 24
+};
 // create the STARK for MiMC computation
 const mimcStark = new index_1.Stark(`
 define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
@@ -29,7 +36,7 @@ define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`, { hashAlgorithm: 'blake2s256' }, true);
+}`, securityOptions, true);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

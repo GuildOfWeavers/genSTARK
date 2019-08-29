@@ -11,8 +11,8 @@ export class QueryIndexGenerator {
     readonly exeQueryCount      : number;
     readonly friQueryCount      : number;
 
-    constructor(extensionFactor: number, options: SecurityOptions) {
-        this.extensionFactor = extensionFactor;
+    constructor(options: SecurityOptions) {
+        this.extensionFactor = options.extensionFactor;
         this.exeQueryCount = options.exeQueryCount;
         this.friQueryCount = options.friQueryCount;
     }

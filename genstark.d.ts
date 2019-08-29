@@ -15,7 +15,7 @@ declare module '@guildofweavers/genstark' {
     export interface SecurityOptions {
 
         /** Execution trace extension factor; defaults to the smallest power of 2 greater than 2x of max constraint degree */
-        extensionFactor?: number;
+        extensionFactor: number;
 
         /** Number of queries for the execution trace; defaults to 80 */
         exeQueryCount: number;
@@ -87,18 +87,9 @@ declare module '@guildofweavers/genstark' {
     }
 
     export interface StarkProof {
-        values      : Buffer[];
-        evProof: {
-            root    : Buffer;
-            nodes   : Buffer[][];
-            depth   : number;
-        };
-        lcProof: {
-            root    : Buffer;
-            nodes   : Buffer[][];
-            depth   : number;
-        };
-        ldProof     : LowDegreeProof;
+        evRoot  : Buffer;
+        evProof : BatchMerkleProof;
+        ldProof : LowDegreeProof;
     }
 
     // CONSTRAINTS
@@ -117,8 +108,10 @@ declare module '@guildofweavers/genstark' {
     // LOW DEGREE PROOF
     // --------------------------------------------------------------------------------------------
     export interface LowDegreeProof {
+        lcRoot      : Buffer;
+        lcProof     : BatchMerkleProof,
         components  : FriComponent[];
-        remainder   : Buffer[];
+        remainder   : bigint[];
     }
     
     export interface FriComponent {
@@ -135,8 +128,10 @@ declare module '@guildofweavers/genstark' {
     };
 
     export interface Logger {
-        start(message?: string) : symbol;
+        start(message?: string, prefix?: string) : symbol;
         log(label: symbol, message: string): void;
         done(label: symbol, message?: string): void;
     }
+
+    export type LogFunction = (message: string) => void;
 }
