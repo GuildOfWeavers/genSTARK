@@ -211,6 +211,15 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single threa
 | Merkle Proof (d=8)*  | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 530 ms     | 53 KB      |
 | Merkle Proof (d=16)* | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.1 sec    | 63 KB      |
 
+All of the above examples have been run with the following security options:
+
+* **extensionFactor**: 16
+* **exeQueryCount**: 48
+* **friQueryCount**: 24
+* **hashAlgorithm**: blake2s256 
+
+Currently, these options imply roughly 96-bit security level for the STARKs.
+
 Merkle proofs are based on a modified version of [Rescue](/examples/rescue) hash function, and in addition to 8 state registers require 1 public input register and 1 secret input register.
 
 **\*** Takes advantage of WebAssembly optimization.
