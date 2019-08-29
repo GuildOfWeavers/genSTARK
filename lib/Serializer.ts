@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { StarkProof, FriComponent } from "@guildofweavers/genstark";
-import { FiniteField, Vector } from '@guildofweavers/air-script';
+import { FiniteField } from '@guildofweavers/air-script';
 import { MAX_ARRAY_LENGTH } from "./utils/sizeof";
 import * as utils from './utils';
 
@@ -31,41 +31,7 @@ export class Serializer {
         this.hashDigestSize = hashDigestSize;
     }
 
-    // EVALUATION SERIALIZER/PARSER
-    // --------------------------------------------------------------------------------------------
-    mergeValues(values: Vector[], positions: number[]): Buffer[] {
-        const bufferSize = values.length * this.fieldElementSize;    
-        const result: Buffer[] = [];
-        for (let position of positions) {
-            let buffer = Buffer.allocUnsafe(bufferSize), offset = 0;
-            for (let vector of values) {
-                offset += vector.copyValue(position, buffer, offset);
-            }
-            result.push(buffer);
-        }
-    
-        return result;
-    }
-
-    parseValues(buffer: Buffer): [bigint[], bigint[]] {
-        const elementSize = this.fieldElementSize;
-
-        let offset = 0;
-
-        const pValues = new Array<bigint>(this.stateWidth);
-        for (let i = 0; i < this.stateWidth; i++, offset += elementSize) {
-            pValues[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
-        }
-
-        const sValues = new Array<bigint>(this.secretInputCount);
-        for (let i = 0; i < this.secretInputCount; i++, offset += elementSize) {
-            sValues[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
-        }
-
-        return [pValues, sValues];
-    }
-
-    // PROOF SERIALIZER/PARSER
+    // PROOF SERIALIZER
     // --------------------------------------------------------------------------------------------
     serializeProof(proof: StarkProof): Buffer {
         
@@ -100,6 +66,8 @@ export class Serializer {
         return buffer;
     }
 
+    // PROOF PARSER
+    // --------------------------------------------------------------------------------------------
     parseProof(buffer: Buffer): StarkProof {
         
         // root

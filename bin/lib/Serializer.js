@@ -13,34 +13,7 @@ class Serializer {
         this.secretInputCount = config.secretInputCount;
         this.hashDigestSize = hashDigestSize;
     }
-    // EVALUATION SERIALIZER/PARSER
-    // --------------------------------------------------------------------------------------------
-    mergeValues(values, positions) {
-        const bufferSize = values.length * this.fieldElementSize;
-        const result = [];
-        for (let position of positions) {
-            let buffer = Buffer.allocUnsafe(bufferSize), offset = 0;
-            for (let vector of values) {
-                offset += vector.copyValue(position, buffer, offset);
-            }
-            result.push(buffer);
-        }
-        return result;
-    }
-    parseValues(buffer) {
-        const elementSize = this.fieldElementSize;
-        let offset = 0;
-        const pValues = new Array(this.stateWidth);
-        for (let i = 0; i < this.stateWidth; i++, offset += elementSize) {
-            pValues[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
-        }
-        const sValues = new Array(this.secretInputCount);
-        for (let i = 0; i < this.secretInputCount; i++, offset += elementSize) {
-            sValues[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
-        }
-        return [pValues, sValues];
-    }
-    // PROOF SERIALIZER/PARSER
+    // PROOF SERIALIZER
     // --------------------------------------------------------------------------------------------
     serializeProof(proof) {
         const size = utils.sizeOf(proof, this.fieldElementSize, this.hashDigestSize);
@@ -67,6 +40,8 @@ class Serializer {
         // return the buffer
         return buffer;
     }
+    // PROOF PARSER
+    // --------------------------------------------------------------------------------------------
     parseProof(buffer) {
         // root
         const evRoot = Buffer.allocUnsafe(this.hashDigestSize);

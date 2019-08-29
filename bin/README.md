@@ -55,15 +55,15 @@ When you run the examples, you should get a nice log documenting each step. Here
 Starting STARK computation
 Set up evaluation context in 10 ms
 Generated execution trace in 39 ms
-Computed execution trace polynomials P(x) in 6 ms
-Low-degree extended P(x) polynomials over evaluation domain in 95 ms
-Serialized evaluations of P(x) and S(x) polynomials in 82 ms
-Built evaluation merkle tree in 86 ms
+Computed execution trace polynomials P(x) in 7 ms
+Low-degree extended P(x) polynomials over evaluation domain in 92 ms
+Serialized evaluations of P(x) and S(x) polynomials in 83 ms
+Built evaluation merkle tree in 85 ms
 Computed 40 evaluation spot checks in 4 ms
-Computed composition polynomial C(x) in 450 ms
-Computed random linear combination of evaluations in 34 ms
-Computed low-degree proof in 238 ms
-STARK computed in 1047 ms
+Computed composition polynomial C(x) in 496 ms
+Combined P(x) and S(x) evaluations with C(x) evaluations in 42 ms
+Computed low-degree proof in 314 ms
+STARK computed in 1175 ms
 --------------------
 Proof serialized in 7 ms; size: 86.12 KB
 --------------------
@@ -72,11 +72,11 @@ Proof parsed in 6 ms
 Starting STARK verification
 Set up evaluation context in 2 ms
 Computed positions for evaluation spot checks in 1 ms
-Decoded evaluation spot checks in 1 ms
-Verified evaluation merkle proof in 5 ms
-Verified transition and boundary constraints in 12 ms
-Verified low-degree proof in 17 ms
-STARK verified in 40 ms
+Decoded evaluation spot checks in 0 ms
+Verified evaluation merkle proof in 3 ms
+Verified transition and boundary constraints in 10 ms
+Verified low-degree proof in 16 ms
+STARK verified in 36 ms
 --------------------
 STARK security level: 96
 ```
@@ -204,7 +204,7 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single threa
 
 | STARK                | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
 | -------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
-| MiMC*                | 128 bits   | 3      | 1         | 2<sup>13</sup> | 1.1 sec    | 86 KB      |
+| MiMC*                | 128 bits   | 3      | 1         | 2<sup>13</sup> | 1.2 sec    | 86 KB      |
 | MiMC*                | 128 bits   | 3      | 1         | 2<sup>17</sup> | 19 sec     | 137 KB     |
 | MiMC                 | 256 bits   | 3      | 1         | 2<sup>13</sup> | 9.2 sec    | 107 KB     |
 | MiMC                 | 256 bits   | 3      | 1         | 2<sup>17</sup> | 178 sec    | 162 KB     |

@@ -107,7 +107,7 @@ class Stark {
         // 5 ----- query evaluation tree at pseudo-random positions
         const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
-        const eValues = this.serializer.mergeValues(eVectors, augmentedPositions);
+        const eValues = this.mergeValues(eVectors, augmentedPositions);
         const eProof = eTree.proveBatch(augmentedPositions);
         eProof.values = eValues;
         log(`Computed ${positions.length} evaluation spot checks`);
@@ -120,7 +120,7 @@ class Stark {
         // 7 ---- compute random linear combination of evaluations
         const lCombination = new components_1.LinearCombination(eTree.root, cPoly.compositionDegree, cPoly.coefficientCount, context);
         const lEvaluations = lCombination.computeMany(cEvaluations, pEvaluations, sEvaluations);
-        log('Computed random linear combination of evaluations');
+        log('Combined P(x) and S(x) evaluations with C(x) evaluations');
         // 8 ----- Compute low-degree proof
         let ldProof;
         try {
@@ -168,7 +168,7 @@ class Stark {
         for (let i = 0; i < proof.evProof.values.length; i++) {
             let mergedEvaluations = proof.evProof.values[i];
             let position = augmentedPositions[i];
-            let [p, s] = this.serializer.parseValues(mergedEvaluations);
+            let [p, s] = this.parseValues(mergedEvaluations);
             pEvaluations.set(position, p);
             sEvaluations.set(position, s);
         }
@@ -235,6 +235,33 @@ class Stark {
             augmentedPositionSet.add((positions[i] + skip) % evaluationDomainSize);
         }
         return Array.from(augmentedPositionSet);
+    }
+    mergeValues(values, positions) {
+        const bufferSize = values.length * this.air.field.elementSize;
+        const result = [];
+        for (let position of positions) {
+            let buffer = Buffer.allocUnsafe(bufferSize), offset = 0;
+            for (let vector of values) {
+                offset += vector.copyValue(position, buffer, offset);
+            }
+            result.push(buffer);
+        }
+        return result;
+    }
+    parseValues(buffer) {
+        const elementSize = this.air.field.elementSize;
+        const stateWidth = this.air.stateWidth;
+        const secretInputCount = this.air.secretInputCount;
+        let offset = 0;
+        const pValues = new Array(stateWidth);
+        for (let i = 0; i < stateWidth; i++, offset += elementSize) {
+            pValues[i] = utils_1.readBigInt(buffer, offset, elementSize);
+        }
+        const sValues = new Array(secretInputCount);
+        for (let i = 0; i < secretInputCount; i++, offset += elementSize) {
+            sValues[i] = utils_1.readBigInt(buffer, offset, elementSize);
+        }
+        return [pValues, sValues];
     }
 }
 exports.Stark = Stark;

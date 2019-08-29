@@ -1,10 +1,10 @@
 // IMPORTS
 // ================================================================================================
 import { SecurityOptions, Assertion, HashAlgorithm, StarkProof, OptimizationOptions, Logger as ILogger } from '@guildofweavers/genstark';
-import { MerkleTree, BatchMerkleProof, createHash, Hash, WasmOptions } from '@guildofweavers/merkle';
-import { parseScript, AirObject, Matrix } from '@guildofweavers/air-script';
+import { MerkleTree, createHash, Hash, WasmOptions } from '@guildofweavers/merkle';
+import { parseScript, AirObject, Vector, Matrix } from '@guildofweavers/air-script';
 import { CompositionPolynomial, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
-import { Logger, sizeOf, powLog2, noop, rehashMerkleProofValues } from './utils';
+import { Logger, sizeOf, powLog2, readBigInt, rehashMerkleProofValues, noop } from './utils';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -139,7 +139,7 @@ export class Stark {
         // 5 ----- query evaluation tree at pseudo-random positions
         const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
-        const eValues = this.serializer.mergeValues(eVectors, augmentedPositions);
+        const eValues = this.mergeValues(eVectors, augmentedPositions);
         const eProof = eTree.proveBatch(augmentedPositions);
         eProof.values = eValues;
         log(`Computed ${positions.length} evaluation spot checks`);
@@ -154,7 +154,7 @@ export class Stark {
         // 7 ---- compute random linear combination of evaluations
         const lCombination = new LinearCombination(eTree.root, cPoly.compositionDegree, cPoly.coefficientCount, context);
         const lEvaluations = lCombination.computeMany(cEvaluations, pEvaluations, sEvaluations);
-        log('Computed random linear combination of evaluations');
+        log('Combined P(x) and S(x) evaluations with C(x) evaluations');
 
         // 8 ----- Compute low-degree proof
         let ldProof;
@@ -212,7 +212,7 @@ export class Stark {
         for (let i = 0; i < proof.evProof.values.length; i++) {
             let mergedEvaluations = proof.evProof.values[i];
             let position = augmentedPositions[i];
-            let [p, s] = this.serializer.parseValues(mergedEvaluations);
+            let [p, s] = this.parseValues(mergedEvaluations);
             
             pEvaluations.set(position, p);
             sEvaluations.set(position, s);
@@ -291,6 +291,40 @@ export class Stark {
             augmentedPositionSet.add((positions[i] + skip) % evaluationDomainSize);
         }
         return Array.from(augmentedPositionSet);
+    }
+
+    private mergeValues(values: Vector[], positions: number[]): Buffer[] {
+        const bufferSize = values.length * this.air.field.elementSize;
+        const result: Buffer[] = [];
+        for (let position of positions) {
+            let buffer = Buffer.allocUnsafe(bufferSize), offset = 0;
+            for (let vector of values) {
+                offset += vector.copyValue(position, buffer, offset);
+            }
+            result.push(buffer);
+        }
+    
+        return result;
+    }
+
+    private parseValues(buffer: Buffer): [bigint[], bigint[]] {
+        const elementSize = this.air.field.elementSize;
+        const stateWidth = this.air.stateWidth;
+        const secretInputCount = this.air.secretInputCount;
+
+        let offset = 0;
+
+        const pValues = new Array<bigint>(stateWidth);
+        for (let i = 0; i < stateWidth; i++, offset += elementSize) {
+            pValues[i] = readBigInt(buffer, offset, elementSize);
+        }
+
+        const sValues = new Array<bigint>(secretInputCount);
+        for (let i = 0; i < secretInputCount; i++, offset += elementSize) {
+            sValues[i] = readBigInt(buffer, offset, elementSize);
+        }
+
+        return [pValues, sValues];
     }
 }
 
