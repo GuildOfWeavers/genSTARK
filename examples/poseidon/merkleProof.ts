@@ -14,7 +14,7 @@ const stateWidth = 6;
 const fRounds = 8;
 const pRounds = 55;
 const roundSteps = fRounds + pRounds + 1;
-const treeDepth = 16;
+const treeDepth = 8;
 
 // MDS matrix and its inverse
 const mds = getMdsMatrix(field, stateWidth);
@@ -40,6 +40,8 @@ define Poseidon6x128 over prime field (${modulus}) {
     transition 12 registers in ${roundSteps * treeDepth} steps {
         when ($k7) {
             when ($k6) {
+                // full rounds
+
                 K: [$k0, $k1, $k2, $k3, $k4, $k5];
                     
                 // compute hash(p, v)
@@ -53,6 +55,8 @@ define Poseidon6x128 over prime field (${modulus}) {
                 out: [...S1, ...S2];
             }
             else {
+                // partial rounds
+
                 // compute hash(p, v)
                 va: ($r5 + $k5)^alpha;
                 S1: [$r0 + $k0, $r1 + $k1, $r2 + $k2, $r3 + $k3, $r4 + $k4, va];
@@ -82,6 +86,8 @@ define Poseidon6x128 over prime field (${modulus}) {
     enforce 12 constraints {
         when ($k7) {
             when ($k6) {
+                // full rounds
+
                 K: [$k0, $k1, $k2, $k3, $k4, $k5];
                     
                 // compute hash(p, v)
@@ -97,6 +103,8 @@ define Poseidon6x128 over prime field (${modulus}) {
                 out: N - S;
             }
             else {
+                // partial rounds
+
                 // compute hash(p, v)
                 va: ($r5 + $k5)^alpha;
                 S1: [$r0 + $k0, $r1 + $k1, $r2 + $k2, $r3 + $k3, $r4 + $k4, va];
@@ -163,24 +171,26 @@ const tree = new MerkleTree(buildLeaves(2**treeDepth), hash);
 // generate a proof for index 42
 const index = 1;
 const proof = tree.prove(index);
-console.log(MerkleTree.verify(tree.root, index, proof, hash));
+//console.log(MerkleTree.verify(tree.root, index, proof, hash));
 
 // set up inputs and assertions for the STARK
 const binaryIndex = toBinaryArray(index, treeDepth);
-const initValues = [proof[0][0], proof[0][1], proof[1][0], proof[1][1], 0n, 0n, proof[1][0], proof[1][1], proof[0][0], proof[0][1], 0n, 0n];
+
+// put first two elements of the proof into initValues
+const leaf = proof.shift()!, sibling = proof.shift()!;
+const initValues = [leaf[0], leaf[1], sibling[0], sibling[1], 0n, 0n, sibling[0], sibling[1], leaf[0], leaf[1], 0n, 0n];
+
 const assertions: Assertion[] = [
     { step: roundSteps * treeDepth - 1, register: 0, value: tree.root[0] },
     { step: roundSteps * treeDepth - 1, register: 1, value: tree.root[1] }
 ];
 
-// remove first 2 elements since they are already in initValues
-const nodes = proof.slice(2);
-// add a dummy value at the end so that length of nodes is a power of 2
-nodes.push([0n, 0n]);
-const pn = transpose(nodes);
+// add a dummy value at the end of the proof so that length is a power of 2
+proof.push([0n, 0n]);
+const nodes = transpose(proof);
 
 // generate a proof
-const sProof = merkleStark.prove(assertions, initValues, [binaryIndex], pn);
+const sProof = merkleStark.prove(assertions, initValues, [binaryIndex], nodes);
 console.log('-'.repeat(20));
 
 // verify the proof

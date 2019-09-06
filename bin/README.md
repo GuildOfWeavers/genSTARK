@@ -35,8 +35,8 @@ define Foo over prime field (2^32 - 3 * 2^25 + 1) {
 
 // create a proof that if we start computation at 1, we end up at 127 after 64 steps
 const assertions = [
-    { register: 0, step: 0, value: 1n },    // value at first step is 1
-    { register: 0, step: 63, value: 127n }  // value at last step is 127
+    { register: 0, step: 0,  value: 1n   },  // value at first step is 1
+    { register: 0, step: 63, value: 127n }   // value at last step is 127
 ];
 const proof = fooStark.prove(assertions, [1n]);
 
@@ -49,6 +49,7 @@ There are a few more sophisticated examples in this repository:
 * [Demo STARKs](/examples/demo) - demonstration of how to use various features of this library.
 * [MiMC STARK](/examples/mimc) - basically the same as Vitalik Buterin's [MiMC tutorial](https://vitalik.ca/general/2018/07/21/starks_part_3.html).
 * [Rescue STARKs](/examples/rescue) - various STARKs based on [Rescue](https://eprint.iacr.org/2019/426.pdf) hash function (e.g. proof of hash preimage, Merkle proof).
+* [Poseidon STARKs](/examples/poseidon) - various STARKs based on [Poseidon](https://eprint.iacr.org/2019/458.pdf) hash function (e.g. proof of hash preimage, Merkle proof).
 
 When you run the examples, you should get a nice log documenting each step. Here is an example output of running 128-bit MiMC STARK for 2<sup>13</sup> steps:
 ```
@@ -202,27 +203,22 @@ interface Assertion {
 # Performance
 Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single thread):
 
-| STARK                | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
-| -------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
-| MiMC*                | 128 bits   | 3      | 1         | 2<sup>13</sup> | 1.2 sec    | 86 KB      |
-| MiMC*                | 128 bits   | 3      | 1         | 2<sup>17</sup> | 19 sec     | 137 KB     |
-| MiMC                 | 256 bits   | 3      | 1         | 2<sup>13</sup> | 9.2 sec    | 107 KB     |
-| MiMC                 | 256 bits   | 3      | 1         | 2<sup>17</sup> | 178 sec    | 162 KB     |
-| Merkle Proof (d=8)*  | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 530 ms     | 53 KB      |
-| Merkle Proof (d=16)* | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.1 sec    | 63 KB      |
+| STARK                         | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
+| ----------------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
+| MiMC                          | 128 bits   | 3      | 1         | 2<sup>13</sup> | 1.2 sec    | 86 KB      |
+| MiMC                          | 128 bits   | 3      | 1         | 2<sup>17</sup> | 19 sec     | 137 KB     |
+| MiMC                          | 256 bits   | 3      | 1         | 2<sup>13</sup> | 9.2 sec    | 107 KB     |
+| MiMC                          | 256 bits   | 3      | 1         | 2<sup>17</sup> | 178 sec    | 162 KB     |
+| Merkle Proof (Rescue, d=8)    | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 530 ms     | 53 KB      |
+| Merkle Proof (Rescue, d=16)   | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.1 sec    | 63 KB      |
+| Merkle Proof (Poseidon, d=8)  | 128 bits   | 7      | 12        | 2<sup>9</sup>  | 1.2 sec    | 95 KB      |
+| Merkle Proof (Poseidon, d=16) | 128 bits   | 7      | 12        | 2<sup>10</sup> | 2.3 sec    | 106 KB     |
 
-All of the above examples have been run with the following security options:
+STARKs in the above examples have security parameters set to provide ~96 bits security.
 
-* **extensionFactor**: 16
-* **exeQueryCount**: 48
-* **friQueryCount**: 24
-* **hashAlgorithm**: blake2s256 
+**Note 1:** Rescue and Poseidon hash function instantiations are not really "apples-to-apples" - refer to [here](/examples/rescue) and [here](/examples/parameters) for exact parameters.
 
-Currently, these options imply roughly 96-bit security level for the STARKs.
-
-Merkle proofs are based on a modified version of [Rescue](/examples/rescue) hash function, and in addition to 8 state registers require 1 public input register and 1 secret input register.
-
-**\*** Takes advantage of WebAssembly optimization.
+**Note 2:** Currently, STARKS in 128-bit fields are able to take advantage of WebAssembly optimization, and thus, are much faster than STARKs in 256-bit fields.
 
 # References
 This library is largely based on Vitalik Buterin's [zk-STARK/MiMC tutorial](https://github.com/ethereum/research/tree/master/mimc_stark). Other super useful resources:
