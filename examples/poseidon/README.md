@@ -1,4 +1,4 @@
-# Rescue STARKs
+# Poseidon STARKs
 
 Examples in this directory use [Poseidon hash function](https://eprint.iacr.org/2019/458.pdf) to define various STARKs.
 
