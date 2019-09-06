@@ -44,8 +44,10 @@ export class CompositionPolynomial {
 
         // create coefficients needed for linear combination
         let dCoefficientCount = constraints.length;
-        for (let { degree } of this.constraintGroups) {
-            if (degree < this.combinationDegree) dCoefficientCount++;
+        for (let { degree, indexes } of this.constraintGroups) {
+            if (degree < this.combinationDegree) {
+                dCoefficientCount += indexes.length;
+            };
         }
 
         let bCoefficientCount = this.bPoly.count;
