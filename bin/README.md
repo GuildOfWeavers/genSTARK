@@ -216,7 +216,7 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single threa
 
 STARKs in the above examples have security parameters set to provide ~96 bits security.
 
-**Note 1:** Rescue and Poseidon hash function instantiations are not really "apples-to-apples" - refer to [here](/examples/rescue) and [here](/examples/parameters) for exact parameters.
+**Note 1:** Rescue and Poseidon hash function instantiations are not really "apples-to-apples" - refer to [here](/examples/rescue) and [here](/examples/poseidon) for exact parameters.
 
 **Note 2:** Currently, STARKS in 128-bit fields are able to take advantage of WebAssembly optimization, and thus, are much faster than STARKs in 256-bit fields.
 
