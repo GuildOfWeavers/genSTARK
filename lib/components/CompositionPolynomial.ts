@@ -68,7 +68,7 @@ export class CompositionPolynomial {
 
     // PROOF METHODS
     // --------------------------------------------------------------------------------------------
-    evaluateAll(pPolys: Matrix, pEvaluations: Matrix, context: ProofContext) {
+    evaluateAll(pPolys: Matrix, pEvaluations: Matrix, context: ProofContext): Vector {
         
         // 1 ----- evaluate transition constraints over composition domain
         let qEvaluations: Matrix;

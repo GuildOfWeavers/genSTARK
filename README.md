@@ -211,8 +211,8 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single threa
 | MiMC                          | 256 bits   | 3      | 1         | 2<sup>17</sup> | 178 sec    | 162 KB     |
 | Merkle Proof (Rescue, d=8)    | 128 bits   | 4      | 8         | 2<sup>8</sup>  | 530 ms     | 53 KB      |
 | Merkle Proof (Rescue, d=16)   | 128 bits   | 4      | 8         | 2<sup>9</sup>  | 1.1 sec    | 63 KB      |
-| Merkle Proof (Poseidon, d=8)  | 128 bits   | 7      | 12        | 2<sup>9</sup>  | 1.2 sec    | 95 KB      |
-| Merkle Proof (Poseidon, d=16) | 128 bits   | 7      | 12        | 2<sup>10</sup> | 2.3 sec    | 106 KB     |
+| Merkle Proof (Poseidon, d=8)  | 128 bits   | 7      | 12        | 2<sup>9</sup>  | 1.3 sec    | 74 KB      |
+| Merkle Proof (Poseidon, d=16) | 128 bits   | 7      | 12        | 2<sup>10</sup> | 2.6 sec    | 82 KB      |
 
 STARKs in the above examples have security parameters set to provide ~96 bits security.
 

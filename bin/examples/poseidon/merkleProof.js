@@ -22,9 +22,9 @@ const roundControls = utils_1.getRoundControls(fRounds, pRounds, roundSteps);
 // define security options for the STARK
 const securityOptions = {
     hashAlgorithm: 'blake2s256',
-    extensionFactor: 16,
-    exeQueryCount: 80,
-    friQueryCount: 24
+    extensionFactor: 32,
+    exeQueryCount: 44,
+    friQueryCount: 20
 };
 const merkleStark = new index_1.Stark(`
 define Poseidon6x128 over prime field (${modulus}) {

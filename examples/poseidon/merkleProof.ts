@@ -26,9 +26,9 @@ const roundControls = getRoundControls(fRounds, pRounds, roundSteps);
 // define security options for the STARK
 const securityOptions: Partial<SecurityOptions> = {
     hashAlgorithm   : 'blake2s256',
-    extensionFactor : 16,
-    exeQueryCount   : 80,
-    friQueryCount   : 24
+    extensionFactor : 32,
+    exeQueryCount   : 44,
+    friQueryCount   : 20
 };
 
 const merkleStark = new Stark(`
