@@ -22,7 +22,7 @@ class LowDegreeProver {
     }
     // PUBLIC METHODS
     // --------------------------------------------------------------------------------------------
-    prove(cEvaluations, domain, exeQueryPositions, maxDegreePlus1) {
+    prove(cEvaluations, domain, maxDegreePlus1) {
         // transpose composition polynomial evaluations into a matrix with 4 columns
         const polyValues = this.field.transposeVector(cEvaluations, 4);
         // hash each row and put the result into a Merkle tree
@@ -30,6 +30,7 @@ class LowDegreeProver {
         const pTree = merkle_1.MerkleTree.create(polyHashes, this.hash);
         this.log('Built liner combination merkle tree');
         // build Merkle proofs but swap out hashed values for the un-hashed ones
+        const exeQueryPositions = this.idxGenerator.getExeIndexes(pTree.root, domain.length);
         const lcPositions = getAugmentedPositions(exeQueryPositions, cEvaluations.length);
         const lcProof = pTree.proveBatch(lcPositions);
         lcProof.values = polyValues.rowsToBuffers(lcPositions);

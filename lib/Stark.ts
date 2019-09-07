@@ -137,38 +137,38 @@ export class Stark {
         const eTree = MerkleTree.create(hashedEvaluations, this.hash);
         log('Built evaluation merkle tree');
 
-        // 5 ----- query evaluation tree at pseudo-random positions
-        const positions = this.indexGenerator.getExeIndexes(eTree.root, evaluationDomainSize);
-        const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
-        const eValues = this.mergeValues(eVectors, augmentedPositions);
-        const eProof = eTree.proveBatch(augmentedPositions);
-        eProof.values = eValues;
-        log(`Computed ${positions.length} evaluation spot checks`);
-
-        // 6 ----- compute composition polynomial C(x)
+        // 5 ----- compute composition polynomial C(x)
         //const cLabel = this.logger.start('Computing composition polynomial', '  ');
         //const cLogger = this.logger.log.bind(this.logger, cLabel);
         const cPoly = new CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, noop);
         const cEvaluations = cPoly.evaluateAll(pPolys, pEvaluations, context);
         log('Computed composition polynomial C(x)');
 
-        // 7 ---- compute random linear combination of evaluations
+        // 6 ---- compute random linear combination of evaluations
         const lCombination = new LinearCombination(eTree.root, cPoly.compositionDegree, cPoly.coefficientCount, context);
         const lEvaluations = lCombination.computeMany(cEvaluations, pEvaluations, sEvaluations);
         log('Combined P(x) and S(x) evaluations with C(x) evaluations');
 
-        // 8 ----- Compute low-degree proof
+        // 7 ----- Compute low-degree proof
         let ldProof;
         try {
             //const ldLabel = this.logger.start('Computing low degree proof', '  ');
             //const ldLogger = this.logger.log.bind(this.logger, ldLabel);
             const ldProver = new LowDegreeProver(this.indexGenerator, this.hash, context, noop);
-            ldProof = ldProver.prove(lEvaluations, context.evaluationDomain, positions, cPoly.compositionDegree);
+            ldProof = ldProver.prove(lEvaluations, context.evaluationDomain, cPoly.compositionDegree);
             log('Computed low-degree proof');
         }
         catch (error) {
             throw new StarkError('Low degree proof failed', error);
         }
+
+        // 8 ----- query evaluation tree at pseudo-random positions
+        const positions = this.indexGenerator.getExeIndexes(ldProof.lcRoot, evaluationDomainSize);
+        const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
+        const eValues = this.mergeValues(eVectors, augmentedPositions);
+        const eProof = eTree.proveBatch(augmentedPositions);
+        eProof.values = eValues;
+        log(`Computed ${positions.length} evaluation spot checks`);
 
         this.logger.done(label, 'STARK computed');
 
@@ -202,7 +202,7 @@ export class Stark {
         log('Set up evaluation context');
 
         // 2 ----- compute positions for evaluation spot-checks
-        const positions = this.indexGenerator.getExeIndexes(eRoot, evaluationDomainSize);
+        const positions = this.indexGenerator.getExeIndexes(proof.ldProof.lcRoot, evaluationDomainSize);
         const augmentedPositions = this.getAugmentedPositions(positions, evaluationDomainSize);
         log(`Computed positions for evaluation spot checks`);
 
