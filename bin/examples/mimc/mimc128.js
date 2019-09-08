@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // ================================================================================================
 const assert = require("assert");
 const index_1 = require("../../index");
+const utils_1 = require("../../lib/utils");
 // STARK DEFINITION
 // ================================================================================================
 //const steps = 2**6, result = 285985527232340595584273426051826821023n;
@@ -37,7 +38,7 @@ define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`, securityOptions, { initialMemory: 512 * 2 ** 20 }); // 512 MB
+}`, securityOptions, { initialMemory: 512 * 2 ** 20 }, new utils_1.Logger(false));
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

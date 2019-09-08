@@ -70,8 +70,7 @@ class Stark {
     // PROVER
     // --------------------------------------------------------------------------------------------
     prove(assertions, initValues, publicInputs, secretInputs) {
-        const label = this.logger.start('Starting STARK computation');
-        const log = this.logger.log.bind(this.logger, label);
+        const log = this.logger.start('Starting STARK computation');
         // 0 ----- validate parameters
         if (!Array.isArray(assertions))
             throw new TypeError('Assertions parameter must be an array');
@@ -107,10 +106,10 @@ class Stark {
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hash);
         log('Built evaluation merkle tree');
         // 5 ----- compute composition polynomial C(x)
-        //const cLabel = this.logger.start('Computing composition polynomial', '  ');
-        //const cLogger = this.logger.log.bind(this.logger, cLabel);
-        const cPoly = new components_1.CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, utils_1.noop);
+        const cLogger = this.logger.sub('Computing composition polynomial');
+        const cPoly = new components_1.CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, cLogger);
         const cEvaluations = cPoly.evaluateAll(pPolys, pEvaluations, context);
+        this.logger.done(cLogger);
         log('Computed composition polynomial C(x)');
         // 6 ---- compute random linear combination of evaluations
         const lCombination = new components_1.LinearCombination(eTree.root, cPoly.compositionDegree, cPoly.coefficientCount, context);
@@ -119,10 +118,10 @@ class Stark {
         // 7 ----- Compute low-degree proof
         let ldProof;
         try {
-            //const ldLabel = this.logger.start('Computing low degree proof', '  ');
-            //const ldLogger = this.logger.log.bind(this.logger, ldLabel);
-            const ldProver = new components_1.LowDegreeProver(this.indexGenerator, this.hash, context, utils_1.noop);
+            const ldLogger = this.logger.sub('Computing low degree proof');
+            const ldProver = new components_1.LowDegreeProver(this.indexGenerator, this.hash, context, ldLogger);
             ldProof = ldProver.prove(lEvaluations, context.evaluationDomain, cPoly.compositionDegree);
+            this.logger.done(ldLogger);
             log('Computed low-degree proof');
         }
         catch (error) {
@@ -135,7 +134,7 @@ class Stark {
         const eProof = eTree.proveBatch(augmentedPositions);
         eProof.values = eValues;
         log(`Computed ${positions.length} evaluation spot checks`);
-        this.logger.done(label, 'STARK computed');
+        this.logger.done(log, 'STARK computed');
         // build and return the proof object
         return {
             evRoot: eTree.root,
@@ -146,8 +145,7 @@ class Stark {
     // VERIFIER
     // --------------------------------------------------------------------------------------------
     verify(assertions, proof, publicInputs) {
-        const label = this.logger.start('Starting STARK verification');
-        const log = this.logger.log.bind(this.logger, label);
+        const log = this.logger.start('Starting STARK verification');
         // 0 ----- validate parameters
         if (assertions.length < 1)
             throw new TypeError('At least one assertion must be provided');
@@ -212,7 +210,7 @@ class Stark {
             throw new StarkError_1.StarkError('Verification of low degree failed', error);
         }
         log(`Verified low-degree proof`);
-        this.logger.done(label, 'STARK verified');
+        this.logger.done(log, 'STARK verified');
         return true;
     }
     // UTILITIES

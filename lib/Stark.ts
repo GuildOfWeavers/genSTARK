@@ -96,8 +96,7 @@ export class Stark {
     // --------------------------------------------------------------------------------------------
     prove(assertions: Assertion[], initValues: bigint[], publicInputs?: bigint[][], secretInputs?: bigint[][]): StarkProof {
 
-        const label = this.logger.start('Starting STARK computation');
-        const log = this.logger.log.bind(this.logger, label);
+        const log = this.logger.start('Starting STARK computation');
     
         // 0 ----- validate parameters
         if (!Array.isArray(assertions)) throw new TypeError('Assertions parameter must be an array');
@@ -138,10 +137,10 @@ export class Stark {
         log('Built evaluation merkle tree');
 
         // 5 ----- compute composition polynomial C(x)
-        //const cLabel = this.logger.start('Computing composition polynomial', '  ');
-        //const cLogger = this.logger.log.bind(this.logger, cLabel);
-        const cPoly = new CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, noop);
+        const cLogger = this.logger.sub('Computing composition polynomial');
+        const cPoly = new CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, cLogger);
         const cEvaluations = cPoly.evaluateAll(pPolys, pEvaluations, context);
+        this.logger.done(cLogger);
         log('Computed composition polynomial C(x)');
 
         // 6 ---- compute random linear combination of evaluations
@@ -152,10 +151,10 @@ export class Stark {
         // 7 ----- Compute low-degree proof
         let ldProof;
         try {
-            //const ldLabel = this.logger.start('Computing low degree proof', '  ');
-            //const ldLogger = this.logger.log.bind(this.logger, ldLabel);
-            const ldProver = new LowDegreeProver(this.indexGenerator, this.hash, context, noop);
+            const ldLogger = this.logger.sub('Computing low degree proof');
+            const ldProver = new LowDegreeProver(this.indexGenerator, this.hash, context, ldLogger);
             ldProof = ldProver.prove(lEvaluations, context.evaluationDomain, cPoly.compositionDegree);
+            this.logger.done(ldLogger);
             log('Computed low-degree proof');
         }
         catch (error) {
@@ -170,7 +169,7 @@ export class Stark {
         eProof.values = eValues;
         log(`Computed ${positions.length} evaluation spot checks`);
 
-        this.logger.done(label, 'STARK computed');
+        this.logger.done(log, 'STARK computed');
 
         // build and return the proof object
         return {
@@ -184,8 +183,7 @@ export class Stark {
     // --------------------------------------------------------------------------------------------
     verify(assertions: Assertion[], proof: StarkProof, publicInputs?: bigint[][]) {
 
-        const label = this.logger.start('Starting STARK verification');
-        const log = this.logger.log.bind(this.logger, label);
+        const log = this.logger.start('Starting STARK verification');
         
         // 0 ----- validate parameters
         if (assertions.length < 1) throw new TypeError('At least one assertion must be provided');
@@ -263,7 +261,7 @@ export class Stark {
         }
         log(`Verified low-degree proof`);
 
-        this.logger.done(label, 'STARK verified');
+        this.logger.done(log, 'STARK verified');
         return true;
     }
 

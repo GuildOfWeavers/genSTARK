@@ -1,8 +1,9 @@
 // IMPORTS
 // ================================================================================================
 import * as assert from 'assert';
-import { Stark } from '../../index';
 import { SecurityOptions } from '@guildofweavers/genstark';
+import { Stark } from '../../index';
+import { Logger } from '../../lib/utils';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -40,7 +41,7 @@ define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`, securityOptions, { initialMemory: 512 * 2**20 });   // 512 MB
+}`, securityOptions, { initialMemory: 512 * 2**20 }, new Logger(false));
 
 // TESTING
 // ================================================================================================
