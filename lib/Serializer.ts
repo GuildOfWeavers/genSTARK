@@ -57,7 +57,11 @@ export class Serializer {
             offset = utils.writeMerkleProof(buffer, offset, component.polyProof, ldLeafSize);
         }
 
-        offset = buffer.writeUInt8(proof.ldProof.remainder.length, offset);
+        // for remainder array length, zero means 256
+        const remainderLength = (proof.ldProof.remainder.length === 256)
+            ? 0
+            : proof.ldProof.remainder.length;
+        offset = buffer.writeUInt8(remainderLength, offset);
         for (let value of proof.ldProof.remainder) {
             offset = utils.writeBigInt(value, buffer, offset, this.fieldElementSize);
         }

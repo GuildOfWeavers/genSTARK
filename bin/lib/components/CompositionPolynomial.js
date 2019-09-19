@@ -16,7 +16,7 @@ class CompositionPolynomial {
         // degree of trace polynomial combination
         this.combinationDegree = getCombinationDegree(constraints, context.traceLength);
         // degree of composition polynomial is deg(C(x)) = deg(Q(x)) - deg(Z(x))
-        this.compositionDegree = this.combinationDegree - context.traceLength;
+        this.compositionDegree = Math.max(this.combinationDegree - context.traceLength, context.traceLength);
         // group transition constraints together by their degree
         this.constraintGroups = groupTransitionConstraints(constraints, context.traceLength);
         // create coefficients needed for linear combination
