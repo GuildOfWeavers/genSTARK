@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, EvaluationContext, Vector } from '@guildofweavers/air-script';
+import { FiniteField, AirObject, Vector } from '@guildofweavers/air-script';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -12,7 +12,7 @@ export class ZeroPolynomial {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(context: EvaluationContext) {
+    constructor(context: AirObject) {
         this.field = context.field;
         this.traceLength = BigInt(context.traceLength);
 

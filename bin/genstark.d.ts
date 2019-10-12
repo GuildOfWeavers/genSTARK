@@ -62,19 +62,19 @@ declare module '@guildofweavers/genstark' {
         /**
          * Generate a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
-         * @param initValues An array containing initial values for all mutable registers
-         * @param publicInputs An array containing values for all specified public registers
-         * @param secretInputs An array containing values for all specified secret registers
+         * @param inputs TODO
+         * @param auxPublicInputs TODO
+         * @param auxSecretInputs TODO
          */
-        prove(assertions: Assertion[], initValues: bigint[], publicInputs?: bigint[][], secretInputs?: bigint[][]): StarkProof;
+        prove(assertions: Assertion[], inputs: any[], auxPublicInputs?: bigint[][], auxSecretInputs?: bigint[][]): StarkProof;
 
         /**
          * Verifies a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
          * @param proof Proof of the computation
-         * @param publicInputs An array containing values for all specified public registers
+         * @param auxPublicInputs TODO
          */
-        verify(assertions: Assertion[], proof: StarkProof, publicInputs?: bigint[][]): boolean;
+        verify(assertions: Assertion[], proof: StarkProof, auxPublicInputs?: bigint[][]): boolean;
 
         /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;
@@ -87,9 +87,10 @@ declare module '@guildofweavers/genstark' {
     }
 
     export interface StarkProof {
-        evRoot  : Buffer;
-        evProof : BatchMerkleProof;
-        ldProof : LowDegreeProof;
+        evRoot      : Buffer;
+        evProof     : BatchMerkleProof;
+        ldProof     : LowDegreeProof;
+        traceShape  : number[];
     }
 
     // CONSTRAINTS

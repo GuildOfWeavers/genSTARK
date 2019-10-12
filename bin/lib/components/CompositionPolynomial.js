@@ -106,9 +106,9 @@ class CompositionPolynomial {
     }
     // VERIFICATION METHODS
     // --------------------------------------------------------------------------------------------
-    evaluateAt(x, pValues, nValues, sValues, context) {
+    evaluateAt(x, pValues, nValues, hValues, context) {
         // evaluate transition constraints at x
-        const qValues = context.evaluateConstraintsAt(x, pValues, nValues, sValues);
+        const qValues = context.evaluateConstraintsAt(x, pValues, nValues, hValues);
         // adjust transition constraint degrees
         for (let { degree, indexes } of this.constraintGroups) {
             if (degree === this.combinationDegree)

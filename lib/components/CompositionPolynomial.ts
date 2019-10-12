@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { FiniteField, Vector, Matrix, Assertion, LogFunction } from "@guildofweavers/genstark";
-import { EvaluationContext, ProofContext, VerificationContext, ConstraintSpecs } from "@guildofweavers/air-script";
+import { AirObject, ProofObject, VerificationObject, ConstraintSpecs } from "@guildofweavers/air-script";
 import { BoundaryConstraints } from "./BoundaryConstraints";
 import { ZeroPolynomial } from "./ZeroPolynomial";
 import { StarkError } from "../StarkError";
@@ -26,7 +26,7 @@ export class CompositionPolynomial {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(constraints: ConstraintSpecs[], assertions: Assertion[], seed: Buffer, context: EvaluationContext, logger: LogFunction) {
+    constructor(constraints: ConstraintSpecs[], assertions: Assertion[], seed: Buffer, context: AirObject, logger: LogFunction) {
 
         this.field = context.field;
         this.bPoly = new BoundaryConstraints(assertions, context);
@@ -68,7 +68,7 @@ export class CompositionPolynomial {
 
     // PROOF METHODS
     // --------------------------------------------------------------------------------------------
-    evaluateAll(pPolys: Matrix, pEvaluations: Matrix, context: ProofContext): Vector {
+    evaluateAll(pPolys: Matrix, pEvaluations: Matrix, context: ProofObject): Vector {
         
         // 1 ----- evaluate transition constraints over composition domain
         let qEvaluations: Matrix;
@@ -147,10 +147,10 @@ export class CompositionPolynomial {
 
     // VERIFICATION METHODS
     // --------------------------------------------------------------------------------------------
-    evaluateAt(x: bigint, pValues: bigint[], nValues: bigint[], sValues: bigint[], context: VerificationContext): bigint {
+    evaluateAt(x: bigint, pValues: bigint[], nValues: bigint[], hValues: bigint[], context: VerificationObject): bigint {
 
         // evaluate transition constraints at x
-        const qValues = context.evaluateConstraintsAt(x, pValues, nValues, sValues);
+        const qValues = context.evaluateConstraintsAt(x, pValues, nValues, hValues);
 
         // adjust transition constraint degrees
         for (let { degree, indexes } of this.constraintGroups) {

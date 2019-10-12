@@ -10,7 +10,8 @@ import * as utils from './utils';
 interface SerializerConfig {
     readonly field              : FiniteField;
     readonly stateWidth         : number;
-    readonly secretInputCount   : number;
+    readonly sRegisterCount     : number;
+    readonly iRegisterCount     : number;
 }
 
 // CLASS DEFINITION
@@ -19,7 +20,8 @@ export class Serializer {
 
     readonly fieldElementSize   : number;
     readonly stateWidth         : number;
-    readonly secretInputCount   : number;
+    readonly iRegisterCount     : number;
+    readonly sRegisterCount     : number;
     readonly hashDigestSize     : number;
 
     // CONSTRUCTOR
@@ -27,7 +29,8 @@ export class Serializer {
     constructor(config: SerializerConfig, hashDigestSize: number) {
         this.fieldElementSize = config.field.elementSize;
         this.stateWidth = config.stateWidth;
-        this.secretInputCount = config.secretInputCount;
+        this.iRegisterCount = config.iRegisterCount;
+        this.sRegisterCount = config.sRegisterCount;
         this.hashDigestSize = hashDigestSize;
     }
 
@@ -64,6 +67,12 @@ export class Serializer {
         offset = buffer.writeUInt8(remainderLength, offset);
         for (let value of proof.ldProof.remainder) {
             offset = utils.writeBigInt(value, buffer, offset, this.fieldElementSize);
+        }
+
+        // trace shape
+        offset = buffer.writeUInt8(proof.traceShape.length, offset);
+        for (let level of proof.traceShape) {
+            offset = buffer.writeUInt32LE(level, offset);
         }
 
         // return the buffer
@@ -109,6 +118,13 @@ export class Serializer {
             friRemainder[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
         }
 
+        // trace shape
+        const traceDepth = buffer.readUInt8(offset); offset += 1;
+        const traceShape = new Array<number>(traceDepth);
+        for (let i = 0; i < traceDepth; i++) {
+            traceShape[i] = buffer.readUInt32LE(offset); offset += 4;
+        }
+
         // build and return the proof
         return {
             evRoot          : evRoot,
@@ -118,13 +134,14 @@ export class Serializer {
                 lcProof     : lcProof.proof,
                 components  : friComponents, 
                 remainder   : friRemainder
-            }
+            },
+            traceShape      : traceShape
         };
     }
 
     // PRIVATE METHODS
     // --------------------------------------------------------------------------------------------
     private getValueCount(): number {
-        return this.stateWidth + this.secretInputCount;
+        return this.stateWidth + this.sRegisterCount + this.iRegisterCount;
     }
 }
