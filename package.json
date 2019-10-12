@@ -22,12 +22,12 @@
     "node": ">=12.7.x"
   },
   "devDependencies": {
-    "@types/node": "12.7.x",
+    "@types/node": "^12.7.12",
     "del": "5.0.x",
     "gulp": "4.0.x"
   },
   "dependencies": {
-    "@guildofweavers/air-script": "0.4.x",
+    "@guildofweavers/air-script": "0.5.x",
     "@guildofweavers/galois": "0.4.x",
     "@guildofweavers/merkle": "0.3.x"
   }
