@@ -19,7 +19,6 @@ const treeDepth = 8;
 // MDS matrix and its inverse
 const mds = getMdsMatrix(field, stateWidth);
 const roundConstants = transpose(getRoundConstants(field, stateWidth, roundSteps));
-const roundControls = getRoundControls(fRounds, pRounds, roundSteps);
 
 // STARK DEFINITION
 // ================================================================================================
@@ -37,111 +36,48 @@ define Poseidon6x128 over prime field (${modulus}) {
     MDS: ${inline.matrix(mds)};
     alpha: ${sBoxExp};
 
-    transition 12 registers in ${roundSteps * treeDepth} steps {
-        when ($k7) {
-            when ($k6) {
-                // full rounds
-
-                K: [$k0, $k1, $k2, $k3, $k4, $k5];
-                    
-                // compute hash(p, v)
-                S1: [$r0, $r1, $r2, $r3, $r4, $r5];
-                S1: MDS # (S1 + K)^alpha;
-
-                // compute hash(v, p)
-                S2: [$r6, $r7, $r8, $r9, $r10, $r11];
-                S2: MDS # (S2 + K)^alpha;
-
-                out: [...S1, ...S2];
+    transition 12 registers {
+        for each ($i0, $i1, $i2, $i3) {
+            init {
+                S1 <- [$i0, $i1, $i2, $i3, 0, 0];
+                S2 <- [$i2, $i3, $i0, $i1, 0, 0];
+                [...S1, ...S2];
             }
-            else {
-                // partial rounds
 
-                // compute hash(p, v)
-                va: ($r5 + $k5)^alpha;
-                S1: [$r0 + $k0, $r1 + $k1, $r2 + $k2, $r3 + $k3, $r4 + $k4, va];
-                S1: MDS # S1;
+            for each ($i2, $i3) {
+
+                init {
+                    H <- $p0 ? $r[6..7] : $r[0..1];
+                    S1 <- [...H, $i2, $i3, 0, 0];
+                    S2 <- [$i2, $i3, ...H, 0, 0];
+                    [...S1, ...S2];
+                }
+
+                for steps [1..4, 60..63] {
+                    // full rounds
+                    S1 <- MDS # ($r[0..5] + $k)^alpha;
+                    S2 <- MDS # ($r[6..11] + $k)^alpha;
+                    [...S1, ...S2];
+                }
     
-                // compute hash(v, p)
-                vb: ($r11 + $k5)^alpha;
-                S2: [$r6 + $k0, $r7 + $k1, $r8 + $k2, $r9 + $k3, $r10 + $k4, vb];
-                S2: MDS # S2;
-
-                out: [...S1, ...S2];
+                for steps [5..59] {
+                    // partial round
+                    S1 <- MDS # [...($r[0..4] + $k[0..4]), ($r5 + $k5)^alpha];	
+                    S2 <- MDS # [...($r[6..10] + $k[0..4]), ($r11 + $k5)^alpha];
+                    [...S1, ...S2];
+                }
             }
-        }
-        else {
-            // this happens every 64th step
-
-            h1: $p0 ? $r6 | $r0;
-            h2: $p0 ? $r7 | $r1;
-
-            S1: [h1, h2, $s0, $s1, 0, 0];
-            S2: [$s0, $s1, h1, h2, 0, 0];
-
-            out: [...S1, ...S2];
         }
     }
 
     enforce 12 constraints {
-        when ($k7) {
-            when ($k6) {
-                // full rounds
-
-                K: [$k0, $k1, $k2, $k3, $k4, $k5];
-                    
-                // compute hash(p, v)
-                S1: [$r0, $r1, $r2, $r3, $r4, $r5];
-                S1: MDS # (S1 + K)^alpha;
-
-                // compute hash(v, p)
-                S2: [$r6, $r7, $r8, $r9, $r10, $r11];
-                S2: MDS # (S2 + K)^alpha;
-
-                N: [$n0, $n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $n11];
-                S: [...S1, ...S2];
-                out: N - S;
-            }
-            else {
-                // partial rounds
-
-                // compute hash(p, v)
-                va: ($r5 + $k5)^alpha;
-                S1: [$r0 + $k0, $r1 + $k1, $r2 + $k2, $r3 + $k3, $r4 + $k4, va];
-                S1: MDS # S1;
-    
-                // compute hash(v, p)
-                vb: ($r11 + $k5)^alpha;
-                S2: [$r6 + $k0, $r7 + $k1, $r8 + $k2, $r9 + $k3, $r10 + $k4, vb];
-                S2: MDS # S2;
-
-                N: [$n0, $n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $n11];
-                S: [...S1, ...S2];
-                out: N - S;
-            }
-        }
-        else {
-            // this happens every 64th step
-
-            h1: $p0 ? $r6 | $r0;
-            h2: $p0 ? $r7 | $r1;
-
-            S1: [h1, h2, $s0, $s1, 0, 0];
-            S2: [$s0, $s1, h1, h2, 0, 0];
-
-            N: [$n0, $n1, $n2, $n3, $n4, $n5, $n6, $n7, $n8, $n9, $n10, $n11];
-            S: [...S1, ...S2];
-            out: N - S;
+        for all steps {
+            transition($r) = $n;
         }
     }
 
-    using 11 readonly registers {
+    using 7 readonly registers {
         $p0: spread binary [...];   // binary representation of node index
-
-
-        // merkle branch nodes
-        $s0: spread [...];
-        $s1: spread [...];
 
         // round constants
         $k0: repeat ${inline.vector(roundConstants[0])};
@@ -150,15 +86,6 @@ define Poseidon6x128 over prime field (${modulus}) {
         $k3: repeat ${inline.vector(roundConstants[3])};
         $k4: repeat ${inline.vector(roundConstants[4])};
         $k5: repeat ${inline.vector(roundConstants[5])};
-
-        // round controls
-        $k6: repeat binary ${inline.vector(roundControls)};
-
-        // 63 ones followed by a zero - will be used to control conditional expression
-        $k7: repeat binary [
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
-        ];
     }
 }`, securityOptions, true);
 
@@ -176,21 +103,17 @@ const proof = tree.prove(index);
 // set up inputs and assertions for the STARK
 const binaryIndex = toBinaryArray(index, treeDepth);
 
-// put first two elements of the proof into initValues
-const leaf = proof.shift()!, sibling = proof.shift()!;
-const initValues = [leaf[0], leaf[1], sibling[0], sibling[1], 0n, 0n, sibling[0], sibling[1], leaf[0], leaf[1], 0n, 0n];
-
+// put first element of the proof into registers $i0 and $i1, and all other nodes into $i2 and $i3
+const leaf = proof.shift()!;
+const nodes = transpose(proof);
+const initValues = [ [leaf[0], leaf[1], nodes[0], nodes[1]] ];
 const assertions: Assertion[] = [
     { step: roundSteps * treeDepth - 1, register: 0, value: tree.root[0] },
     { step: roundSteps * treeDepth - 1, register: 1, value: tree.root[1] }
 ];
 
-// add a dummy value at the end of the proof so that length is a power of 2
-proof.push([0n, 0n]);
-const nodes = transpose(proof);
-
 // generate a proof
-const sProof = merkleStark.prove(assertions, initValues, [binaryIndex], nodes);
+const sProof = merkleStark.prove(assertions, initValues, [binaryIndex]);
 console.log('-'.repeat(20));
 
 // verify the proof

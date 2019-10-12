@@ -43,7 +43,7 @@ define Poseidon6x128 over prime field (${modulus}) {
     transition 6 registers {
         for each ($i0, $i1, $i2, $i3) {
             
-            // initialize execution trace
+            // initialize the execution trace
             init [$i0, $i1, $i2, $i3, 0, 0];
 
             for steps [1..4, 60..63] {
