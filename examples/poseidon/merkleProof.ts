@@ -106,14 +106,14 @@ const binaryIndex = toBinaryArray(index, treeDepth);
 // put first element of the proof into registers $i0 and $i1, and all other nodes into $i2 and $i3
 const leaf = proof.shift()!;
 const nodes = transpose(proof);
-const initValues = [ [leaf[0], leaf[1], nodes[0], nodes[1]] ];
+const inputs = [ [leaf[0], leaf[1], nodes[0], nodes[1]] ];
 const assertions: Assertion[] = [
     { step: roundSteps * treeDepth - 1, register: 0, value: tree.root[0] },
     { step: roundSteps * treeDepth - 1, register: 1, value: tree.root[1] }
 ];
 
 // generate a proof
-const sProof = merkleStark.prove(assertions, initValues, [binaryIndex]);
+const sProof = merkleStark.prove(assertions, inputs, [binaryIndex]);
 console.log('-'.repeat(20));
 
 // verify the proof

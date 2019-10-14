@@ -49,49 +49,37 @@ The way this is translated into a STARK is:
 
 This all results into a transition function that looks like this:
 ```
-transition 12 registers in ${roundSteps * treeDepth} steps {
-    when ($k7) {
-        when ($k6) {
-            // full rounds
-
-            K: [$k0, $k1, $k2, $k3, $k4, $k5];
-                
-            // compute hash(p, v)
-            S1: [$r0, $r1, $r2, $r3, $r4, $r5];
-            S1: MDS # (S1 + K)^alpha;
-
-            // compute hash(v, p)
-            S2: [$r6, $r7, $r8, $r9, $r10, $r11];
-            S2: MDS # (S2 + K)^alpha;
-
-            out: [...S1, ...S2];
+transition 12 registers {
+    for each ($i0, $i1, $i2, $i3) {
+        init {
+            S1 <- [$i0, $i1, $i2, $i3, 0, 0];
+            S2 <- [$i2, $i3, $i0, $i1, 0, 0];
+            [...S1, ...S2];
         }
-        else {
-            // partial rounds
 
-            // compute hash(p, v)
-            va: ($r5 + $k5)^alpha;
-            S1: [$r0 + $k0, $r1 + $k1, $r2 + $k2, $r3 + $k3, $r4 + $k4, va];
-            S1: MDS # S1;
+        for each ($i2, $i3) {
 
-            // compute hash(v, p)
-            vb: ($r11 + $k5)^alpha;
-            S2: [$r6 + $k0, $r7 + $k1, $r8 + $k2, $r9 + $k3, $r10 + $k4, vb];
-            S2: MDS # S2;
+            init {
+                H <- $p0 ? $r[6..7] : $r[0..1];
+                S1 <- [...H, $i2, $i3, 0, 0];
+                S2 <- [$i2, $i3, ...H, 0, 0];
+                [...S1, ...S2];
+            }
 
-            out: [...S1, ...S2];
+            for steps [1..4, 60..63] {
+                // full rounds
+                S1 <- MDS # ($r[0..5] + $k)^alpha;
+                S2 <- MDS # ($r[6..11] + $k)^alpha;
+                [...S1, ...S2];
+            }
+
+            for steps [5..59] {
+                // partial round
+                S1 <- MDS # [...($r[0..4] + $k[0..4]), ($r5 + $k5)^alpha];	
+                S2 <- MDS # [...($r[6..10] + $k[0..4]), ($r11 + $k5)^alpha];
+                [...S1, ...S2];
+            }
         }
-    }
-    else {
-        // this happens every 64th step
-
-        h1: $p0 ? $r6 | $r0;
-        h2: $p0 ? $r7 | $r1;
-
-        S1: [h1, h2, $s0, $s1, 0, 0];
-        S2: [$s0, $s1, h1, h2, 0, 0];
-
-        out: [...S1, ...S2];
     }
 }
 ```
