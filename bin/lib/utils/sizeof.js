@@ -29,7 +29,11 @@ function sizeOf(proof, fieldElementSize, hashDigestSize) {
     ldLevels.push({ total: ldRemainder });
     ldProof += ldRemainder;
     size += ldProof;
-    return { evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, total: size };
+    // trace shape
+    let traceShape = 1; // trace depth
+    traceShape += proof.traceShape.length * 4;
+    size += traceShape;
+    return { evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, traceShape, total: size };
 }
 exports.sizeOf = sizeOf;
 function sizeOfMerkleProof(proof) {

@@ -32,7 +32,7 @@ const rescueStark = new index_1.Stark(`
 define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
 
     alpha: 3;
-    inv_alpha: 0-6148914683720324437;
+    inv_alpha: 6148914683720324437;
 
     MDS: [
         [18446744051160973310, 18446744051160973301],
@@ -44,24 +44,29 @@ define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
         [16397105823254198500, 12297829367440648875]
     ];
 
-    transition 2 registers in 32 steps {
-        S: [$r0, $r1];
-        K1: [$k0, $k1];
-        K2: [$k2, $k3];
-        S: MDS # S^alpha + K1;
-        out: MDS # S^(inv_alpha) + K2;
+    transition 2 registers {
+        for each ($i0, $i1) {
+            init [$i0, $i1];
+
+            for steps [1..31] {
+                S <- MDS # $r^alpha + $k[0..1];
+                MDS # (/S)^(inv_alpha) + $k[2..3];
+            }
+        }
     }
 
     enforce 2 constraints {
-        S: [$r0, $r1];
-        N: [$n0, $n1];
-        K1: [$k0, $k1];
-        K2: [$k2, $k3];
+        for each ($i0, $i1) {
+            init {
+                [$i0, $i1] = $n;
+            }
 
-        T1: MDS # S^alpha + K1;
-        T2: (INV_MDS # (N - K2))^alpha;
-
-        out: T1 - T2;
+            for steps [1..31] {
+                S <- MDS # $r^alpha + $k[0..1];
+                N <- (INV_MDS # ($n - $k[2..3]))^alpha;
+                S = N;
+            }
+        }
     }
 
     using 4 readonly registers {
@@ -75,7 +80,7 @@ define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
 // ================================================================================================
 // Generate proof that hashing 42 with Rescue results in 14354339131598895532
 // set up inputs and assertions
-const initValues = buildInputs(42n);
+const initValues = [buildInputs(42n)];
 const assertions = [
     { step: steps - 1, register: 0, value: 14354339131598895532n }
 ];

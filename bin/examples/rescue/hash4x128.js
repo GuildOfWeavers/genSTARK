@@ -36,7 +36,7 @@ const rescueStark = new index_1.Stark(`
 define Rescue4x128 over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;
-    inv_alpha: 0-113427455640312821154458202464371168597;
+    inv_alpha: 113427455640312821154458202464371168597;
 
     MDS: [
         [340282366920938463463374607393113505064, 340282366920938463463374607393113476633, 340282366920938463463374607393112623703, 340282366920938463463374607393088807273],
@@ -52,25 +52,29 @@ define Rescue4x128 over prime field (2^128 - 9 * 2^32 + 1) {
         [ 73878794827854483309086441046605817365, 229228508225866824084614421584601165863, 125857624914110248133585690282064031000,  84953896817024417490170340940393220925]
     ];
 
-    transition 4 registers in 32 steps {
-        S: [$r0, $r1, $r2, $r3];
-        K1: [$k0, $k1, $k2, $k3];
-        K2: [$k4, $k5, $k6, $k7];
+    transition 4 registers {
+        for each ($i0, $i1, $i2, $i3) {
+            init [$i0, $i1, $i2, $i3];
 
-        S: MDS # S^alpha + K1;
-        out: MDS # S^(inv_alpha) + K2;
+            for steps [1..31] {
+                S <- MDS # $r^alpha + $k[0..3];
+                MDS # (/S)^(inv_alpha) + $k[4..7];
+            }
+        }
     }
 
     enforce 4 constraints {
-        S: [$r0, $r1, $r2, $r3];
-        N: [$n0, $n1, $n2, $n3];
-        K1: [$k0, $k1, $k2, $k3];
-        K2: [$k4, $k5, $k6, $k7];
+        for each ($i0, $i1, $i2, $i3) {
+            init {
+                [$i0, $i1, $i2, $i3] = $n;
+            }
 
-        T1: MDS # S^alpha + K1;
-        T2: (INV_MDS # (N - K2))^alpha;
-
-        out: T1 - T2;
+            for steps [1..31] {
+                S <- MDS # $r^alpha + $k[0..3];
+                N <- (INV_MDS # ($n - $k[4..7]))^alpha;
+                S = N;
+            }
+        }
     }
 
     using 8 readonly registers {
@@ -87,7 +91,7 @@ define Rescue4x128 over prime field (2^128 - 9 * 2^32 + 1) {
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const initValues = buildInputs([42n, 43n]);
+const initValues = [buildInputs([42n, 43n])];
 const assertions = [
     { step: steps - 1, register: 0, value: 302524937772545017647250309501879538110n },
     { step: steps - 1, register: 1, value: 205025454306577433144586673939030012640n },

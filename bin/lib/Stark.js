@@ -27,16 +27,17 @@ class Stark {
             throw new TypeError('Source script must be a string');
         if (!source.trim())
             throw new TypeError('Source script cannot be an empty string');
+        let extensionFactor = security ? security.extensionFactor : undefined;
         let sOptions;
         if (optimization) {
             const wasmOptions = buildWasmOptions(optimization);
-            // instantiate AIR object
-            this.air = air_script_1.parseScript(source, undefined, wasmOptions);
+            // instantiate AIR module
+            this.air = air_script_1.parseScript(source, { wasmOptions, extensionFactor });
             if (!this.air.field.isOptimized) {
                 console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
             }
             // instantiate Hash object
-            sOptions = validateSecurityOptions(security, this.air.maxConstraintDegree);
+            sOptions = validateSecurityOptions(security, this.air.extensionFactor);
             const wasmOptions2 = buildWasmOptions(optimization); // TODO: use the same options as for AIR
             this.hash = merkle_1.createHash(sOptions.hashAlgorithm, wasmOptions2);
             if (!this.hash.isOptimized) {
@@ -44,8 +45,8 @@ class Stark {
             }
         }
         else {
-            this.air = air_script_1.parseScript(source);
-            sOptions = validateSecurityOptions(security, this.air.maxConstraintDegree);
+            this.air = air_script_1.parseScript(source, { extensionFactor });
+            sOptions = validateSecurityOptions(security, this.air.extensionFactor);
             this.hash = merkle_1.createHash(sOptions.hashAlgorithm, false);
         }
         this.extensionFactor = sOptions.extensionFactor;
@@ -69,24 +70,24 @@ class Stark {
     }
     // PROVER
     // --------------------------------------------------------------------------------------------
-    prove(assertions, initValues, publicInputs, secretInputs) {
+    prove(assertions, inputs, auxPublicInputs, auxSecretInputs) {
         const log = this.logger.start('Starting STARK computation');
         // 0 ----- validate parameters
         if (!Array.isArray(assertions))
             throw new TypeError('Assertions parameter must be an array');
         if (assertions.length === 0)
             throw new TypeError('At least one assertion must be provided');
-        if (!Array.isArray(initValues))
+        if (!Array.isArray(inputs))
             throw new TypeError('Initialization values parameter must be an array');
         // 1 ----- set up evaluation context
         const field = this.air.field;
-        const context = this.air.createContext(publicInputs || [], secretInputs || [], this.extensionFactor);
+        const context = this.air.initProof(inputs, auxPublicInputs || [], auxSecretInputs || []);
         const evaluationDomainSize = context.evaluationDomain.length;
         log('Set up evaluation context');
         // 2 ----- generate execution trace and make sure it is correct
         let executionTrace;
         try {
-            executionTrace = context.generateExecutionTrace(initValues);
+            executionTrace = context.generateExecutionTrace();
             validateAssertions(executionTrace, assertions);
         }
         catch (error) {
@@ -99,8 +100,8 @@ class Stark {
         const pEvaluations = field.evalPolysAtRoots(pPolys, context.evaluationDomain);
         log('Low-degree extended P(x) polynomials over evaluation domain');
         // 4 ----- build merkle tree for evaluations of P(x) and S(x)
-        const sEvaluations = context.getSecretRegisterTraces();
-        const eVectors = [...field.matrixRowsToVectors(pEvaluations), ...sEvaluations];
+        const hEvaluations = context.hiddenRegisterTraces;
+        const eVectors = [...field.matrixRowsToVectors(pEvaluations), ...hEvaluations];
         const hashedEvaluations = this.hash.mergeVectorRows(eVectors);
         log('Serialized evaluations of P(x) and S(x) polynomials');
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hash);
@@ -113,7 +114,7 @@ class Stark {
         log('Computed composition polynomial C(x)');
         // 6 ---- compute random linear combination of evaluations
         const lCombination = new components_1.LinearCombination(eTree.root, cPoly.compositionDegree, cPoly.coefficientCount, context);
-        const lEvaluations = lCombination.computeMany(cEvaluations, pEvaluations, sEvaluations);
+        const lEvaluations = lCombination.computeMany(cEvaluations, pEvaluations, hEvaluations);
         log('Combined P(x) and S(x) evaluations with C(x) evaluations');
         // 7 ----- Compute low-degree proof
         let ldProof;
@@ -139,12 +140,13 @@ class Stark {
         return {
             evRoot: eTree.root,
             evProof: eProof,
-            ldProof: ldProof
+            ldProof: ldProof,
+            traceShape: context.traceShape
         };
     }
     // VERIFIER
     // --------------------------------------------------------------------------------------------
-    verify(assertions, proof, publicInputs) {
+    verify(assertions, proof, auxPublicInputs) {
         const log = this.logger.start('Starting STARK verification');
         // 0 ----- validate parameters
         if (assertions.length < 1)
@@ -153,7 +155,7 @@ class Stark {
         const field = this.air.field;
         const eRoot = proof.evRoot;
         const extensionFactor = this.extensionFactor;
-        const context = this.air.createContext(publicInputs || [], extensionFactor);
+        const context = this.air.initVerification(proof.traceShape, auxPublicInputs || []);
         const evaluationDomainSize = context.traceLength * extensionFactor;
         const cPoly = new components_1.CompositionPolynomial(this.air.constraints, assertions, eRoot, context, utils_1.noop);
         const lCombination = new components_1.LinearCombination(eRoot, cPoly.compositionDegree, cPoly.coefficientCount, context);
@@ -164,13 +166,13 @@ class Stark {
         log(`Computed positions for evaluation spot checks`);
         // 3 ----- decode evaluation spot-checks
         const pEvaluations = new Map();
-        const sEvaluations = new Map();
+        const hEvaluations = new Map();
         for (let i = 0; i < proof.evProof.values.length; i++) {
             let mergedEvaluations = proof.evProof.values[i];
             let position = augmentedPositions[i];
-            let [p, s] = this.parseValues(mergedEvaluations);
+            let [p, h] = this.parseValues(mergedEvaluations);
             pEvaluations.set(position, p);
-            sEvaluations.set(position, s);
+            hEvaluations.set(position, h);
         }
         log(`Decoded evaluation spot checks`);
         // 4 ----- verify merkle proof for evaluation tree
@@ -194,11 +196,11 @@ class Stark {
             let x = field.exp(context.rootOfUnity, BigInt(step));
             let pValues = pEvaluations.get(step);
             let nValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize);
-            let sValues = sEvaluations.get(step);
+            let hValues = hEvaluations.get(step);
             // evaluate composition polynomial at x
-            let cValue = cPoly.evaluateAt(x, pValues, nValues, sValues, context);
+            let cValue = cPoly.evaluateAt(x, pValues, nValues, hValues, context);
             // combine composition polynomial evaluation with values of P(x) and S(x)
-            lcValues[i] = lCombination.computeOne(x, cValue, pValues, sValues);
+            lcValues[i] = lCombination.computeOne(x, cValue, pValues, hValues);
         }
         log(`Verified transition and boundary constraints`);
         // 6 ----- verify low-degree proof
@@ -251,23 +253,24 @@ class Stark {
     parseValues(buffer) {
         const elementSize = this.air.field.elementSize;
         const stateWidth = this.air.stateWidth;
-        const secretInputCount = this.air.secretInputCount;
+        const sRegisterCount = this.air.sRegisterCount;
+        const iRegisterCount = this.air.iRegisterCount;
         let offset = 0;
         const pValues = new Array(stateWidth);
-        for (let i = 0; i < stateWidth; i++, offset += elementSize) {
+        for (let i = 0; i < pValues.length; i++, offset += elementSize) {
             pValues[i] = utils_1.readBigInt(buffer, offset, elementSize);
         }
-        const sValues = new Array(secretInputCount);
-        for (let i = 0; i < secretInputCount; i++, offset += elementSize) {
-            sValues[i] = utils_1.readBigInt(buffer, offset, elementSize);
+        const hValues = new Array(sRegisterCount + iRegisterCount);
+        for (let i = 0; i < hValues.length; i++, offset += elementSize) {
+            hValues[i] = utils_1.readBigInt(buffer, offset, elementSize);
         }
-        return [pValues, sValues];
+        return [pValues, hValues];
     }
 }
 exports.Stark = Stark;
 // HELPER FUNCTIONS
 // ================================================================================================
-function validateSecurityOptions(options, maxConstraintDegree) {
+function validateSecurityOptions(options, extensionFactor) {
     // execution trace spot checks
     const exeQueryCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_QUERY_COUNT;
     if (exeQueryCount < 1 || exeQueryCount > MAX_EXE_QUERY_COUNT || !Number.isInteger(exeQueryCount)) {
@@ -284,9 +287,8 @@ function validateSecurityOptions(options, maxConstraintDegree) {
         throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
     }
     // extension factor
-    let extensionFactor = (options ? options.extensionFactor : undefined);
     if (!extensionFactor) {
-        extensionFactor = 2 ** (Math.ceil(Math.log2(maxConstraintDegree)) + 1);
+        throw new TypeError(`Extension factor is undefined`);
     }
     return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
 }

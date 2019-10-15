@@ -9,12 +9,19 @@ const steps = 2**6, result = 780n;
 const demoStark = new Stark(`
 define Demo over prime field (96769) {
 
-    transition 1 register in ${steps} steps {
-        out: $r0 + 1 + $p0 + 2 * $s0;
+    transition 1 register {
+        for each ($i0) {
+            init { $i0 }
+            for steps [1..${steps - 1}] {
+                $r0 + 1 + $p0 + 2 * $s0;
+            }
+        }
     }
 
     enforce 1 constraint {
-        out: $n0 - ($r0 + 1 + $p0 + 2 * $s0);
+        for all steps {
+            transition($r) = $n;
+        }
     }
 
     using 2 readonly registers {
@@ -26,21 +33,21 @@ define Demo over prime field (96769) {
 // TESTING
 // =================================================================================================
 // set up inputs and assertions
-const initValues = [1n];
-const publicInputs = [[1n, 2n, 3n, 4n]];
-const secretInputs = [[1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n]];
+const inputs = [[1n]];
+const auxPublicInputs = [[1n, 2n, 3n, 4n]];
+const auxSecretInputs = [[1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n]];
 
 const assertions = [
-    { step: 0, register: 0, value: initValues[0] },
+    { step: 0, register: 0, value: inputs[0][0] },
     { step: steps-1, register: 0, value: result  }
 ];
 
 // generate a proof
-const proof = demoStark.prove(assertions, initValues, publicInputs, secretInputs);
+const proof = demoStark.prove(assertions, inputs, auxPublicInputs, auxSecretInputs);
 console.log('-'.repeat(20));
 
 // verify the proof
-demoStark.verify(assertions, proof, publicInputs);
+demoStark.verify(assertions, proof, auxPublicInputs);
 console.log('-'.repeat(20));
 
 // EXECUTION TRACE

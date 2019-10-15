@@ -40,58 +40,50 @@ define Poseidon6x128 over prime field (${modulus}) {
 
     MDS: ${utils_2.inline.matrix(mds)};
 
-    transition 6 registers in ${steps} steps {
-        when ($k6) {
-            S: [$r0, $r1, $r2, $r3, $r4, $r5];
-            K: [$k0, $k1, $k2, $k3, $k4, $k5];
+    transition 6 registers {
+        for each ($i0, $i1, $i2, $i3) {
+            
+            // initialize the execution trace
+            init [$i0, $i1, $i2, $i3, 0, 0];
 
-            out: MDS # (S + K)^5;
-        }
-        else {
-            v5: ($r5 + $k5)^5;
-            S: [$r0 + $k0, $r1 + $k1, $r2 + $k2, $r3 + $k3, $r4 + $k4, v5];
+            for steps [1..4, 60..63] {
+                // full rounds
+                MDS # ($r + $k)^5;
+            }
 
-            out: MDS # S;
+            for steps [5..59] {
+                // partial rounds
+                v5 <- ($r5 + $k5)^5;
+                MDS # [...($r[0..4] + $k[0..4]), v5];
+            }
         }
     }
 
     enforce 6 constraints {
-        when ($k6) {
-            S: [$r0, $r1, $r2, $r3, $r4, $r5];
-            K: [$k0, $k1, $k2, $k3, $k4, $k5];
-            N: [$n0, $n1, $n2, $n3, $n4, $n5];
-            
-            out: N - MDS # (S + K)^5;
-        }
-        else {
-            v5: ($r5 + $k5)^5;
-            S: [$r0 + $k0, $r1 + $k1, $r2 + $k2, $r3 + $k3, $r4 + $k4, v5];
-            N: [$n0, $n1, $n2, $n3, $n4, $n5];
-
-            out: N - MDS # S;
+        for all steps {
+            transition($r) = $n;
         }
     }
 
-    using 7 readonly registers {
+    using 6 readonly registers {
         $k0: repeat ${utils_2.inline.vector(roundConstants[0])};
         $k1: repeat ${utils_2.inline.vector(roundConstants[1])};
         $k2: repeat ${utils_2.inline.vector(roundConstants[2])};
         $k3: repeat ${utils_2.inline.vector(roundConstants[3])};
         $k4: repeat ${utils_2.inline.vector(roundConstants[4])};
         $k5: repeat ${utils_2.inline.vector(roundConstants[5])};
-        $k6: repeat binary ${utils_2.inline.vector(roundControls)};
     }
 }`, securityOptions, true);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const initValues = [1n, 2n, 3n, 4n, 0n, 0n];
+const inputs = [[1n, 2n, 3n, 4n]];
 const assertions = [
     { step: steps - 1, register: 0, value: result[0] },
     { step: steps - 1, register: 1, value: result[1] },
 ];
 // generate a proof
-const proof = poseidonStark.prove(assertions, initValues);
+const proof = poseidonStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 // verify the proof
 poseidonStark.verify(assertions, proof);

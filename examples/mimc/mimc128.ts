@@ -22,7 +22,7 @@ for (let i = 0; i < 64; i++) {
 const securityOptions: SecurityOptions = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 16,
-    exeQueryCount   : 40,
+    exeQueryCount   : 48,
     friQueryCount   : 24
 };
 
@@ -30,12 +30,19 @@ const securityOptions: SecurityOptions = {
 const mimcStark = new Stark(`
 define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
 
-    transition 1 register in ${steps} steps {
-        out: $r0^3 + $k0;
+    transition 1 register {
+        for each ($i0) {
+            init $i0;
+            for steps [1..${steps - 1}] {
+                $r0^3 + $k0;
+            }
+        }
     }
 
     enforce 1 constraint {
-        out: $n0 - ($r0^3 + $k0);
+        for all steps {
+            transition($r) = $n;
+        }
     }
 
     using 1 readonly register {
@@ -46,14 +53,14 @@ define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const initValues = [3n];                                // we need to provide starting value for 1 register
+const inputs = [[3n]];                                  // we need to provide starting value for 1 register
 const assertions = [
-    { step: 0, register: 0, value: initValues[0] },     // value at first step is equal to input
+    { step: 0, register: 0, value: inputs[0][0] },      // value at first step is equal to input
     { step: steps - 1, register: 0, value: result }     // value at last step is equal to result
 ];
 
 // prove that the assertions hold if we execute MiMC computation with given inputs
-let proof = mimcStark.prove(assertions, initValues);
+let proof = mimcStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 
 // serialize the proof
