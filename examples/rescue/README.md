@@ -51,44 +51,47 @@ In this example, the following parameters are uses:
 The way this is translated into a STARK is:
 
 * There are 8 state registers:
-  * The first 4 registers are used to compute `hash(p, v)`
-  * The other 4 registers are used to compute `hash(v, p)`
-* Hashing a value takes 31 steps - so, the computation is broken into 32-step rounds. The first 31 steps of each round are used to hash the values, and the last step is used to set the values for the next round of hashing.
-* There is 1 public input register that holds a binary representation of the `index` parameter such that the next binary digit of the index "appears" in the register every 32 steps.
-  * This value is used to determine which of the hashes advances to the next round of computation.
-* There is 1 secret input register that holds values for `proof` nodes such that a new node value "appears" in the register every 32 steps.
+  * The first 4 registers (`$r0` - `$r3`) are used to compute `hash(p, v)`.
+  * The other 4 registers (`$r4` - `$r7`) are used to compute `hash(v, p)`.
+* Each register is 128-bits, and values in the merkle tree are assumed to be 128-bits as well. For example, `hash(p, v)` works like so:
+  * Value `p` goes into registers `$r0`. Value `v` goes into registers `$r1`. The other 2 registers (`$r2` and `$r3`) are used internally by the hash function algorithm and are initialized to `0`.
+  * After 31 steps, the hash of two values is in registers `$r0`.
+* There is also a single auxiliary input register `$p0` which holds a binary representation of the `index` value. The value in this register is used to figure out whither `hash(p, v)` or `hash(v, p)` advances to the next cycle.
+* Since, hashing takes 31 steps, the computation consists of a 32-step loop repeated for each node of a Merkle branch. The code works as follows:
+  * The value of the node at `index` is passed in via register `$i0`. All other nodes in the merkle branch are passed in via register `$i1`. So, there are many values in register `$i1` for each value in register `$i0`.
+  * The first `init` clause is executed once for each branch (you can generate proofs for multiple branches). All it does is initialize `$r` registers to hold values passed in via `$i` registers (see [this](https://github.com/GuildOfWeavers/AirScript#nested-input-loops) for more explanation of how input loops work).
+  * The second `init` clause is executed once for each node in a branch. It uses value in `$p0` to figure out which of the hashed values (`hash(p, v)` or `hash(v, p)`) advances to the next cycle of hashing.
+  * The `for steps` loop executes the actual hash function logic. It computes both, `hash(p, v)` and `hash(v, p)` at the same, with result of `hash(p, v)` going to register `$r0` and result of `hash(v, p)` going to register `$r4`.
 
 This all results into a transition function that looks like this:
 ```
-transition 8 registers in 16*32 steps {
-    when ($k0) {
-        // constants for the hash function
-        K1: [$k1, $k2, $k3, $k4];
-        K2: [$k5, $k6, $k7, $k8];
+transition 8 registers {
+    for each ($i0, $i1) {
 
-        // compute hash(p, v)
-        S1: [$r0, $r1, $r2, $r3];
-        S1: MDS # S1^alpha + K1;
-        S1: MDS # S1^(inv_alpha) + K2;
+        // initialize state with first 2 node values
+        init [$i0, $i1, 0, 0, $i1, $i0, 0, 0];
 
-        // compute hash(v, p)
-        S2: [$r4, $r5, $r6, $r7];
-        S2: MDS # S2^alpha + K1;
-        S2: MDS # S2^(inv_alpha) + K2;
+        for each ($i1) {
 
-        out: [...S1, ...S2];
-    }
-    else {
-        // this happens every 32nd step
+            // for each node, figure out which value advances to the next cycle
+            init {
+                h <- $p0 ? $r4 : $r0;
+                [h, $i1, 0, 0, $i1, h, 0, 0];
+            }
 
-        // select the hash to move to the next step
-        h: $p0 ? $r4 | $r0;
+            // execute Rescue hash function computation for 31 steps
+            for steps [1..31] {
+                // compute hash(p, v)
+                S1 <- MDS # $r[0..3]^alpha + $k[0..3];
+                S1 <- MDS # (/S1)^(inv_alpha) + $k[4..7];
 
-        // set values for p and v for the next step
-        S1: [h, $s0, 0, 0];
-        S2: [$s0, h, 0, 0];
+                // compute hash(v, p)
+                S2 <- MDS # $r[4..7]^alpha + $k[0..3];
+                S2 <- MDS # (/S2)^(inv_alpha) + $k[4..7];
 
-        out: [...S1, ...S2];
+                [...S1, ...S2];
+            }
+        }
     }
 }
 ```

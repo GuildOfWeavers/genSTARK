@@ -31,13 +31,15 @@ const securityOptions: Partial<SecurityOptions> = {
 };
 
 const merkleStark = new Stark(`
-define Poseidon6x128 over prime field (${modulus}) {
+define PoseidonMP over prime field (${modulus}) {
 
     MDS: ${inline.matrix(mds)};
     alpha: ${sBoxExp};
 
     transition 12 registers {
         for each ($i0, $i1, $i2, $i3) {
+
+            // initialize state with first 2 node values
             init {
                 S1 <- [$i0, $i1, $i2, $i3, 0, 0];
                 S2 <- [$i2, $i3, $i0, $i1, 0, 0];
@@ -46,6 +48,7 @@ define Poseidon6x128 over prime field (${modulus}) {
 
             for each ($i2, $i3) {
 
+                // for each node, figure out which value advances to the next cycle
                 init {
                     H <- $p0 ? $r[6..7] : $r[0..1];
                     S1 <- [...H, $i2, $i3, 0, 0];
@@ -53,6 +56,7 @@ define Poseidon6x128 over prime field (${modulus}) {
                     [...S1, ...S2];
                 }
 
+                // execute Poseidon hash function computation for 63 steps
                 for steps [1..4, 60..63] {
                     // full rounds
                     S1 <- MDS # ($r[0..5] + $k)^alpha;

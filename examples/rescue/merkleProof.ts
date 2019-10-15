@@ -46,7 +46,7 @@ const securityOptions: Partial<SecurityOptions> = {
 };
 
 const merkleStark = new Stark(`
-define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
+define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;
     inv_alpha: 113427455640312821154458202464371168597;
@@ -67,14 +67,19 @@ define MerkleProof over prime field (2^128 - 9 * 2^32 + 1) {
 
     transition 8 registers {
         for each ($i0, $i1) {
+
+            // initialize state with first 2 node values
             init [$i0, $i1, 0, 0, $i1, $i0, 0, 0];
 
             for each ($i1) {
+
+                // for each node, figure out which value advances to the next cycle
                 init {
                     h <- $p0 ? $r4 : $r0;
                     [h, $i1, 0, 0, $i1, h, 0, 0];
                 }
 
+                // execute Rescue hash function computation for 31 steps
                 for steps [1..31] {
                     // compute hash(p, v)
                     S1 <- MDS # $r[0..3]^alpha + $k[0..3];

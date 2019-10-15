@@ -1,5 +1,5 @@
 # genSTARK
-This library is intended to help you quickly and easily generate STARK-based proofs of computation using JavaScript. The goal is to take care of as much boilerplate code as possible, and let you focus on the specific "business logic" of your computations.
+This library is intended to help you quickly and easily generate STARK-based proofs of computation using JavaScript. The goal is to take care of as much boilerplate code as possible, and let you focus on the specifics of your computations.
 
 ### Background
 A STARK is a novel proof-of-computation scheme that allows you to create an efficiently verifiable proof that a computation was executed correctly. The scheme was developed by Eli-Ben Sasson and team at Technion-Israel Institute of Technology. STARKs do not require an initial trusted setup, and rely on very few cryptographic assumptions. See [references](#References) for more info.
@@ -23,13 +23,16 @@ const fooStark = new Stark(`
 define Foo over prime field (2^32 - 3 * 2^25 + 1) {
 
     // define transition function
-    transition 1 register in 64 steps {
-        out: $r0 + 2;
+    transition 1 register {
+        for each ($i0) {
+            init { $i0 }
+            for steps [1..63] { $r0 + 2 }
+        }
     }
 
     // define transition constraints
     enforce 1 constraint {
-        out: $n0 - ($r0 + 2);
+        for all steps { transition($r) = $n }
     }
 }`);
 
@@ -38,7 +41,7 @@ const assertions = [
     { register: 0, step: 0,  value: 1n   },  // value at first step is 1
     { register: 0, step: 63, value: 127n }   // value at last step is 127
 ];
-const proof = fooStark.prove(assertions, [1n]);
+const proof = fooStark.prove(assertions, [[1n]]);
 
 // verify that if we start at 1 and run the computation for 64 steps, we get 127
 const result = fooStark.verify(assertions, proof);
@@ -54,30 +57,30 @@ There are a few more sophisticated examples in this repository:
 When you run the examples, you should get a nice log documenting each step. Here is an example output of running 128-bit MiMC STARK for 2<sup>13</sup> steps:
 ```
 Starting STARK computation
-Set up evaluation context in 10 ms
-Generated execution trace in 39 ms
+Set up evaluation context in 146 ms
+Generated execution trace in 52 ms
 Computed execution trace polynomials P(x) in 7 ms
-Low-degree extended P(x) polynomials over evaluation domain in 92 ms
-Serialized evaluations of P(x) and S(x) polynomials in 83 ms
-Built evaluation merkle tree in 85 ms
-Computed 40 evaluation spot checks in 4 ms
-Computed composition polynomial C(x) in 496 ms
-Combined P(x) and S(x) evaluations with C(x) evaluations in 42 ms
-Computed low-degree proof in 314 ms
-STARK computed in 1175 ms
+Low-degree extended P(x) polynomials over evaluation domain in 83 ms
+Serialized evaluations of P(x) and S(x) polynomials in 92 ms
+Built evaluation merkle tree in 87 ms
+Computed composition polynomial C(x) in 574 ms
+Combined P(x) and S(x) evaluations with C(x) evaluations in 50 ms
+Computed low-degree proof in 231 ms
+Computed 48 evaluation spot checks in 2 ms
+STARK computed in 1327 ms
 --------------------
-Proof serialized in 7 ms; size: 86.12 KB
+Proof serialized in 8 ms; size: 94.58 KB
 --------------------
 Proof parsed in 6 ms
 --------------------
 Starting STARK verification
-Set up evaluation context in 2 ms
+Set up evaluation context in 9 ms
 Computed positions for evaluation spot checks in 1 ms
-Decoded evaluation spot checks in 0 ms
-Verified evaluation merkle proof in 3 ms
-Verified transition and boundary constraints in 10 ms
-Verified low-degree proof in 16 ms
-STARK verified in 36 ms
+Decoded evaluation spot checks in 1 ms
+Verified evaluation merkle proof in 4 ms
+Verified transition and boundary constraints in 52 ms
+Verified low-degree proof in 14 ms
+STARK verified in 85 ms
 --------------------
 STARK security level: 96
 ```
@@ -132,50 +135,56 @@ The meaning of the parameters is as follows:
 | Parameter     | Description |
 | ------------- | ----------- |
 | assertions    | An array of [Assertion](#Assertions) objects (also called boundary constraints). These assertions specify register values at specific steps of a valid computation. At least 1 assertion must be provided. |
-| initValues    | An array of `BigInt`'s containing initial values for all mutable registers. |
-| publicInputs? | An array containing values for all specified public registers. This parameter is optional and can be skipped if no public input registers have been defined. |
-| secretInputs? | An array containing values for all specified secret registers. This parameter is optional and can be skipped if no secret input registers have been defined. |
+| inputs        | An array containing initialization values for all `$i` registers. Must contain at least one set of values. |
+| auxPublicInputs? | An array containing initialization values for all `$p` registers. This parameter is optional and can be skipped if no public auxiliary inputs have been defined. |
+| auxSecretInputs? | An array containing initialization values for all `$s` registers. This parameter is optional and can be skipped if no secret auxiliary inputs have been defined. |
 
-### Initial values and inputs
-Handling of initial values and inputs deserves a bit more explanation. As described above, there are 3 ways to supply inputs to `STARK.prove()` method:
+### Inputs
+Handling of inputs deserves a bit more explanation. As described above, there are 3 ways to supply inputs to `STARK.prove()` method:
 
-* `initValues` parameter is always required. It is basically used to define step 0 or the execution trace. Thus, the number of values provided must match the number of mutable registers in the STARK.
-* The other two parameters provide values for the input registers defined in the STARK. To learn more about these, refer to [Readonly registers](https://github.com/GuildOfWeavers/AirScript#readonly-registers) section of AirScript documentation. These parameters are required only if STARK's definition includes input registers.
+* `inputs` parameter is always required. It is used to initialize the execution trace for different instances of the computation. The structure of `inputs` must match the structure of input loops defined in transition function. For more information, see [Input loops](https://github.com/GuildOfWeavers/AirScript#input-loops) section of AirScript documentation.
+* The other two parameters provide values for the input registers defined in the STARK. To learn more about these, refer to [Readonly registers](https://github.com/GuildOfWeavers/AirScript#readonly-registers) section of AirScript documentation. These parameters are required only if STARK's definition includes auxiliary input registers.
 
-For example, the fragment below specifies that a STARK must have 3 readonly registers, but that the values for these registers are not available at the STARK's definition time (the `[...]` indicate that the values will be provided later):
+For example, the fragment below specifies that a STARK must have a single `$i` register of depth 0, and 3 auxiliary input registers. Moreover, prefixes `$p` and `$s` specify that 2 of the auxiliary registers are *public* (the values will be known to the prover **and** the verified), and 1 of the registers is *secret* (the values will be known **only** to the prover).
 ```
+transition 1 register {
+    for each ($i0) {
+        init { $i0 }
+        for steps [1..63] { $r0 + 2 }
+    }
+}
+
 using 3 readonly registers {
     $p0: repeat [...];
     $p1: spread [...];
     $s0: spread [...];
 }
 ```
-Moreover, by using prefixes `$p` and `$s` it also specifies that 2 of the registers are *public* (the values will be known to the prover **and** the verified), and 1 of the registers is *secret* (the values will be known **only** to the prover).
 
-So, based on this definition, the parameters for `STARK.prove()` method should be supplied like so:
+Based on this definition, the parameters for `STARK.prove()` method should be supplied like so:
 
 ```TypeScript
-// let's say we have 2 mutable registers
-let initValues = [1n, 2n];
+// let's say we want to run the computation for 2 sets of inputs
+let inputs = [[1n], [2n]];
 
-// define values for public input registers
+// define values for public auxiliary inputs
 let pValues1 = [1n, 2n, 3n, 4n];
 let pValues2 = [1n, 2n, 3n, 4n, 5n, 6n, 7n, 7n];
 
-// define values for secret input registers
+// define values for secret auxiliary inputs
 let sValues = [10n, 11n, 12n, 13n];
 
 // generate the proof
-let proof = fooStark.prove(assertions, initValues, [pValues1, pValues2], [sValues]);
+let proof = fooStark.prove(assertions, inputs, [pValues1, pValues2], [sValues]);
 ```
-When the proof is generated, the provided values will "appear" in registers `$p0`, `$p1`, and `$s0` to be used in transition function and transition constraints. The rules for how this happens are also described in the [Readonly registers](https://github.com/GuildOfWeavers/AirScript#readonly-registers) section of AirScript documentation.
+When the proof is generated, the provided values will "appear" in registers `$i0`, `$p0`, `$p1`, and `$s0` to be used in transition function and transition constraints. The rules for how this happens are also described in the [Input loops](https://github.com/GuildOfWeavers/AirScript#input-loops) and  [Readonly registers](https://github.com/GuildOfWeavers/AirScript#readonly-registers) sections of AirScript documentation.
 
 
 ## Verifying proofs
 Once you've generated a proof, you can verify it using `Stark.verify()` method like so:
 
 ```TypeScript
-const result = myStark.verify(assertions, proof, publicInputs?);
+const result = myStark.verify(assertions, proof, auxPublicInputs?);
 ```
 The meaning of the parameters is as follows:
 
@@ -183,11 +192,11 @@ The meaning of the parameters is as follows:
 | ------------- | ----------- |
 | assertions    | The same array of [Assertion](#Assertions) objects that was passed to the `prove()` method. |
 | proof         | The proof object that was generated by the `prove()` method. |
-| publicInputs? | An array containing values for all specified public registers. This parameter is optional and can be skipped if no public input registers have been defined. |
+| auxPublicInputs? | An array containing initialization values for all `$p` registers. This parameter is optional and can be skipped if no public auxiliary inputs have been defined. |
 
 Verifying a proof basically attests to something like this: 
 
->If you start with some set of initial values (known to the prover), and run the computation for the specified number of steps, the execution trace generated by the computation will satisfy the specified assertions.
+>If you start with some set of inputs (known to the prover), and run the computation for the specified number of steps, the execution trace generated by the computation will satisfy the specified assertions.
 
 ## Assertions
 Assertions (or boundary constraints) are objects that specify the exact value of a given mutable register at a given step. An assertion object has the following form:
@@ -205,7 +214,7 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single threa
 
 | STARK                         | Field Size | Degree | Registers | Steps          | Proof Time | Proof Size |
 | ----------------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
-| MiMC                          | 128 bits   | 3      | 1         | 2<sup>13</sup> | 1.3 sec    | 96 KB      |
+| MiMC                          | 128 bits   | 3      | 1         | 2<sup>13</sup> | 1.3 sec    | 95 KB      |
 | MiMC                          | 128 bits   | 3      | 1         | 2<sup>17</sup> | 23 sec     | 147 KB     |
 | MiMC                          | 256 bits   | 3      | 1         | 2<sup>13</sup> | 11.5 sec   | 108 KB     |
 | MiMC                          | 256 bits   | 3      | 1         | 2<sup>17</sup> | 230 sec    | 165 KB     |
@@ -221,7 +230,7 @@ STARKs in the above examples have security parameters set to provide ~96 bits se
 **Note 2:** Currently, STARKS in 128-bit fields are able to take advantage of WebAssembly optimization, and thus, are much faster than STARKs in 256-bit fields.
 
 # References
-This library is largely based on Vitalik Buterin's [zk-STARK/MiMC tutorial](https://github.com/ethereum/research/tree/master/mimc_stark). Other super useful resources:
+This library is originally based on Vitalik Buterin's [zk-STARK/MiMC tutorial](https://github.com/ethereum/research/tree/master/mimc_stark). Other super useful resources:
 
 * STARKs whitepaper: [Scalable, transparent, and post-quantum secure computational integrity](https://eprint.iacr.org/2018/046.pdf)
 
@@ -236,6 +245,11 @@ StarkWare's STARK Math blog series:
 * [Arithmetization II](https://medium.com/starkware/arithmetization-ii-403c3b3f4355)
 * [Low Degree Testing](https://medium.com/starkware/low-degree-testing-f7614f5172db)
 * [A Framework for Efficient STARKs](https://medium.com/starkware/a-framework-for-efficient-starks-19608ba06fbe)
+
+Other STARK libraries:
+
+* [Hodor](https://github.com/matter-labs/hodor) from Matter Labs.
+* [OpenZKP](https://github.com/0xProject/OpenZKP) from 0xProject.
 
 # License
 [MIT](/LICENSE) © 2019 Guild of Weavers
