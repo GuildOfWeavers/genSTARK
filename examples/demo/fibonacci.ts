@@ -5,29 +5,34 @@ import { Stark } from '../../index';
 
 // STARK DEFINITION
 // ================================================================================================
-//const steps = 2**6, result = 1783540607n;         // ~50 ms to prove, ~9 KB proof size
-const steps = 2**13, result = 203257732n;           // ~1 second to prove, ~140 KB proof size
-//const steps = 2**17, result = 2391373091n;        // ~13 seconds to prove, ~280 KB proof size
+//const steps = 2**6, result = 1783540607n;
+const steps = 2**13, result = 203257732n;
+//const steps = 2**17, result = 2391373091n;
 
 const fibStark = new Stark(`
 define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
 
-    transition 2 registers in ${steps} steps {
-        a0: $r0 + $r1;
-        out: [a0, a0 + $r1];
+    transition 2 registers {
+        for each ($i0) {
+            init [$i0, $i0];
+            for steps [1..${steps - 1}] {
+                a0 <- $r0 + $r1;
+                [a0, a0 + $r1];
+            }
+        }
     }
 
     enforce 2 constraints {
-        a0: $r0 + $r1;
-        out: [$n0 - a0, $n1 - (a0 + $r1)];
+        for all steps {
+            transition($r) = $n;
+        }
     }
-
 }`);
 
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const initValues = [1n, 1n];                        // step 0 and 1 in Fibonacci sequence are 1
+const inputs = [[1n]];                              // step 0 and 1 in Fibonacci sequence are 1
 const assertions = [
     { step: 0, register: 0, value: 1n },            // value at the first step is 1
     { step: 0, register: 1, value: 1n },            // value at the second step is 1
@@ -35,7 +40,7 @@ const assertions = [
 ];
 
 // prove that the assertions hold if we execute Fibonacci computation
-let proof = fibStark.prove(assertions, initValues);
+let proof = fibStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 
 // serialize the proof

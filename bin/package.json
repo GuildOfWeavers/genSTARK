@@ -22,7 +22,7 @@
     "node": ">=12.7.x"
   },
   "devDependencies": {
-    "@types/node": "^12.7.12",
+    "@types/node": "12.7.x",
     "del": "5.0.x",
     "gulp": "4.0.x"
   },

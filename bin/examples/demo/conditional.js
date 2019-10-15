@@ -9,21 +9,23 @@ const steps = 2 ** 6, result = 3964567481n;
 const demoStark = new index_1.Stark(`
 define Demo over prime field (2^32 - 3 * 2^25 + 1) {
 
-    transition 1 register in ${steps} steps {
-        when ($p0) {
-            out: $s0 ? $r0 + 1 | $r0^2;
-        }
-        else {
-            out: $r0 + $p1 * $s1;
+    transition 1 register {
+        for each ($i0) {
+            init { $i0 }
+            for steps [1..${steps - 1}] {
+                when ($p0) {
+                    $s0 ? $r0 + 1 : $r0^2;
+                }
+                else {
+                    $r0 + $p1 * $s1;
+                }
+            }
         }
     }
 
-    enforce 2 constraints {
-        when ($p0) {
-            out: [$n0 - ($s0 ? $r0 + 1 | $r0^2), $s0^2 - $s0];
-        }
-        else {
-            out: [$n0 - ($r0 + $p1 * $s1), $s0^2 - $s0];
+    enforce 1 constraint {
+        for all steps {
+            transition($r) = $n;
         }
     }
 
@@ -37,18 +39,18 @@ define Demo over prime field (2^32 - 3 * 2^25 + 1) {
 // TESTING
 // =================================================================================================
 // set up inputs and assertions
-const initValues = [0n];
-const publicInputs = [[0n, 1n], [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n]];
-const secretInputs = [[0n, 0n, 0n, 1n], [9n, 11n, 13n, 15n]];
+const inputs = [[0n]];
+const auxPublicInputs = [[0n, 1n], [1n, 2n, 3n, 4n, 5n, 6n, 7n, 8n]];
+const auxSecretInputs = [[0n, 0n, 0n, 1n], [9n, 11n, 13n, 15n]];
 const assertions = [
-    { step: 0, register: 0, value: initValues[0] },
+    { step: 0, register: 0, value: inputs[0][0] },
     { step: steps - 1, register: 0, value: result }
 ];
 // generate a proof
-const proof = demoStark.prove(assertions, initValues, publicInputs, secretInputs);
+const proof = demoStark.prove(assertions, inputs, auxPublicInputs, auxSecretInputs);
 console.log('-'.repeat(20));
 // verify the proof
-demoStark.verify(assertions, proof, publicInputs);
+demoStark.verify(assertions, proof, auxPublicInputs);
 console.log('-'.repeat(20));
 // EXECUTION TRACE
 // ================================================================================================
