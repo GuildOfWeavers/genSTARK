@@ -207,8 +207,8 @@ Some very informal benchmarks run on Intel Core i5-7300U @ 2.60GHz (single threa
 | ----------------------------- | :--------: | :----: | :-------: | :------------: | :--------: | :--------: |
 | MiMC                          | 128 bits   | 3      | 1         | 2<sup>13</sup> | 1.3 sec    | 96 KB      |
 | MiMC                          | 128 bits   | 3      | 1         | 2<sup>17</sup> | 23 sec     | 147 KB     |
-| MiMC                          | 256 bits   | 3      | 1         | 2<sup>13</sup> | 9.2 sec    | 107 KB     |
-| MiMC                          | 256 bits   | 3      | 1         | 2<sup>17</sup> | 178 sec    | 162 KB     |
+| MiMC                          | 256 bits   | 3      | 1         | 2<sup>13</sup> | 11.5 sec   | 108 KB     |
+| MiMC                          | 256 bits   | 3      | 1         | 2<sup>17</sup> | 230 sec    | 165 KB     |
 | Merkle Proof (Rescue, d=8)    | 128 bits   | 5      | 8         | 2<sup>8</sup>  | 300 ms     | 60 KB      |
 | Merkle Proof (Rescue, d=16)   | 128 bits   | 5      | 8         | 2<sup>9</sup>  | 600 ms     | 72 KB      |
 | Merkle Proof (Poseidon, d=8)  | 128 bits   | 8      | 12        | 2<sup>9</sup>  | 900 ms     | 74 KB      |
