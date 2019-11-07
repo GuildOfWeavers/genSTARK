@@ -227,7 +227,7 @@ STARKs in the above examples have security parameters set to provide ~96 bits se
 
 **Note 1:** Rescue and Poseidon hash function instantiations are not really "apples-to-apples" - refer to [here](/examples/rescue) and [here](/examples/poseidon) for exact parameters.
 
-**Note 2:** Currently, STARKS in 128-bit fields are able to take advantage of WebAssembly optimization, and thus, are much faster than STARKs in 256-bit fields.
+**Note 2:** Currently, STARKs in 128-bit fields are able to take advantage of WebAssembly optimization, and thus, are much faster than STARKs in 256-bit fields.
 
 # References
 This library is originally based on Vitalik Buterin's [zk-STARK/MiMC tutorial](https://github.com/ethereum/research/tree/master/mimc_stark). Other super useful resources:

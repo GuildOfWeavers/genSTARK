@@ -1,6 +1,6 @@
 {
   "name": "@guildofweavers/genstark",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "zk-STARK generation library",
   "main": "index.js",
   "typings": "genstark.d.ts",
