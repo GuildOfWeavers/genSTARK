@@ -32,7 +32,7 @@ const keyStates = rescue.unrollConstants();
 const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
-const rescueStark = new index_1.Stark(`
+const rescueStark = index_1.createStark(Buffer.from(`
 define Rescue4x128 over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;
@@ -87,7 +87,7 @@ define Rescue4x128 over prime field (2^128 - 9 * 2^32 + 1) {
         $k6: repeat [${roundConstants[6].join(', ')}];
         $k7: repeat [${roundConstants[7].join(', ')}];
     }
-}`);
+}`));
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

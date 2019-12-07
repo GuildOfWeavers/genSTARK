@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { FiniteField, Vector, Matrix, Assertion, LogFunction } from "@guildofweavers/genstark";
-import { AirObject, ProofObject, VerificationObject, ConstraintSpecs } from "@guildofweavers/air-script";
+import { AirInstance, ConstraintDescriptor, Prover, Verifier } from "@guildofweavers/air-assembly";
 import { BoundaryConstraints } from "./BoundaryConstraints";
 import { ZeroPolynomial } from "./ZeroPolynomial";
 import { StarkError } from "../StarkError";
@@ -26,7 +26,7 @@ export class CompositionPolynomial {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(constraints: ConstraintSpecs[], assertions: Assertion[], seed: Buffer, context: AirObject, logger: LogFunction) {
+    constructor(constraints: ConstraintDescriptor[], assertions: Assertion[], seed: Buffer, context: AirInstance, logger: LogFunction) {
 
         this.field = context.field;
         this.bPoly = new BoundaryConstraints(assertions, context);
@@ -68,12 +68,12 @@ export class CompositionPolynomial {
 
     // PROOF METHODS
     // --------------------------------------------------------------------------------------------
-    evaluateAll(pPolys: Matrix, pEvaluations: Matrix, context: ProofObject): Vector {
+    evaluateAll(pPolys: Matrix, pEvaluations: Matrix, context: Prover): Vector {
         
         // 1 ----- evaluate transition constraints over composition domain
         let qEvaluations: Matrix;
         try {
-            qEvaluations = context.evaluateTracePolynomials(pPolys);
+            qEvaluations = context.evaluateTransitionConstraints(pPolys);
         }
         catch (error) {
             throw new StarkError('Failed to evaluate transition constraints', error);
@@ -147,7 +147,7 @@ export class CompositionPolynomial {
 
     // VERIFICATION METHODS
     // --------------------------------------------------------------------------------------------
-    evaluateAt(x: bigint, pValues: bigint[], nValues: bigint[], hValues: bigint[], context: VerificationObject): bigint {
+    evaluateAt(x: bigint, pValues: bigint[], nValues: bigint[], hValues: bigint[], context: Verifier): bigint {
 
         // evaluate transition constraints at x
         const qValues = context.evaluateConstraintsAt(x, pValues, nValues, hValues);
@@ -193,7 +193,7 @@ export class CompositionPolynomial {
 
 // HELPER FUNCTIONS
 // ================================================================================================
-function getCombinationDegree(constraints: ConstraintSpecs[], traceLength: number) {
+function getCombinationDegree(constraints: ConstraintDescriptor[], traceLength: number) {
     let maxConstraintDegree = 1;
     for (let constraint of constraints) {
         if (maxConstraintDegree < constraint.degree) {
@@ -203,7 +203,7 @@ function getCombinationDegree(constraints: ConstraintSpecs[], traceLength: numbe
     return 2**Math.ceil(Math.log2(maxConstraintDegree)) * traceLength;
 }
 
-function groupTransitionConstraints(constraints: ConstraintSpecs[], traceLength: number) {
+function groupTransitionConstraints(constraints: ConstraintDescriptor[], traceLength: number) {
     
     const constraintGroups = new Map<number, number[]>();
     for (let i = 0; i < constraints.length; i++) {

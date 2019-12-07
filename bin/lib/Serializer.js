@@ -9,9 +9,8 @@ class Serializer {
     // --------------------------------------------------------------------------------------------
     constructor(config, hashDigestSize) {
         this.fieldElementSize = config.field.elementSize;
-        this.stateWidth = config.stateWidth;
-        this.iRegisterCount = config.iRegisterCount;
-        this.sRegisterCount = config.sRegisterCount;
+        this.tRegisterCount = config.traceRegisterCount;
+        this.sRegisterCount = config.secretInputCount;
         this.hashDigestSize = hashDigestSize;
     }
     // PROOF SERIALIZER
@@ -42,11 +41,11 @@ class Serializer {
         for (let value of proof.ldProof.remainder) {
             offset = utils.writeBigInt(value, buffer, offset, this.fieldElementSize);
         }
-        // trace shape
-        offset = buffer.writeUInt8(proof.traceShape.length, offset);
-        for (let level of proof.traceShape) {
-            offset = buffer.writeUInt32LE(level, offset);
-        }
+        // input shapes TODO
+        offset = buffer.writeUInt8(proof.inputShapes.length, offset);
+        //for (let level of proof.inputShapes) {
+        //    offset = buffer.writeUInt32LE(level, offset);
+        //}
         // return the buffer
         return buffer;
     }
@@ -85,14 +84,13 @@ class Serializer {
         for (let i = 0; i < friRemainderLength; i++, offset += this.fieldElementSize) {
             friRemainder[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
         }
-        // trace shape
+        // input shapes TODO
         const traceDepth = buffer.readUInt8(offset);
         offset += 1;
         const traceShape = new Array(traceDepth);
-        for (let i = 0; i < traceDepth; i++) {
-            traceShape[i] = buffer.readUInt32LE(offset);
-            offset += 4;
-        }
+        //for (let i = 0; i < traceDepth; i++) {
+        //    traceShape[i] = buffer.readUInt32LE(offset); offset += 4;
+        //}
         // build and return the proof
         return {
             evRoot: evRoot,
@@ -103,13 +101,13 @@ class Serializer {
                 components: friComponents,
                 remainder: friRemainder
             },
-            traceShape: traceShape
+            inputShapes: [traceShape] // TODO
         };
     }
     // PRIVATE METHODS
     // --------------------------------------------------------------------------------------------
     getValueCount() {
-        return this.stateWidth + this.sRegisterCount + this.iRegisterCount;
+        return this.tRegisterCount + this.sRegisterCount;
     }
 }
 exports.Serializer = Serializer;

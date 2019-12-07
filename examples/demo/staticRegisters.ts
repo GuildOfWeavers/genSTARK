@@ -1,12 +1,12 @@
 // IMPORTS
 // ================================================================================================
-import { Stark } from '../../index';
+import { createStark } from '../../index';
 
 // STARK DEFINITION
 // ================================================================================================
 const steps = 2**6, result = 780n;
 
-const demoStark = new Stark(`
+const demoStark = createStark(Buffer.from(`
 define Demo over prime field (96769) {
 
     transition 1 register {
@@ -28,7 +28,7 @@ define Demo over prime field (96769) {
         $k0: repeat [1, 2, 3, 4];
         $k1: spread [1, 2, 3, 4, 5, 6, 7, 8];
     }
-}`);
+}`));
 
 // TESTING
 // ================================================================================================

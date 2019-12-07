@@ -2,19 +2,26 @@ declare module '@guildofweavers/genstark' {
 
     // IMPORTS
     // --------------------------------------------------------------------------------------------
-    import { FiniteField } from '@guildofweavers/air-script';
-    import { BatchMerkleProof, HashAlgorithm } from '@guildofweavers/merkle';
+    import { AirModule, FiniteField } from '@guildofweavers/air-assembly';
+    import { Hash, HashAlgorithm, BatchMerkleProof } from '@guildofweavers/merkle';
 
     // RE-EXPORTS
     // --------------------------------------------------------------------------------------------
     export { FiniteField, createPrimeField, Vector, Matrix } from '@guildofweavers/galois';
     export { MerkleTree, BatchMerkleProof, HashAlgorithm, createHash, Hash } from '@guildofweavers/merkle';
 
+    // PUBLIC FUNCTIONS
+    // --------------------------------------------------------------------------------------------
+    export function createStark(source: Buffer | string, security?: Partial<SecurityOptions>, optimization?: boolean | Partial<OptimizationOptions>, logger?: Logger): Stark;
+
     // STARK
     // --------------------------------------------------------------------------------------------
     export interface SecurityOptions {
 
-        /** Execution trace extension factor; defaults to the smallest power of 2 greater than 2x of max constraint degree */
+        /**
+         * Execution trace extension factor; defaults to the smallest power of 2 greater than 2x
+         * of the highest constraint degree
+         */
         extensionFactor: number;
 
         /** Number of queries for the execution trace; defaults to 80 */
@@ -43,38 +50,27 @@ declare module '@guildofweavers/genstark' {
 
         /**
          * Creates a STARK instance based on the provided parameters
-         * @param source AirScript source for the STARK
-         * @param security Security options for the STARK instance
-         * @param optimization A flag indicating whether WebAssembly-based optimization should be enabled
+         * @param air 
+         * @param options Security options for the STARK instance
          * @param logger Optional logger; defaults to console logging; set to null to disable
          */
-        constructor(source: string, security?: Partial<SecurityOptions>, optimization?: boolean, logger?: Logger);
-
-        /**
-         * Creates a STARK instance based on the provided parameters
-         * @param source AirScript source for the STARK
-         * @param security Security options for the STARK instance
-         * @param optimization WebAssembly optimization options
-         * @param logger Optional logger; defaults to console logging; set to null to disable
-         */
-        constructor(source: string, security?: Partial<SecurityOptions>, optimization?: Partial<OptimizationOptions>, logger?: Logger);
+        constructor(air: AirModule, options: SecurityOptions, logger?: Logger);
 
         /**
          * Generate a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
          * @param inputs TODO
-         * @param auxPublicInputs TODO
-         * @param auxSecretInputs TODO
+         * @param seed TODO
          */
-        prove(assertions: Assertion[], inputs: any[], auxPublicInputs?: bigint[][], auxSecretInputs?: bigint[][]): StarkProof;
+        prove(assertions: Assertion[], inputs: any[], seed?: bigint[]): StarkProof;
 
         /**
          * Verifies a proof of computation for this STARK
          * @param assertions Boundary constraints for the computation
          * @param proof Proof of the computation
-         * @param auxPublicInputs TODO
+         * @param publicInputs TODO
          */
-        verify(assertions: Assertion[], proof: StarkProof, auxPublicInputs?: bigint[][]): boolean;
+        verify(assertions: Assertion[], proof: StarkProof, publicInputs?: any[]): boolean;
 
         /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;
@@ -90,7 +86,7 @@ declare module '@guildofweavers/genstark' {
         evRoot      : Buffer;
         evProof     : BatchMerkleProof;
         ldProof     : LowDegreeProof;
-        traceShape  : number[];
+        inputShapes : number[][];
     }
 
     // CONSTRAINTS

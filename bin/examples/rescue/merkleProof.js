@@ -38,7 +38,7 @@ const securityOptions = {
     exeQueryCount: 60,
     friQueryCount: 24
 };
-const merkleStark = new index_1.Stark(`
+const merkleStark = index_1.createStark(Buffer.from(`
 define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;
@@ -128,7 +128,7 @@ define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
         $k6: repeat [${roundConstants[6].join(', ')}];
         $k7: repeat [${roundConstants[7].join(', ')}];
     }
-}`, securityOptions, true);
+}`), securityOptions, true);
 // TESTING
 // ================================================================================================
 // generate a random merkle tree
@@ -147,7 +147,7 @@ const assertions = [
     { step: roundSteps * treeDepth - 1, register: 0, value: tree.root }
 ];
 // generate a proof
-const sProof = merkleStark.prove(assertions, initValues, [binaryIndex]);
+const sProof = merkleStark.prove(assertions, initValues); // TODO
 console.log('-'.repeat(20));
 // verify the proof
 merkleStark.verify(assertions, sProof, [binaryIndex]);

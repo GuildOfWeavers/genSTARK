@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { FiniteField, AirObject, Matrix, Vector } from '@guildofweavers/air-script';
+import { FiniteField, AirInstance, Matrix, Vector } from '@guildofweavers/air-assembly';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -18,7 +18,7 @@ export class LinearCombination {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(seed: Buffer, compositionDegree: number, coefficientOffset: number, context: AirObject) {
+    constructor(seed: Buffer, compositionDegree: number, coefficientOffset: number, context: AirInstance) {
         this.field = context.field;
         this.seed = seed;
         this.rootOfUnity = context.rootOfUnity;

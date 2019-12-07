@@ -1,12 +1,12 @@
 // IMPORTS
 // ================================================================================================
-import { Stark } from '../../index';
+import { createStark } from '../../index';
 
 // STARK DEFINITION
 // ================================================================================================
 const steps = 2**6, result = 3964567481n;
 
-const demoStark = new Stark(`
+const demoStark = createStark(Buffer.from(`
 define Demo over prime field (2^32 - 3 * 2^25 + 1) {
 
     transition 1 register {
@@ -35,7 +35,7 @@ define Demo over prime field (2^32 - 3 * 2^25 + 1) {
         $s0: repeat binary [...];
         $s1: spread [...];
     }
-}`);
+}`));
 
 // TESTING
 // =================================================================================================
@@ -50,7 +50,7 @@ const assertions = [
 ];
 
 // generate a proof
-const proof = demoStark.prove(assertions, inputs, auxPublicInputs, auxSecretInputs);
+const proof = demoStark.prove(assertions, inputs);  // TODO
 console.log('-'.repeat(20));
 
 // verify the proof

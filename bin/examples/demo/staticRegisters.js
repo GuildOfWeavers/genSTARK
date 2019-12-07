@@ -6,7 +6,7 @@ const index_1 = require("../../index");
 // STARK DEFINITION
 // ================================================================================================
 const steps = 2 ** 6, result = 780n;
-const demoStark = new index_1.Stark(`
+const demoStark = index_1.createStark(Buffer.from(`
 define Demo over prime field (96769) {
 
     transition 1 register {
@@ -28,7 +28,7 @@ define Demo over prime field (96769) {
         $k0: repeat [1, 2, 3, 4];
         $k1: spread [1, 2, 3, 4, 5, 6, 7, 8];
     }
-}`);
+}`));
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

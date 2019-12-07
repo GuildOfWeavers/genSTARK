@@ -9,7 +9,7 @@ const index_1 = require("../../index");
 //const steps = 2**6, result = 1783540607n;
 const steps = 2 ** 13, result = 203257732n;
 //const steps = 2**17, result = 2391373091n;
-const fibStark = new index_1.Stark(`
+const fibStark = index_1.createStark(Buffer.from(`
 define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
 
     transition 2 registers {
@@ -27,7 +27,7 @@ define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
             transition($r) = $n;
         }
     }
-}`);
+}`));
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

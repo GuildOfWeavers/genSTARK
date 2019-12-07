@@ -1,63 +1,32 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const merkle_1 = require("@guildofweavers/merkle");
-const air_script_1 = require("@guildofweavers/air-script");
 const components_1 = require("./components");
 const utils_1 = require("./utils");
 const Serializer_1 = require("./Serializer");
 const StarkError_1 = require("./StarkError");
-// MODULE VARIABLES
-// ================================================================================================
-const DEFAULT_EXE_QUERY_COUNT = 80;
-const DEFAULT_FRI_QUERY_COUNT = 40;
-const MAX_EXE_QUERY_COUNT = 128;
-const MAX_FRI_QUERY_COUNT = 64;
-const WASM_PAGE_SIZE = 65536; // 64 KB
-const DEFAULT_INITIAL_MEMORY = 32 * 2 ** 20; // 32 MB
-const DEFAULT_MAXIMUM_MEMORY = 2 * 2 ** 30 - WASM_PAGE_SIZE; // 2 GB less one page
-const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
-const DEFAULT_HASH_ALGORITHM = 'sha256';
 // CLASS DEFINITION
 // ================================================================================================
 class Stark {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(source, security, optimization, logger) {
-        if (typeof source !== 'string')
-            throw new TypeError('Source script must be a string');
-        if (!source.trim())
-            throw new TypeError('Source script cannot be an empty string');
-        let extensionFactor = security ? security.extensionFactor : undefined;
-        let sOptions;
-        if (optimization) {
-            const wasmOptions = buildWasmOptions(optimization);
-            // instantiate AIR module
-            this.air = air_script_1.parseScript(source, { wasmOptions, extensionFactor });
-            if (!this.air.field.isOptimized) {
-                console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
-            }
-            // instantiate Hash object
-            sOptions = validateSecurityOptions(security, this.air.extensionFactor);
-            const wasmOptions2 = buildWasmOptions(optimization); // TODO: use the same options as for AIR
-            this.hash = merkle_1.createHash(sOptions.hashAlgorithm, wasmOptions2);
-            if (!this.hash.isOptimized) {
-                console.warn(`WARNING: WebAssembly optimization is not available for ${sOptions.hashAlgorithm} hash algorithm`);
-            }
+    constructor(air, options, logger) {
+        if (air.extensionFactor !== options.extensionFactor) {
+            throw new Error(`Extension factor in AIR module and security options are inconsistent`);
         }
-        else {
-            this.air = air_script_1.parseScript(source, { extensionFactor });
-            sOptions = validateSecurityOptions(security, this.air.extensionFactor);
-            this.hash = merkle_1.createHash(sOptions.hashAlgorithm, false);
+        this.air = air;
+        this.hash = merkle_1.createHash(options.hashAlgorithm, air.field.isOptimized);
+        if (!this.hash.isOptimized) {
+            console.warn(`WARNING: WebAssembly optimization is not available for ${options.hashAlgorithm} hash algorithm`);
         }
-        this.extensionFactor = sOptions.extensionFactor;
-        this.indexGenerator = new components_1.QueryIndexGenerator(sOptions);
+        this.indexGenerator = new components_1.QueryIndexGenerator(options);
         this.serializer = new Serializer_1.Serializer(this.air, this.hash.digestSize);
         this.logger = logger || new utils_1.Logger();
     }
     // ACCESSORS
     // --------------------------------------------------------------------------------------------
     get securityLevel() {
-        const extensionFactor = this.extensionFactor;
+        const extensionFactor = this.air.extensionFactor;
         // execution trace security
         const exeQueryCount = this.indexGenerator.exeQueryCount;
         const es = utils_1.powLog2(extensionFactor / this.air.maxConstraintDegree, exeQueryCount);
@@ -70,7 +39,7 @@ class Stark {
     }
     // PROVER
     // --------------------------------------------------------------------------------------------
-    prove(assertions, inputs, auxPublicInputs, auxSecretInputs) {
+    prove(assertions, inputs, seed) {
         const log = this.logger.start('Starting STARK computation');
         // 0 ----- validate parameters
         if (!Array.isArray(assertions))
@@ -81,13 +50,13 @@ class Stark {
             throw new TypeError('Initialization values parameter must be an array');
         // 1 ----- set up evaluation context
         const field = this.air.field;
-        const context = this.air.initProof(inputs, auxPublicInputs || [], auxSecretInputs || []);
+        const context = this.air.createProver(inputs);
         const evaluationDomainSize = context.evaluationDomain.length;
         log('Set up evaluation context');
         // 2 ----- generate execution trace and make sure it is correct
         let executionTrace;
         try {
-            executionTrace = context.generateExecutionTrace();
+            executionTrace = context.generateExecutionTrace(seed);
             validateAssertions(executionTrace, assertions);
         }
         catch (error) {
@@ -100,8 +69,8 @@ class Stark {
         const pEvaluations = field.evalPolysAtRoots(pPolys, context.evaluationDomain);
         log('Low-degree extended P(x) polynomials over evaluation domain');
         // 4 ----- build merkle tree for evaluations of P(x) and S(x)
-        const hEvaluations = context.hiddenRegisterTraces;
-        const eVectors = [...field.matrixRowsToVectors(pEvaluations), ...hEvaluations];
+        const sEvaluations = context.secretRegisterTraces;
+        const eVectors = [...field.matrixRowsToVectors(pEvaluations), ...sEvaluations];
         const hashedEvaluations = this.hash.mergeVectorRows(eVectors);
         log('Serialized evaluations of P(x) and S(x) polynomials');
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hash);
@@ -114,7 +83,7 @@ class Stark {
         log('Computed composition polynomial C(x)');
         // 6 ---- compute random linear combination of evaluations
         const lCombination = new components_1.LinearCombination(eTree.root, cPoly.compositionDegree, cPoly.coefficientCount, context);
-        const lEvaluations = lCombination.computeMany(cEvaluations, pEvaluations, hEvaluations);
+        const lEvaluations = lCombination.computeMany(cEvaluations, pEvaluations, sEvaluations);
         log('Combined P(x) and S(x) evaluations with C(x) evaluations');
         // 7 ----- Compute low-degree proof
         let ldProof;
@@ -141,12 +110,12 @@ class Stark {
             evRoot: eTree.root,
             evProof: eProof,
             ldProof: ldProof,
-            traceShape: context.traceShape
+            inputShapes: context.inputShapes
         };
     }
     // VERIFIER
     // --------------------------------------------------------------------------------------------
-    verify(assertions, proof, auxPublicInputs) {
+    verify(assertions, proof, publicInputs) {
         const log = this.logger.start('Starting STARK verification');
         // 0 ----- validate parameters
         if (assertions.length < 1)
@@ -154,8 +123,8 @@ class Stark {
         // 1 ----- set up evaluation context
         const field = this.air.field;
         const eRoot = proof.evRoot;
-        const extensionFactor = this.extensionFactor;
-        const context = this.air.initVerification(proof.traceShape, auxPublicInputs || []);
+        const extensionFactor = this.air.extensionFactor;
+        const context = this.air.createVerifier(proof.inputShapes, publicInputs || []);
         const evaluationDomainSize = context.traceLength * extensionFactor;
         const cPoly = new components_1.CompositionPolynomial(this.air.constraints, assertions, eRoot, context, utils_1.noop);
         const lCombination = new components_1.LinearCombination(eRoot, cPoly.compositionDegree, cPoly.coefficientCount, context);
@@ -230,7 +199,7 @@ class Stark {
     // HELPER METHODS
     // --------------------------------------------------------------------------------------------
     getAugmentedPositions(positions, evaluationDomainSize) {
-        const skip = this.extensionFactor;
+        const skip = this.air.extensionFactor;
         const augmentedPositionSet = new Set();
         for (let i = 0; i < positions.length; i++) {
             augmentedPositionSet.add(positions[i]);
@@ -252,62 +221,21 @@ class Stark {
     }
     parseValues(buffer) {
         const elementSize = this.air.field.elementSize;
-        const stateWidth = this.air.stateWidth;
-        const sRegisterCount = this.air.sRegisterCount;
-        const iRegisterCount = this.air.iRegisterCount;
         let offset = 0;
-        const pValues = new Array(stateWidth);
+        const pValues = new Array(this.air.traceRegisterCount);
         for (let i = 0; i < pValues.length; i++, offset += elementSize) {
             pValues[i] = utils_1.readBigInt(buffer, offset, elementSize);
         }
-        const hValues = new Array(sRegisterCount + iRegisterCount);
-        for (let i = 0; i < hValues.length; i++, offset += elementSize) {
-            hValues[i] = utils_1.readBigInt(buffer, offset, elementSize);
+        const sValues = new Array(this.air.secretInputCount);
+        for (let i = 0; i < sValues.length; i++, offset += elementSize) {
+            sValues[i] = utils_1.readBigInt(buffer, offset, elementSize);
         }
-        return [pValues, hValues];
+        return [pValues, sValues];
     }
 }
 exports.Stark = Stark;
 // HELPER FUNCTIONS
 // ================================================================================================
-function validateSecurityOptions(options, extensionFactor) {
-    // execution trace spot checks
-    const exeQueryCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_QUERY_COUNT;
-    if (exeQueryCount < 1 || exeQueryCount > MAX_EXE_QUERY_COUNT || !Number.isInteger(exeQueryCount)) {
-        throw new TypeError(`Execution sample size must be an integer between 1 and ${MAX_EXE_QUERY_COUNT}`);
-    }
-    // low degree evaluation spot checks
-    const friQueryCount = (options ? options.friQueryCount : undefined) || DEFAULT_FRI_QUERY_COUNT;
-    if (friQueryCount < 1 || friQueryCount > MAX_FRI_QUERY_COUNT || !Number.isInteger(friQueryCount)) {
-        throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_QUERY_COUNT}`);
-    }
-    // hash function
-    const hashAlgorithm = (options ? options.hashAlgorithm : undefined) || DEFAULT_HASH_ALGORITHM;
-    if (!HASH_ALGORITHMS.includes(hashAlgorithm)) {
-        throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
-    }
-    // extension factor
-    if (!extensionFactor) {
-        throw new TypeError(`Extension factor is undefined`);
-    }
-    return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
-}
-function buildWasmOptions(options) {
-    if (typeof options === 'boolean') {
-        return {
-            memory: new WebAssembly.Memory({
-                initial: Math.ceil(DEFAULT_INITIAL_MEMORY / WASM_PAGE_SIZE),
-                maximum: Math.ceil(DEFAULT_MAXIMUM_MEMORY / WASM_PAGE_SIZE)
-            })
-        };
-    }
-    else {
-        const initialMemory = Math.ceil((options.initialMemory || DEFAULT_INITIAL_MEMORY) / WASM_PAGE_SIZE);
-        const maximumMemory = Math.ceil((options.maximumMemory || DEFAULT_MAXIMUM_MEMORY) / WASM_PAGE_SIZE);
-        const memory = new WebAssembly.Memory({ initial: initialMemory, maximum: maximumMemory });
-        return { memory };
-    }
-}
 function validateAssertions(trace, assertions) {
     const registers = trace.rowCount;
     const steps = trace.colCount;

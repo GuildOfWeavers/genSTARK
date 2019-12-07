@@ -35,7 +35,7 @@ const securityOptions = {
     exeQueryCount: 68,
     friQueryCount: 24
 };
-const poseidonStark = new index_1.Stark(`
+const poseidonStark = index_1.createStark(Buffer.from(`
 define Poseidon6x128 over prime field (${modulus}) {
 
     MDS: ${utils_2.inline.matrix(mds)};
@@ -73,7 +73,7 @@ define Poseidon6x128 over prime field (${modulus}) {
         $k4: repeat ${utils_2.inline.vector(roundConstants[4])};
         $k5: repeat ${utils_2.inline.vector(roundConstants[5])};
     }
-}`, securityOptions, true);
+}`), securityOptions, true);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

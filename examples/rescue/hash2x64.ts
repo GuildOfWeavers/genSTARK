@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { Stark, createPrimeField } from '../../index';
+import { createStark, createPrimeField } from '../../index';
 import { Rescue } from './utils';
 
 // STARK PARAMETERS
@@ -31,7 +31,7 @@ const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 
 // STARK DEFINITION
 // ================================================================================================
-const rescueStark = new Stark(`
+const rescueStark = createStark(Buffer.from(`
 define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
 
     alpha: 3;
@@ -78,7 +78,7 @@ define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
         $k2: repeat [${roundConstants[2].join(', ')}];
         $k3: repeat [${roundConstants[3].join(', ')}];
     }
-}`);
+}`));
 
 // TESTING
 // ================================================================================================

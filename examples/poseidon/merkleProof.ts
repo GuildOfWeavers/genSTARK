@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { Assertion, SecurityOptions } from '@guildofweavers/genstark';
-import { Stark, createPrimeField } from '../../index';
+import { createStark, createPrimeField } from '../../index';
 import { getMdsMatrix, transpose, getRoundConstants, createHash, getRoundControls, MerkleTree } from './utils';
 import { inline } from '../../lib/utils';
 
@@ -30,7 +30,7 @@ const securityOptions: Partial<SecurityOptions> = {
     friQueryCount   : 20
 };
 
-const merkleStark = new Stark(`
+const merkleStark = createStark(Buffer.from(`
 define PoseidonMP over prime field (${modulus}) {
 
     MDS: ${inline.matrix(mds)};
@@ -91,7 +91,7 @@ define PoseidonMP over prime field (${modulus}) {
         $k4: repeat ${inline.vector(roundConstants[4])};
         $k5: repeat ${inline.vector(roundConstants[5])};
     }
-}`, securityOptions, true);
+}`), securityOptions, true);
 
 // TESTING
 // ================================================================================================
@@ -117,7 +117,7 @@ const assertions: Assertion[] = [
 ];
 
 // generate a proof
-const sProof = merkleStark.prove(assertions, inputs, [binaryIndex]);
+const sProof = merkleStark.prove(assertions, inputs);   // TODO
 console.log('-'.repeat(20));
 
 // verify the proof

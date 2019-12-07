@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import * as assert from 'assert';
-import { Stark } from '../../index';
+import { createStark } from '../../index';
 import { SecurityOptions } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
@@ -25,7 +25,7 @@ const securityOptions: SecurityOptions = {
 };
 
 // create the STARK for MiMC computation
-const mimcStark = new Stark(`
+const mimcStark =createStark(Buffer.from(`
 define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
 
     transition 1 register {
@@ -46,7 +46,7 @@ define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`, securityOptions, true);
+}`), securityOptions, true);
 
 // TESTING
 // ================================================================================================

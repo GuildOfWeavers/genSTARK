@@ -28,7 +28,7 @@ const keyStates = rescue.unrollConstants();
 const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
-const rescueStark = new index_1.Stark(`
+const rescueStark = index_1.createStark(Buffer.from(`
 define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
 
     alpha: 3;
@@ -75,7 +75,7 @@ define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
         $k2: repeat [${roundConstants[2].join(', ')}];
         $k3: repeat [${roundConstants[3].join(', ')}];
     }
-}`);
+}`));
 // TESTING
 // ================================================================================================
 // Generate proof that hashing 42 with Rescue results in 14354339131598895532

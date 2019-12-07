@@ -46,7 +46,7 @@ class CompositionPolynomial {
         // 1 ----- evaluate transition constraints over composition domain
         let qEvaluations;
         try {
-            qEvaluations = context.evaluateTracePolynomials(pPolys);
+            qEvaluations = context.evaluateTransitionConstraints(pPolys);
         }
         catch (error) {
             throw new StarkError_1.StarkError('Failed to evaluate transition constraints', error);

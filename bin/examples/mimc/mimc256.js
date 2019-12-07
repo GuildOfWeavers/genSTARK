@@ -22,7 +22,7 @@ const securityOptions = {
     friQueryCount: 24
 };
 // create the STARK for MiMC computation
-const mimcStark = new index_1.Stark(`
+const mimcStark = index_1.createStark(Buffer.from(`
 define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
 
     transition 1 register {
@@ -43,7 +43,7 @@ define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`, securityOptions, true);
+}`), securityOptions, true);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

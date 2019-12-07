@@ -25,7 +25,7 @@ const securityOptions = {
     exeQueryCount: 44,
     friQueryCount: 20
 };
-const merkleStark = new index_1.Stark(`
+const merkleStark = index_1.createStark(Buffer.from(`
 define PoseidonMP over prime field (${modulus}) {
 
     MDS: ${utils_2.inline.matrix(mds)};
@@ -86,7 +86,7 @@ define PoseidonMP over prime field (${modulus}) {
         $k4: repeat ${utils_2.inline.vector(roundConstants[4])};
         $k5: repeat ${utils_2.inline.vector(roundConstants[5])};
     }
-}`, securityOptions, true);
+}`), securityOptions, true);
 // TESTING
 // ================================================================================================
 // generate a random merkle tree
@@ -107,7 +107,7 @@ const assertions = [
     { step: roundSteps * treeDepth - 1, register: 1, value: tree.root[1] }
 ];
 // generate a proof
-const sProof = merkleStark.prove(assertions, inputs, [binaryIndex]);
+const sProof = merkleStark.prove(assertions, inputs); // TODO
 console.log('-'.repeat(20));
 // verify the proof
 merkleStark.verify(assertions, sProof, [binaryIndex]);

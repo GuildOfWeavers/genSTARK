@@ -6,7 +6,7 @@ const index_1 = require("../../index");
 // STARK DEFINITION
 // ================================================================================================
 const steps = 2 ** 6, result = 3964567481n;
-const demoStark = new index_1.Stark(`
+const demoStark = index_1.createStark(Buffer.from(`
 define Demo over prime field (2^32 - 3 * 2^25 + 1) {
 
     transition 1 register {
@@ -35,7 +35,7 @@ define Demo over prime field (2^32 - 3 * 2^25 + 1) {
         $s0: repeat binary [...];
         $s1: spread [...];
     }
-}`);
+}`));
 // TESTING
 // =================================================================================================
 // set up inputs and assertions
@@ -47,7 +47,7 @@ const assertions = [
     { step: steps - 1, register: 0, value: result }
 ];
 // generate a proof
-const proof = demoStark.prove(assertions, inputs, auxPublicInputs, auxSecretInputs);
+const proof = demoStark.prove(assertions, inputs); // TODO
 console.log('-'.repeat(20));
 // verify the proof
 demoStark.verify(assertions, proof, auxPublicInputs);

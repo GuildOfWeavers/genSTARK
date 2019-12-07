@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { Assertion, SecurityOptions } from '@guildofweavers/genstark';
-import { Stark, createPrimeField } from '../../index';
+import { createStark, createPrimeField } from '../../index';
 import { Rescue, MerkleTree, makeHashFunction } from './utils';
 
 // STARK PARAMETERS
@@ -45,7 +45,7 @@ const securityOptions: Partial<SecurityOptions> = {
     friQueryCount   : 24
 };
 
-const merkleStark = new Stark(`
+const merkleStark = createStark(Buffer.from(`
 define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;
@@ -135,7 +135,7 @@ define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
         $k6: repeat [${roundConstants[6].join(', ')}];
         $k7: repeat [${roundConstants[7].join(', ')}];
     }
-}`, securityOptions, true);
+}`), securityOptions, true);
 
 // TESTING
 // ================================================================================================
@@ -158,7 +158,7 @@ const assertions: Assertion[] = [
 ];
 
 // generate a proof
-const sProof = merkleStark.prove(assertions, initValues, [binaryIndex]);
+const sProof = merkleStark.prove(assertions, initValues);   // TODO
 console.log('-'.repeat(20));
 
 // verify the proof

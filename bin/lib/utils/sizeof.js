@@ -29,9 +29,9 @@ function sizeOf(proof, fieldElementSize, hashDigestSize) {
     ldLevels.push({ total: ldRemainder });
     ldProof += ldRemainder;
     size += ldProof;
-    // trace shape
+    // input shapes TODO
     let traceShape = 1; // trace depth
-    traceShape += proof.traceShape.length * 4;
+    traceShape += proof.inputShapes.length * 4;
     size += traceShape;
     return { evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, traceShape, total: size };
 }
