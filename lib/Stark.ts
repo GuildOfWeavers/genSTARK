@@ -1,10 +1,10 @@
 // IMPORTS
 // ================================================================================================
-import { Stark as IStark, Assertion, StarkProof, StarkOptions, SecurityOptions, Logger as ILogger } from '@guildofweavers/genstark';
+import { Stark as IStark, Assertion, StarkProof, StarkOptions, SecurityOptions, Logger } from '@guildofweavers/genstark';
 import { MerkleTree, Hash, HashAlgorithm, createHash } from '@guildofweavers/merkle';
 import { AirModule, Vector, Matrix, AirSchema, instantiate, WasmOptions } from '@guildofweavers/air-assembly';
 import { CompositionPolynomial, LowDegreeProver, LinearCombination, QueryIndexGenerator } from './components';
-import { Logger, sizeOf, powLog2, readBigInt, rehashMerkleProofValues, noop } from './utils';
+import { sizeOf, powLog2, readBigInt, rehashMerkleProofValues, noop } from './utils';
 import { Serializer } from './Serializer';
 import { StarkError } from './StarkError';
 
@@ -28,17 +28,16 @@ export class Stark implements IStark {
 
     readonly indexGenerator     : QueryIndexGenerator;
     readonly serializer         : Serializer;
-    readonly logger             : ILogger;
+    readonly logger             : Logger;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(schema: AirSchema, options?: Partial<StarkOptions>, logger?: ILogger) {
+    constructor(schema: AirSchema, options: Partial<StarkOptions> = {}, logger: Logger) {
 
-        const extensionFactor = options ? options.extensionFactor : undefined;
-        const wasmOptions = buildWasmOptions(options ? options.wasm : true);
+        const wasmOptions = buildWasmOptions(options.wasm);
 
         // instantiate AIR module
-        this.air = instantiate(schema, { extensionFactor, wasmOptions });
+        this.air = instantiate(schema, { extensionFactor: options.extensionFactor, wasmOptions });
         if (wasmOptions && !this.air.field.isOptimized) {
             console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
         }
@@ -54,7 +53,7 @@ export class Stark implements IStark {
 
         this.indexGenerator = new QueryIndexGenerator(sOptions);
         this.serializer = new Serializer(this.air, this.hash.digestSize);
-        this.logger = logger || new Logger();
+        this.logger = logger;
     }
 
     // ACCESSORS

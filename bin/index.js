@@ -20,6 +20,9 @@ function instantiate(source, options, logger) {
     if (logger === null) {
         logger = utils_1.noopLogger;
     }
+    else if (logger === undefined) {
+        logger = new utils_1.Logger();
+    }
     if (source instanceof air_assembly_1.AirSchema) {
         return new Stark_1.Stark(source, options, logger);
     }

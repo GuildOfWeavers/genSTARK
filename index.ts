@@ -3,7 +3,7 @@
 import { StarkOptions, Logger } from '@guildofweavers/genstark';
 import { AirSchema, compile as compileAirAssembly } from '@guildofweavers/air-assembly';
 import { Stark } from './lib/Stark';
-import { noopLogger } from './lib/utils';
+import { Logger as ConsoleLogger, noopLogger } from './lib/utils';
 
 // RE-EXPORTS
 // ================================================================================================
@@ -17,6 +17,9 @@ export { createPrimeField } from '@guildofweavers/galois';
 export function instantiate(source: AirSchema | Buffer | string, options?: Partial<StarkOptions>, logger?: Logger): Stark {
     if (logger === null) {
         logger = noopLogger;
+    }
+    else if (logger === undefined) {
+        logger = new ConsoleLogger();
     }
 
     if (source instanceof AirSchema) {

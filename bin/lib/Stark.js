@@ -19,11 +19,10 @@ const DEFAULT_HASH_ALGORITHM = 'sha256';
 class Stark {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(schema, options, logger) {
-        const extensionFactor = options ? options.extensionFactor : undefined;
-        const wasmOptions = buildWasmOptions(options ? options.wasm : true);
+    constructor(schema, options = {}, logger) {
+        const wasmOptions = buildWasmOptions(options.wasm);
         // instantiate AIR module
-        this.air = air_assembly_1.instantiate(schema, { extensionFactor, wasmOptions });
+        this.air = air_assembly_1.instantiate(schema, { extensionFactor: options.extensionFactor, wasmOptions });
         if (wasmOptions && !this.air.field.isOptimized) {
             console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
         }
@@ -37,7 +36,7 @@ class Stark {
         ;
         this.indexGenerator = new components_1.QueryIndexGenerator(sOptions);
         this.serializer = new Serializer_1.Serializer(this.air, this.hash.digestSize);
-        this.logger = logger || new utils_1.Logger();
+        this.logger = logger;
     }
     // ACCESSORS
     // --------------------------------------------------------------------------------------------
