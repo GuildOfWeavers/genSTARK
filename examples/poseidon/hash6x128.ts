@@ -32,11 +32,12 @@ roundControls.push(0n);
 
 // STARK DEFINITION
 // ================================================================================================
-const securityOptions: Partial<StarkOptions> = {
+const options: StarkOptions = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 16,
     exeQueryCount   : 68,
-    friQueryCount   : 24
+    friQueryCount   : 24,
+    wasm            : true
 };
 
 const poseidonStark = instantiate(Buffer.from(`
@@ -77,7 +78,7 @@ define Poseidon6x128 over prime field (${modulus}) {
         $k4: repeat ${inline.vector(roundConstants[4])};
         $k5: repeat ${inline.vector(roundConstants[5])};
     }
-}`), securityOptions, true);
+}`), options);
 
 // TESTING
 // ================================================================================================

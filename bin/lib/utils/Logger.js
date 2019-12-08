@@ -56,4 +56,12 @@ class Logger {
     }
 }
 exports.Logger = Logger;
+// NOOP LOGGER
+// ================================================================================================
+const noopLog = (message) => undefined;
+exports.noopLogger = {
+    start: (message, prefix) => noopLog,
+    sub: (message) => noopLog,
+    done: (log, message) => undefined
+};
 //# sourceMappingURL=Logger.js.map

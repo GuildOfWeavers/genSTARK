@@ -38,11 +38,12 @@ const { roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
 // define security options for the STARK
-const securityOptions: Partial<StarkOptions> = {
+const options: StarkOptions = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 16,
     exeQueryCount   : 60,
-    friQueryCount   : 24
+    friQueryCount   : 24,
+    wasm            : true
 };
 
 const merkleStark = instantiate(Buffer.from(`
@@ -135,7 +136,7 @@ define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
         $k6: repeat [${roundConstants[6].join(', ')}];
         $k7: repeat [${roundConstants[7].join(', ')}];
     }
-}`), securityOptions, true);
+}`), options);
 
 // TESTING
 // ================================================================================================

@@ -45,7 +45,7 @@ export class Logger implements ILogger {
         }
     }
 
-    done(log: LogFunction, message?: string) {
+    done(log: LogFunction, message?: string): void {
         if (log === noop) return;
         const label = this.functionMap.get(log)!;
         const [start] = this.timestampMap.get(label)!;
@@ -66,3 +66,12 @@ export class Logger implements ILogger {
         this.timestampMap.set(label, [start, Date.now()]);
     }
 }
+
+// NOOP LOGGER
+// ================================================================================================
+const noopLog: LogFunction = (message: string) => undefined;
+export const noopLogger: ILogger = {
+    start   : (message?: string, prefix?: string) => noopLog,
+    sub     : (message?: string) => noopLog,
+    done    : (log: LogFunction, message?: string) => undefined
+};

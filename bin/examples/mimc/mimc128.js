@@ -16,7 +16,8 @@ const options = {
     hashAlgorithm: 'blake2s256',
     extensionFactor: 16,
     exeQueryCount: 48,
-    friQueryCount: 24
+    friQueryCount: 24,
+    wasm: true
 };
 // create the STARK for MiMC computation
 const mimcStark = index_1.instantiate(Buffer.from(`
@@ -38,7 +39,7 @@ const mimcStark = index_1.instantiate(Buffer.from(`
             (add
                 (exp (load.trace 0) (load.const 0))
                 (get (load.static 0) 0))))
-    (export main (init seed) (steps ${steps})))`), options, true, new utils_1.Logger(false));
+    (export main (init seed) (steps ${steps})))`), options, new utils_1.Logger(false));
 // TESTING
 // ================================================================================================
 // generate control values

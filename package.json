@@ -24,7 +24,7 @@
   "scripts": {
     "clean": "rimraf bin",
     "compile": "tsc -p .",
-    "copyfiles": "copyfiles ./package.json ./package-lock.json ./genstark.d.ts ./.npmignore ./README.md bin",
+    "copyfiles": "copyfiles ./package*.json ./*.d.ts ./*.md ./.npmignore bin",
     "build": "npm run clean && npm run copyfiles && npm run compile",
     "publish": "npm publish bin --access=public"
   },

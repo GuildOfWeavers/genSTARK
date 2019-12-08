@@ -29,11 +29,12 @@ for (let i = 0; i < fRounds + pRounds; i++) {
 roundControls.push(0n);
 // STARK DEFINITION
 // ================================================================================================
-const securityOptions = {
+const options = {
     hashAlgorithm: 'blake2s256',
     extensionFactor: 16,
     exeQueryCount: 68,
-    friQueryCount: 24
+    friQueryCount: 24,
+    wasm: true
 };
 const poseidonStark = index_1.instantiate(Buffer.from(`
 define Poseidon3x128 over prime field (${modulus}) {
@@ -70,7 +71,7 @@ define Poseidon3x128 over prime field (${modulus}) {
         $k1: repeat ${utils_2.inline.vector(roundConstants[1])};
         $k2: repeat ${utils_2.inline.vector(roundConstants[2])};
     }
-}`), securityOptions, true);
+}`), options);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

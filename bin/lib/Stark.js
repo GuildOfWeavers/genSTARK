@@ -1,25 +1,41 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const merkle_1 = require("@guildofweavers/merkle");
+const air_assembly_1 = require("@guildofweavers/air-assembly");
 const components_1 = require("./components");
 const utils_1 = require("./utils");
 const Serializer_1 = require("./Serializer");
 const StarkError_1 = require("./StarkError");
+// MODULE VARIABLES
+// ================================================================================================
+const DEFAULT_EXE_QUERY_COUNT = 80;
+const DEFAULT_FRI_QUERY_COUNT = 40;
+const MAX_EXE_QUERY_COUNT = 128;
+const MAX_FRI_QUERY_COUNT = 64;
+const HASH_ALGORITHMS = ['sha256', 'blake2s256'];
+const DEFAULT_HASH_ALGORITHM = 'sha256';
 // CLASS DEFINITION
 // ================================================================================================
 class Stark {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(air, options, logger) {
-        if (air.extensionFactor !== options.extensionFactor) {
-            throw new Error(`Extension factor in AIR module and security options are inconsistent`);
+    constructor(schema, options, logger) {
+        const extensionFactor = options ? options.extensionFactor : undefined;
+        const wasmOptions = buildWasmOptions(options ? options.wasm : true);
+        // instantiate AIR module
+        this.air = air_assembly_1.instantiate(schema, { extensionFactor, wasmOptions });
+        if (wasmOptions && !this.air.field.isOptimized) {
+            console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
         }
-        this.air = air;
-        this.hash = merkle_1.createHash(options.hashAlgorithm, air.field.isOptimized);
+        // build security options
+        const sOptions = buildSecurityOptions(options, this.air.extensionFactor);
+        // instantiate Hash object
+        this.hash = merkle_1.createHash(sOptions.hashAlgorithm, this.air.field.isOptimized);
         if (!this.hash.isOptimized) {
-            console.warn(`WARNING: WebAssembly optimization is not available for ${options.hashAlgorithm} hash algorithm`);
+            console.warn(`WARNING: WebAssembly optimization is not available for ${sOptions.hashAlgorithm} hash algorithm`);
         }
-        this.indexGenerator = new components_1.QueryIndexGenerator(options);
+        ;
+        this.indexGenerator = new components_1.QueryIndexGenerator(sOptions);
         this.serializer = new Serializer_1.Serializer(this.air, this.hash.digestSize);
         this.logger = logger || new utils_1.Logger();
     }
@@ -232,6 +248,38 @@ class Stark {
 exports.Stark = Stark;
 // HELPER FUNCTIONS
 // ================================================================================================
+function buildSecurityOptions(options, extensionFactor) {
+    // execution trace spot checks
+    const exeQueryCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_QUERY_COUNT;
+    if (exeQueryCount < 1 || exeQueryCount > MAX_EXE_QUERY_COUNT || !Number.isInteger(exeQueryCount)) {
+        throw new TypeError(`Execution sample size must be an integer between 1 and ${MAX_EXE_QUERY_COUNT}`);
+    }
+    // low degree evaluation spot checks
+    const friQueryCount = (options ? options.friQueryCount : undefined) || DEFAULT_FRI_QUERY_COUNT;
+    if (friQueryCount < 1 || friQueryCount > MAX_FRI_QUERY_COUNT || !Number.isInteger(friQueryCount)) {
+        throw new TypeError(`FRI sample size must be an integer between 1 and ${MAX_FRI_QUERY_COUNT}`);
+    }
+    // hash function
+    const hashAlgorithm = (options ? options.hashAlgorithm : undefined) || DEFAULT_HASH_ALGORITHM;
+    if (!HASH_ALGORITHMS.includes(hashAlgorithm)) {
+        throw new TypeError(`Hash algorithm ${hashAlgorithm} is not supported`);
+    }
+    // extension factor
+    if (!extensionFactor) {
+        throw new TypeError(`Extension factor is undefined`);
+    }
+    return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
+}
+function buildWasmOptions(useWasm) {
+    if (useWasm === false)
+        return undefined;
+    return {
+        memory: new WebAssembly.Memory({
+            initial: 512,
+            maximum: 32768 // 2 GB
+        })
+    };
+}
 function validateAssertions(trace, assertions) {
     const registers = trace.rowCount;
     const steps = trace.colCount;

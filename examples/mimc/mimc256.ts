@@ -21,7 +21,8 @@ const securityOptions: StarkOptions = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 16,
     exeQueryCount   : 40,
-    friQueryCount   : 24
+    friQueryCount   : 24,
+    wasm            : true
 };
 
 // create the STARK for MiMC computation
@@ -46,7 +47,7 @@ define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`), securityOptions, true);
+}`), securityOptions);
 
 // TESTING
 // ================================================================================================

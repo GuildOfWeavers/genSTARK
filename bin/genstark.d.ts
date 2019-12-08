@@ -2,7 +2,7 @@ declare module '@guildofweavers/genstark' {
 
     // IMPORTS
     // --------------------------------------------------------------------------------------------
-    import { AirModule, FiniteField } from '@guildofweavers/air-assembly';
+    import { AirSchema, FiniteField } from '@guildofweavers/air-assembly';
     import { Hash, HashAlgorithm, BatchMerkleProof } from '@guildofweavers/merkle';
 
     // RE-EXPORTS
@@ -12,54 +12,74 @@ declare module '@guildofweavers/genstark' {
 
     // PUBLIC FUNCTIONS
     // --------------------------------------------------------------------------------------------
-    export function instantiate(source: Buffer | string, options?: Partial<StarkOptions>, useWasm?: boolean, logger?: Logger): Stark;
+
+    /**
+     * Creates an instance of STARK object based on the provided AirAssembly schema.
+     * @param schema AirAssembly schema from which the STARK object is to be built.
+     * @param options Security and optimization options for STARK instance.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
+     */
+    export function instantiate(schema: AirSchema, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
+
+    /**
+     * Creates an instance of STARK object from the provided AirAssembly source code.
+     * @param source AirAssembly source code from which the STARK object is to be built.
+     * @param options Security and optimization options for STARK instance.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
+     */
+    export function instantiate(source: Buffer, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
+
+    /**
+     * Creates an instance of STARK object from the specified AirAssembly file.
+     * @param path Path to a file containing AirAssembly source code from which the STARK object is to be built.
+     * @param options Security and optimization options for STARK instance.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
+     */
+    export function instantiate(path: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
 
     // STARK
     // --------------------------------------------------------------------------------------------
-    export interface StarkOptions {
+    export interface StarkOptions extends SecurityOptions {
 
+        /** A flag indicating whether to use WebAssembly optimizations; defaults to true */
+        readonly wasm: boolean;
+    }
+
+    export interface SecurityOptions {
         /**
          * Execution trace extension factor; defaults to the smallest power of 2 greater than 2x
          * of the highest constraint degree
          */
-        extensionFactor: number;
+        readonly extensionFactor: number;
 
         /** Number of queries for the execution trace; defaults to 80 */
-        exeQueryCount: number;
+        readonly exeQueryCount: number;
 
         /** Number of queries for low degree proof; defaults to 40 */
-        friQueryCount: number;
+        readonly friQueryCount: number;
 
         /** Hash algorithm for Merkle trees; defaults to sha256 */
-        hashAlgorithm: HashAlgorithm;
+        readonly hashAlgorithm: HashAlgorithm;
     }
 
-    export class Stark {
+    export interface Stark {
 
         /** Estimated security level of the STARK (experimental) */
         readonly securityLevel: number;
 
         /**
-         * Creates a STARK instance based on the provided parameters
-         * @param air TODO
-         * @param options Security options for the STARK instance
-         * @param logger Optional logger; defaults to console logging; set to null to disable
+         * Generate a proof of computation for this STARK.
+         * @param assertions Boundary constraints for the computation.
+         * @param inputs Values for initializing declared input registers.
+         * @param seed Seed values for initializing execution trace.
          */
-        constructor(air: AirModule, options: StarkOptions, logger?: Logger);
+        prove(assertions: Assertion[], inputs?: any[], seed?: bigint[]): StarkProof;
 
         /**
-         * Generate a proof of computation for this STARK
-         * @param assertions Boundary constraints for the computation
-         * @param inputs TODO
-         * @param seed TODO
-         */
-        prove(assertions: Assertion[], inputs: any[], seed?: bigint[]): StarkProof;
-
-        /**
-         * Verifies a proof of computation for this STARK
-         * @param assertions Boundary constraints for the computation
+         * Verifies a proof of computation for this STARK.
+         * @param assertions Boundary constraints for the computation.
          * @param proof Proof of the computation
-         * @param publicInputs TODO
+         * @param publicInputs Values for initializing declared public input registers.
          */
         verify(assertions: Assertion[], proof: StarkProof, publicInputs?: any[]): boolean;
 

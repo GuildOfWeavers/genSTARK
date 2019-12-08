@@ -19,11 +19,12 @@ const roundConstants = utils_1.transpose(utils_1.getRoundConstants(field, stateW
 // STARK DEFINITION
 // ================================================================================================
 // define security options for the STARK
-const securityOptions = {
+const options = {
     hashAlgorithm: 'blake2s256',
     extensionFactor: 32,
     exeQueryCount: 44,
-    friQueryCount: 20
+    friQueryCount: 20,
+    wasm: true
 };
 const merkleStark = index_1.instantiate(Buffer.from(`
 define PoseidonMP over prime field (${modulus}) {
@@ -86,7 +87,7 @@ define PoseidonMP over prime field (${modulus}) {
         $k4: repeat ${utils_2.inline.vector(roundConstants[4])};
         $k5: repeat ${utils_2.inline.vector(roundConstants[5])};
     }
-}`), securityOptions, true);
+}`), options);
 // TESTING
 // ================================================================================================
 // generate a random merkle tree

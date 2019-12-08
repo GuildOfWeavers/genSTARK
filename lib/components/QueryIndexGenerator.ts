@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import * as crypto from 'crypto';
-import { StarkOptions } from '@guildofweavers/genstark';
+import { SecurityOptions } from '@guildofweavers/genstark';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -11,7 +11,7 @@ export class QueryIndexGenerator {
     readonly exeQueryCount      : number;
     readonly friQueryCount      : number;
 
-    constructor(options: StarkOptions) {
+    constructor(options: SecurityOptions) {
         this.extensionFactor = options.extensionFactor;
         this.exeQueryCount = options.exeQueryCount;
         this.friQueryCount = options.friQueryCount;
