@@ -12,11 +12,11 @@ declare module '@guildofweavers/genstark' {
 
     // PUBLIC FUNCTIONS
     // --------------------------------------------------------------------------------------------
-    export function createStark(source: Buffer | string, security?: Partial<SecurityOptions>, optimization?: boolean | Partial<OptimizationOptions>, logger?: Logger): Stark;
+    export function createStark(source: Buffer | string, options?: Partial<StarkOptions>, useWasm?: boolean, logger?: Logger): Stark;
 
     // STARK
     // --------------------------------------------------------------------------------------------
-    export interface SecurityOptions {
+    export interface StarkOptions {
 
         /**
          * Execution trace extension factor; defaults to the smallest power of 2 greater than 2x
@@ -34,15 +34,6 @@ declare module '@guildofweavers/genstark' {
         hashAlgorithm: HashAlgorithm;
     }
 
-    export interface OptimizationOptions {
-
-        /** Initial number of bytes to allocate for WASM optimization */
-        initialMemory: number;
-
-        /** Maximum number of bytes to allocate for WASM optimization */
-        maximumMemory: number;
-    }
-
     export class Stark {
 
         /** Estimated security level of the STARK (experimental) */
@@ -50,11 +41,11 @@ declare module '@guildofweavers/genstark' {
 
         /**
          * Creates a STARK instance based on the provided parameters
-         * @param air 
+         * @param air TODO
          * @param options Security options for the STARK instance
          * @param logger Optional logger; defaults to console logging; set to null to disable
          */
-        constructor(air: AirModule, options: SecurityOptions, logger?: Logger);
+        constructor(air: AirModule, options: StarkOptions, logger?: Logger);
 
         /**
          * Generate a proof of computation for this STARK
@@ -83,10 +74,10 @@ declare module '@guildofweavers/genstark' {
     }
 
     export interface StarkProof {
-        evRoot      : Buffer;
-        evProof     : BatchMerkleProof;
-        ldProof     : LowDegreeProof;
-        inputShapes : number[][];
+        evRoot  : Buffer;
+        evProof : BatchMerkleProof;
+        ldProof : LowDegreeProof;
+        iShapes : number[][];
     }
 
     // CONSTRAINTS

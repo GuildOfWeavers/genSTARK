@@ -46,17 +46,14 @@ class Stark {
             throw new TypeError('Assertions parameter must be an array');
         if (assertions.length === 0)
             throw new TypeError('At least one assertion must be provided');
-        if (!Array.isArray(inputs))
-            throw new TypeError('Initialization values parameter must be an array');
         // 1 ----- set up evaluation context
-        const field = this.air.field;
-        const context = this.air.createProver(inputs);
+        const context = this.air.initProvingContext(inputs, seed);
         const evaluationDomainSize = context.evaluationDomain.length;
         log('Set up evaluation context');
         // 2 ----- generate execution trace and make sure it is correct
         let executionTrace;
         try {
-            executionTrace = context.generateExecutionTrace(seed);
+            executionTrace = context.generateExecutionTrace();
             validateAssertions(executionTrace, assertions);
         }
         catch (error) {
@@ -64,20 +61,20 @@ class Stark {
         }
         log('Generated execution trace');
         // 3 ----- compute P(x) polynomials and low-degree extend them
-        const pPolys = field.interpolateRoots(context.executionDomain, executionTrace);
+        const pPolys = context.field.interpolateRoots(context.executionDomain, executionTrace);
         log('Computed execution trace polynomials P(x)');
-        const pEvaluations = field.evalPolysAtRoots(pPolys, context.evaluationDomain);
+        const pEvaluations = context.field.evalPolysAtRoots(pPolys, context.evaluationDomain);
         log('Low-degree extended P(x) polynomials over evaluation domain');
         // 4 ----- build merkle tree for evaluations of P(x) and S(x)
         const sEvaluations = context.secretRegisterTraces;
-        const eVectors = [...field.matrixRowsToVectors(pEvaluations), ...sEvaluations];
+        const eVectors = [...context.field.matrixRowsToVectors(pEvaluations), ...sEvaluations];
         const hashedEvaluations = this.hash.mergeVectorRows(eVectors);
         log('Serialized evaluations of P(x) and S(x) polynomials');
         const eTree = merkle_1.MerkleTree.create(hashedEvaluations, this.hash);
         log('Built evaluation merkle tree');
         // 5 ----- compute composition polynomial C(x)
         const cLogger = this.logger.sub('Computing composition polynomial');
-        const cPoly = new components_1.CompositionPolynomial(this.air.constraints, assertions, eTree.root, context, cLogger);
+        const cPoly = new components_1.CompositionPolynomial(assertions, eTree.root, context, cLogger);
         const cEvaluations = cPoly.evaluateAll(pPolys, pEvaluations, context);
         this.logger.done(cLogger);
         log('Computed composition polynomial C(x)');
@@ -110,7 +107,7 @@ class Stark {
             evRoot: eTree.root,
             evProof: eProof,
             ldProof: ldProof,
-            inputShapes: context.inputShapes
+            iShapes: context.inputShapes
         };
     }
     // VERIFIER
@@ -121,12 +118,11 @@ class Stark {
         if (assertions.length < 1)
             throw new TypeError('At least one assertion must be provided');
         // 1 ----- set up evaluation context
-        const field = this.air.field;
         const eRoot = proof.evRoot;
         const extensionFactor = this.air.extensionFactor;
-        const context = this.air.createVerifier(proof.inputShapes, publicInputs || []);
+        const context = this.air.initVerificationContext(proof.iShapes, publicInputs);
         const evaluationDomainSize = context.traceLength * extensionFactor;
-        const cPoly = new components_1.CompositionPolynomial(this.air.constraints, assertions, eRoot, context, utils_1.noop);
+        const cPoly = new components_1.CompositionPolynomial(assertions, eRoot, context, utils_1.noop);
         const lCombination = new components_1.LinearCombination(eRoot, cPoly.compositionDegree, cPoly.coefficientCount, context);
         log('Set up evaluation context');
         // 2 ----- compute positions for evaluation spot-checks
@@ -135,13 +131,13 @@ class Stark {
         log(`Computed positions for evaluation spot checks`);
         // 3 ----- decode evaluation spot-checks
         const pEvaluations = new Map();
-        const hEvaluations = new Map();
+        const sEvaluations = new Map();
         for (let i = 0; i < proof.evProof.values.length; i++) {
             let mergedEvaluations = proof.evProof.values[i];
             let position = augmentedPositions[i];
-            let [p, h] = this.parseValues(mergedEvaluations);
+            let [p, s] = this.parseValues(mergedEvaluations);
             pEvaluations.set(position, p);
-            hEvaluations.set(position, h);
+            sEvaluations.set(position, s);
         }
         log(`Decoded evaluation spot checks`);
         // 4 ----- verify merkle proof for evaluation tree
@@ -162,14 +158,14 @@ class Stark {
         const lcValues = new Array(positions.length);
         for (let i = 0; i < positions.length; i++) {
             let step = positions[i];
-            let x = field.exp(context.rootOfUnity, BigInt(step));
+            let x = context.field.exp(context.rootOfUnity, BigInt(step));
             let pValues = pEvaluations.get(step);
             let nValues = pEvaluations.get((step + extensionFactor) % evaluationDomainSize);
-            let hValues = hEvaluations.get(step);
+            let sValues = sEvaluations.get(step);
             // evaluate composition polynomial at x
-            let cValue = cPoly.evaluateAt(x, pValues, nValues, hValues, context);
+            let cValue = cPoly.evaluateAt(x, pValues, nValues, sValues, context);
             // combine composition polynomial evaluation with values of P(x) and S(x)
-            lcValues[i] = lCombination.computeOne(x, cValue, pValues, hValues);
+            lcValues[i] = lCombination.computeOne(x, cValue, pValues, sValues);
         }
         log(`Verified transition and boundary constraints`);
         // 6 ----- verify low-degree proof

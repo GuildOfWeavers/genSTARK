@@ -41,11 +41,14 @@ class Serializer {
         for (let value of proof.ldProof.remainder) {
             offset = utils.writeBigInt(value, buffer, offset, this.fieldElementSize);
         }
-        // input shapes TODO
-        offset = buffer.writeUInt8(proof.inputShapes.length, offset);
-        //for (let level of proof.inputShapes) {
-        //    offset = buffer.writeUInt32LE(level, offset);
-        //}
+        // input shapes
+        offset = buffer.writeUInt8(proof.iShapes.length, offset);
+        for (let shape of proof.iShapes) {
+            offset = buffer.writeUInt8(shape.length, offset);
+            for (let level of shape) {
+                offset = buffer.writeUInt32LE(level, offset);
+            }
+        }
         // return the buffer
         return buffer;
     }
@@ -84,13 +87,19 @@ class Serializer {
         for (let i = 0; i < friRemainderLength; i++, offset += this.fieldElementSize) {
             friRemainder[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
         }
-        // input shapes TODO
-        const traceDepth = buffer.readUInt8(offset);
+        // input shapes
+        const inputCount = buffer.readUInt8(offset);
         offset += 1;
-        const traceShape = new Array(traceDepth);
-        //for (let i = 0; i < traceDepth; i++) {
-        //    traceShape[i] = buffer.readUInt32LE(offset); offset += 4;
-        //}
+        const inputShapes = new Array(inputCount);
+        for (let i = 0; i < inputCount; i++) {
+            let rank = buffer.readUInt8(offset);
+            offset += 1;
+            inputShapes[i] = new Array();
+            for (let j = 0; j < rank; j++) {
+                inputShapes[i][j] = buffer.readUInt32LE(offset);
+                offset += 4;
+            }
+        }
         // build and return the proof
         return {
             evRoot: evRoot,
@@ -101,7 +110,7 @@ class Serializer {
                 components: friComponents,
                 remainder: friRemainder
             },
-            inputShapes: [traceShape] // TODO
+            iShapes: inputShapes
         };
     }
     // PRIVATE METHODS

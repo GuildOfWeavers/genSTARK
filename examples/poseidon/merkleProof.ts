@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { Assertion, SecurityOptions } from '@guildofweavers/genstark';
+import { Assertion, StarkOptions } from '@guildofweavers/genstark';
 import { createStark, createPrimeField } from '../../index';
 import { getMdsMatrix, transpose, getRoundConstants, createHash, getRoundControls, MerkleTree } from './utils';
 import { inline } from '../../lib/utils';
@@ -23,7 +23,7 @@ const roundConstants = transpose(getRoundConstants(field, stateWidth, roundSteps
 // STARK DEFINITION
 // ================================================================================================
 // define security options for the STARK
-const securityOptions: Partial<SecurityOptions> = {
+const securityOptions: Partial<StarkOptions> = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 32,
     exeQueryCount   : 44,

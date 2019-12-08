@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { createStark, createPrimeField } from '../../index';
-import { SecurityOptions } from '@guildofweavers/genstark';
+import { StarkOptions } from '@guildofweavers/genstark';
 import { getMdsMatrix, transpose, getRoundConstants, createHash } from './utils';
 import { inline } from '../../lib/utils';
 
@@ -32,7 +32,7 @@ roundControls.push(0n);
 
 // STARK DEFINITION
 // ================================================================================================
-const securityOptions: Partial<SecurityOptions> = {
+const securityOptions: Partial<StarkOptions> = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 16,
     exeQueryCount   : 68,

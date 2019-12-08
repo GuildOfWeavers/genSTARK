@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { OptimizationOptions, SecurityOptions, HashAlgorithm, Logger } from '@guildofweavers/genstark';
+import { StarkOptions, HashAlgorithm, Logger } from '@guildofweavers/genstark';
 import { compile, instantiate, WasmOptions } from '@guildofweavers/air-assembly';
 import { Stark } from './lib/Stark';
 
@@ -28,15 +28,15 @@ const DEFAULT_MAXIMUM_MEMORY = 2 * 2**30 - WASM_PAGE_SIZE;  // 2 GB less one pag
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
-export function createStark(source: Buffer | string, security?: Partial<SecurityOptions>, optimization?: boolean | Partial<OptimizationOptions>, logger?: Logger) {
+export function createStark(source: Buffer | string, security?: Partial<StarkOptions>, useWasm?: boolean, logger?: Logger) {
 
     const extensionFactor = security ? security.extensionFactor : undefined;
-    const wasmOptions = optimization ? buildWasmOptions(optimization) : undefined;
+    const wasmOptions = useWasm ? buildWasmOptions() : undefined;
     
     // instantiate AIR module
     const schema = compile(source as any);
     const air = instantiate(schema, { extensionFactor, wasmOptions });
-    if (optimization && !air.field.isOptimized) {
+    if (useWasm && !air.field.isOptimized) {
         console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
     }
 
@@ -47,7 +47,7 @@ export function createStark(source: Buffer | string, security?: Partial<Security
 
 // HELPER FUNCTIONS
 // ================================================================================================
-function validateSecurityOptions(options: Partial<SecurityOptions> | undefined, extensionFactor: number): SecurityOptions {
+function validateSecurityOptions(options: Partial<StarkOptions> | undefined, extensionFactor: number): StarkOptions {
 
     // execution trace spot checks
     const exeQueryCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_QUERY_COUNT;
@@ -75,19 +75,11 @@ function validateSecurityOptions(options: Partial<SecurityOptions> | undefined, 
     return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
 }
 
-function buildWasmOptions(options: Partial<OptimizationOptions> | boolean): WasmOptions {
-    if (typeof options === 'boolean') {
-        return {
-            memory : new WebAssembly.Memory({
-                initial: Math.ceil(DEFAULT_INITIAL_MEMORY / WASM_PAGE_SIZE),
-                maximum: Math.ceil(DEFAULT_MAXIMUM_MEMORY / WASM_PAGE_SIZE)
-            })
-        }
-    }
-    else {
-        const initialMemory = Math.ceil((options.initialMemory || DEFAULT_INITIAL_MEMORY) / WASM_PAGE_SIZE);
-        const maximumMemory = Math.ceil((options.maximumMemory || DEFAULT_MAXIMUM_MEMORY) / WASM_PAGE_SIZE);
-        const memory = new WebAssembly.Memory({ initial: initialMemory, maximum: maximumMemory });
-        return { memory };
-    }
+function buildWasmOptions(): WasmOptions {
+    return {
+        memory : new WebAssembly.Memory({
+            initial: Math.ceil(DEFAULT_INITIAL_MEMORY / WASM_PAGE_SIZE),
+            maximum: Math.ceil(DEFAULT_MAXIMUM_MEMORY / WASM_PAGE_SIZE)
+        })
+    };
 }

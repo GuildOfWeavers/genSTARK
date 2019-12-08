@@ -2,7 +2,7 @@
 // ================================================================================================
 import * as assert from 'assert';
 import { createStark } from '../../index';
-import { SecurityOptions } from '@guildofweavers/genstark';
+import { StarkOptions } from '@guildofweavers/genstark';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -17,7 +17,7 @@ for (let i = 0; i < 64; i++) {
 }
 
 // define security options for the STARK
-const securityOptions: SecurityOptions = {
+const securityOptions: StarkOptions = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 16,
     exeQueryCount   : 40,

@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { Assertion } from '@guildofweavers/genstark';
-import { FiniteField, AirInstance, Vector, Matrix } from '@guildofweavers/air-assembly';
+import { FiniteField, AirContext, Vector, Matrix } from '@guildofweavers/air-assembly';
 
 // CLASS DEFINITION
 // ================================================================================================
@@ -12,7 +12,7 @@ export class BoundaryConstraints {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(assertions: Assertion[], context: AirInstance) {
+    constructor(assertions: Assertion[], context: AirContext) {
         const field = this.field = context.field;
         const extensionFactor = context.extensionFactor;
 

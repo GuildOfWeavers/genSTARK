@@ -66,11 +66,14 @@ export class Serializer {
             offset = utils.writeBigInt(value, buffer, offset, this.fieldElementSize);
         }
 
-        // input shapes TODO
-        offset = buffer.writeUInt8(proof.inputShapes.length, offset);
-        //for (let level of proof.inputShapes) {
-        //    offset = buffer.writeUInt32LE(level, offset);
-        //}
+        // input shapes
+        offset = buffer.writeUInt8(proof.iShapes.length, offset);
+        for (let shape of proof.iShapes) {
+            offset = buffer.writeUInt8(shape.length, offset);
+            for (let level of shape) {
+                offset = buffer.writeUInt32LE(level, offset);
+            }
+        }
 
         // return the buffer
         return buffer;
@@ -115,12 +118,17 @@ export class Serializer {
             friRemainder[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
         }
 
-        // input shapes TODO
-        const traceDepth = buffer.readUInt8(offset); offset += 1;
-        const traceShape = new Array<number>(traceDepth);
-        //for (let i = 0; i < traceDepth; i++) {
-        //    traceShape[i] = buffer.readUInt32LE(offset); offset += 4;
-        //}
+        // input shapes
+        const inputCount = buffer.readUInt8(offset); offset += 1;
+        const inputShapes = new Array<number[]>(inputCount);
+        for (let i = 0; i < inputCount; i++) {
+            let rank = buffer.readUInt8(offset); offset += 1;
+            inputShapes[i] = new Array<number>();
+
+            for (let j = 0; j < rank; j++) {
+                inputShapes[i][j] = buffer.readUInt32LE(offset); offset += 4;
+            }
+        }
 
         // build and return the proof
         return {
@@ -132,7 +140,7 @@ export class Serializer {
                 components  : friComponents, 
                 remainder   : friRemainder
             },
-            inputShapes      : [traceShape] // TODO
+            iShapes         : inputShapes
         };
     }
 

@@ -8,19 +8,19 @@ const StarkError_1 = require("../StarkError");
 class CompositionPolynomial {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(constraints, assertions, seed, context, logger) {
+    constructor(assertions, seed, context, logger) {
         this.field = context.field;
         this.bPoly = new BoundaryConstraints_1.BoundaryConstraints(assertions, context);
         this.zPoly = new ZeroPolynomial_1.ZeroPolynomial(context);
         this.log = logger;
         // degree of trace polynomial combination
-        this.combinationDegree = getCombinationDegree(constraints, context.traceLength);
+        this.combinationDegree = getCombinationDegree(context.constraints, context.traceLength);
         // degree of composition polynomial is deg(C(x)) = deg(Q(x)) - deg(Z(x))
         this.compositionDegree = Math.max(this.combinationDegree - context.traceLength, context.traceLength);
         // group transition constraints together by their degree
-        this.constraintGroups = groupTransitionConstraints(constraints, context.traceLength);
+        this.constraintGroups = groupTransitionConstraints(context.constraints, context.traceLength);
         // create coefficients needed for linear combination
-        let dCoefficientCount = constraints.length;
+        let dCoefficientCount = context.constraints.length;
         for (let { degree, indexes } of this.constraintGroups) {
             if (degree < this.combinationDegree) {
                 dCoefficientCount += indexes.length;

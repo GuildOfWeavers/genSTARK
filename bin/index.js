@@ -26,13 +26,13 @@ const DEFAULT_INITIAL_MEMORY = 32 * 2 ** 20; // 32 MB
 const DEFAULT_MAXIMUM_MEMORY = 2 * 2 ** 30 - WASM_PAGE_SIZE; // 2 GB less one page
 // PUBLIC FUNCTIONS
 // ================================================================================================
-function createStark(source, security, optimization, logger) {
+function createStark(source, security, useWasm, logger) {
     const extensionFactor = security ? security.extensionFactor : undefined;
-    const wasmOptions = optimization ? buildWasmOptions(optimization) : undefined;
+    const wasmOptions = useWasm ? buildWasmOptions() : undefined;
     // instantiate AIR module
     const schema = air_assembly_1.compile(source);
     const air = air_assembly_1.instantiate(schema, { extensionFactor, wasmOptions });
-    if (optimization && !air.field.isOptimized) {
+    if (useWasm && !air.field.isOptimized) {
         console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
     }
     const sOptions = validateSecurityOptions(security, air.extensionFactor);
@@ -63,20 +63,12 @@ function validateSecurityOptions(options, extensionFactor) {
     }
     return { extensionFactor, exeQueryCount, friQueryCount, hashAlgorithm };
 }
-function buildWasmOptions(options) {
-    if (typeof options === 'boolean') {
-        return {
-            memory: new WebAssembly.Memory({
-                initial: Math.ceil(DEFAULT_INITIAL_MEMORY / WASM_PAGE_SIZE),
-                maximum: Math.ceil(DEFAULT_MAXIMUM_MEMORY / WASM_PAGE_SIZE)
-            })
-        };
-    }
-    else {
-        const initialMemory = Math.ceil((options.initialMemory || DEFAULT_INITIAL_MEMORY) / WASM_PAGE_SIZE);
-        const maximumMemory = Math.ceil((options.maximumMemory || DEFAULT_MAXIMUM_MEMORY) / WASM_PAGE_SIZE);
-        const memory = new WebAssembly.Memory({ initial: initialMemory, maximum: maximumMemory });
-        return { memory };
-    }
+function buildWasmOptions() {
+    return {
+        memory: new WebAssembly.Memory({
+            initial: Math.ceil(DEFAULT_INITIAL_MEMORY / WASM_PAGE_SIZE),
+            maximum: Math.ceil(DEFAULT_MAXIMUM_MEMORY / WASM_PAGE_SIZE)
+        })
+    };
 }
 //# sourceMappingURL=index.js.map

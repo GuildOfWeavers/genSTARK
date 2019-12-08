@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { LowDegreeProof, FriComponent, LogFunction } from "@guildofweavers/genstark";
-import { FiniteField, Vector, Matrix, AirInstance } from '@guildofweavers/air-assembly';
+import { FiniteField, Vector, Matrix, AirContext } from '@guildofweavers/air-assembly';
 import { MerkleTree, Hash } from '@guildofweavers/merkle';
 import { QueryIndexGenerator } from "./QueryIndexGenerator";
 import { readBigInt, rehashMerkleProofValues } from "../utils";
@@ -25,7 +25,7 @@ export class LowDegreeProver {
 
     // CONSTRUCTORS
     // --------------------------------------------------------------------------------------------
-    constructor(idxGenerator: QueryIndexGenerator, hash: Hash, context: AirInstance, logger: LogFunction) {
+    constructor(idxGenerator: QueryIndexGenerator, hash: Hash, context: AirContext, logger: LogFunction) {
         this.field = context.field;
         this.polyRowSize = this.field.elementSize * 4;
         this.rootOfUnity = context.rootOfUnity;

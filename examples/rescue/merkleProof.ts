@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { Assertion, SecurityOptions } from '@guildofweavers/genstark';
+import { Assertion, StarkOptions } from '@guildofweavers/genstark';
 import { createStark, createPrimeField } from '../../index';
 import { Rescue, MerkleTree, makeHashFunction } from './utils';
 
@@ -38,7 +38,7 @@ const { roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
 // define security options for the STARK
-const securityOptions: Partial<SecurityOptions> = {
+const securityOptions: Partial<StarkOptions> = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 16,
     exeQueryCount   : 60,
