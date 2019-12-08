@@ -28,7 +28,7 @@ const keyStates = rescue.unrollConstants();
 const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
-const rescueStark = index_1.createStark(Buffer.from(`
+const rescueStark = index_1.instantiate(Buffer.from(`
 define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
 
     alpha: 3;

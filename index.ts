@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { StarkOptions, HashAlgorithm, Logger } from '@guildofweavers/genstark';
-import { compile, instantiate, WasmOptions } from '@guildofweavers/air-assembly';
+import { compile as compileAirAssembly, instantiate as instantiateAirModule, WasmOptions } from '@guildofweavers/air-assembly';
 import { Stark } from './lib/Stark';
 
 // RE-EXPORTS
@@ -28,26 +28,26 @@ const DEFAULT_MAXIMUM_MEMORY = 2 * 2**30 - WASM_PAGE_SIZE;  // 2 GB less one pag
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
-export function createStark(source: Buffer | string, security?: Partial<StarkOptions>, useWasm?: boolean, logger?: Logger) {
+export function instantiate(source: Buffer | string, options?: Partial<StarkOptions>, useWasm?: boolean, logger?: Logger): Stark {
 
-    const extensionFactor = security ? security.extensionFactor : undefined;
+    const extensionFactor = options ? options.extensionFactor : undefined;
     const wasmOptions = useWasm ? buildWasmOptions() : undefined;
     
     // instantiate AIR module
-    const schema = compile(source as any);
-    const air = instantiate(schema, { extensionFactor, wasmOptions });
+    const schema = compileAirAssembly(source as any);
+    const air = instantiateAirModule(schema, { extensionFactor, wasmOptions });
     if (useWasm && !air.field.isOptimized) {
         console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
     }
 
-    const sOptions = validateSecurityOptions(security, air.extensionFactor);
+    const sOptions = validateStarkOptions(options, air.extensionFactor);
 
     return new Stark(air, sOptions, logger);
 }
 
 // HELPER FUNCTIONS
 // ================================================================================================
-function validateSecurityOptions(options: Partial<StarkOptions> | undefined, extensionFactor: number): StarkOptions {
+function validateStarkOptions(options: Partial<StarkOptions> | undefined, extensionFactor: number): StarkOptions {
 
     // execution trace spot checks
     const exeQueryCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_QUERY_COUNT;

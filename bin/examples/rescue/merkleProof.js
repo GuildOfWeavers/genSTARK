@@ -38,7 +38,7 @@ const securityOptions = {
     exeQueryCount: 60,
     friQueryCount: 24
 };
-const merkleStark = index_1.createStark(Buffer.from(`
+const merkleStark = index_1.instantiate(Buffer.from(`
 define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;

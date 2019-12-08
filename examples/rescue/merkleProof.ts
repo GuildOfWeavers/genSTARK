@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import { Assertion, StarkOptions } from '@guildofweavers/genstark';
-import { createStark, createPrimeField } from '../../index';
+import { instantiate, createPrimeField } from '../../index';
 import { Rescue, MerkleTree, makeHashFunction } from './utils';
 
 // STARK PARAMETERS
@@ -45,7 +45,7 @@ const securityOptions: Partial<StarkOptions> = {
     friQueryCount   : 24
 };
 
-const merkleStark = createStark(Buffer.from(`
+const merkleStark = instantiate(Buffer.from(`
 define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
 
     alpha: 3;

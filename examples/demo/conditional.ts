@@ -1,12 +1,12 @@
 // IMPORTS
 // ================================================================================================
-import { createStark } from '../../index';
+import { instantiate } from '../../index';
 
 // STARK DEFINITION
 // ================================================================================================
 const steps = 2**6, result = 3964567481n;
 
-const demoStark = createStark(Buffer.from(`
+const demoStark = instantiate(Buffer.from(`
 define Demo over prime field (2^32 - 3 * 2^25 + 1) {
 
     transition 1 register {

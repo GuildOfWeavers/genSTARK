@@ -25,7 +25,7 @@ const securityOptions = {
     exeQueryCount: 44,
     friQueryCount: 20
 };
-const merkleStark = index_1.createStark(Buffer.from(`
+const merkleStark = index_1.instantiate(Buffer.from(`
 define PoseidonMP over prime field (${modulus}) {
 
     MDS: ${utils_2.inline.matrix(mds)};

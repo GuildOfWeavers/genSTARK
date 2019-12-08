@@ -26,8 +26,8 @@ const DEFAULT_INITIAL_MEMORY = 32 * 2 ** 20; // 32 MB
 const DEFAULT_MAXIMUM_MEMORY = 2 * 2 ** 30 - WASM_PAGE_SIZE; // 2 GB less one page
 // PUBLIC FUNCTIONS
 // ================================================================================================
-function createStark(source, security, useWasm, logger) {
-    const extensionFactor = security ? security.extensionFactor : undefined;
+function instantiate(source, options, useWasm, logger) {
+    const extensionFactor = options ? options.extensionFactor : undefined;
     const wasmOptions = useWasm ? buildWasmOptions() : undefined;
     // instantiate AIR module
     const schema = air_assembly_1.compile(source);
@@ -35,13 +35,13 @@ function createStark(source, security, useWasm, logger) {
     if (useWasm && !air.field.isOptimized) {
         console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
     }
-    const sOptions = validateSecurityOptions(security, air.extensionFactor);
+    const sOptions = validateStarkOptions(options, air.extensionFactor);
     return new Stark_1.Stark(air, sOptions, logger);
 }
-exports.createStark = createStark;
+exports.instantiate = instantiate;
 // HELPER FUNCTIONS
 // ================================================================================================
-function validateSecurityOptions(options, extensionFactor) {
+function validateStarkOptions(options, extensionFactor) {
     // execution trace spot checks
     const exeQueryCount = (options ? options.exeQueryCount : undefined) || DEFAULT_EXE_QUERY_COUNT;
     if (exeQueryCount < 1 || exeQueryCount > MAX_EXE_QUERY_COUNT || !Number.isInteger(exeQueryCount)) {

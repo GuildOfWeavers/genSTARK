@@ -6,7 +6,7 @@ const index_1 = require("../../index");
 // STARK DEFINITION
 // ================================================================================================
 const steps = 2 ** 6, result = 780n;
-const demoStark = index_1.createStark(Buffer.from(`
+const demoStark = index_1.instantiate(Buffer.from(`
 define Demo over prime field (96769) {
 
     transition 1 register {

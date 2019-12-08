@@ -2,7 +2,7 @@
 // ================================================================================================
 import * as assert from 'assert';
 import { StarkOptions, FiniteField } from '@guildofweavers/genstark';
-import { createStark } from '../../index';
+import { instantiate } from '../../index';
 import { Logger } from '../../lib/utils';
 import { prng } from '@guildofweavers/air-assembly';
 
@@ -21,7 +21,7 @@ const options: StarkOptions = {
 };
 
 // create the STARK for MiMC computation
-const mimcStark = createStark(Buffer.from(`
+const mimcStark = instantiate(Buffer.from(`
 (module
     (field prime 340282366920938463463374607393113505793)
     (const 

@@ -1,7 +1,7 @@
 // IMPORTS
 // ================================================================================================
 import * as assert from 'assert';
-import { createStark } from '../../index';
+import { instantiate } from '../../index';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -9,7 +9,7 @@ import { createStark } from '../../index';
 const steps = 2**13, result = 203257732n;
 //const steps = 2**17, result = 2391373091n;
 
-const fibStark = createStark(Buffer.from(`
+const fibStark = instantiate(Buffer.from(`
 define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
 
     transition 2 registers {

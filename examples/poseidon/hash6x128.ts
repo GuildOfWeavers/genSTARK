@@ -1,6 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { createStark, createPrimeField } from '../../index';
+import { instantiate, createPrimeField } from '../../index';
 import { StarkOptions } from '@guildofweavers/genstark';
 import { getMdsMatrix, transpose, getRoundConstants, createHash } from './utils';
 import { inline } from '../../lib/utils';
@@ -39,7 +39,7 @@ const securityOptions: Partial<StarkOptions> = {
     friQueryCount   : 24
 };
 
-const poseidonStark = createStark(Buffer.from(`
+const poseidonStark = instantiate(Buffer.from(`
 define Poseidon6x128 over prime field (${modulus}) {
 
     MDS: ${inline.matrix(mds)};

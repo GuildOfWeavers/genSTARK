@@ -19,7 +19,7 @@ const options = {
     friQueryCount: 24
 };
 // create the STARK for MiMC computation
-const mimcStark = index_1.createStark(Buffer.from(`
+const mimcStark = index_1.instantiate(Buffer.from(`
 (module
     (field prime 340282366920938463463374607393113505793)
     (const 

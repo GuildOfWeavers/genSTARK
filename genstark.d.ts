@@ -12,7 +12,7 @@ declare module '@guildofweavers/genstark' {
 
     // PUBLIC FUNCTIONS
     // --------------------------------------------------------------------------------------------
-    export function createStark(source: Buffer | string, options?: Partial<StarkOptions>, useWasm?: boolean, logger?: Logger): Stark;
+    export function instantiate(source: Buffer | string, options?: Partial<StarkOptions>, useWasm?: boolean, logger?: Logger): Stark;
 
     // STARK
     // --------------------------------------------------------------------------------------------

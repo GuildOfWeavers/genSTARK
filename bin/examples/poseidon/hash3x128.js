@@ -35,7 +35,7 @@ const securityOptions = {
     exeQueryCount: 68,
     friQueryCount: 24
 };
-const poseidonStark = index_1.createStark(Buffer.from(`
+const poseidonStark = index_1.instantiate(Buffer.from(`
 define Poseidon3x128 over prime field (${modulus}) {
 
     MDS: ${utils_2.inline.matrix(mds)};

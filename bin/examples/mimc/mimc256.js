@@ -22,7 +22,7 @@ const securityOptions = {
     friQueryCount: 24
 };
 // create the STARK for MiMC computation
-const mimcStark = index_1.createStark(Buffer.from(`
+const mimcStark = index_1.instantiate(Buffer.from(`
 define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
 
     transition 1 register {
