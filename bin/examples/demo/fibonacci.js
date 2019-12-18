@@ -27,7 +27,7 @@ define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
             transition($r) = $n;
         }
     }
-}`));
+}`), 'TODO');
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

@@ -16,26 +16,29 @@ declare module '@guildofweavers/genstark' {
     /**
      * Creates an instance of STARK object based on the provided AirAssembly schema.
      * @param schema AirAssembly schema from which the STARK object is to be built.
+     * @param component TODO
      * @param options Security and optimization options for STARK instance.
      * @param logger Optional logger; defaults to console logging; set to null to disable.
      */
-    export function instantiate(schema: AirSchema, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
+    export function instantiate(schema: AirSchema, component: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
 
     /**
      * Creates an instance of STARK object from the provided AirAssembly source code.
      * @param source AirAssembly source code from which the STARK object is to be built.
+     * @param component TODO
      * @param options Security and optimization options for STARK instance.
      * @param logger Optional logger; defaults to console logging; set to null to disable.
      */
-    export function instantiate(source: Buffer, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
+    export function instantiate(source: Buffer, component: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
 
     /**
      * Creates an instance of STARK object from the specified AirAssembly file.
      * @param path Path to a file containing AirAssembly source code from which the STARK object is to be built.
+     * @param component TODO
      * @param options Security and optimization options for STARK instance.
      * @param logger Optional logger; defaults to console logging; set to null to disable.
      */
-    export function instantiate(path: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
+    export function instantiate(path: string, component: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
 
     // STARK
     // --------------------------------------------------------------------------------------------

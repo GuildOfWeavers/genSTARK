@@ -19,10 +19,10 @@ const DEFAULT_HASH_ALGORITHM = 'sha256';
 class Stark {
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(schema, options = {}, logger) {
+    constructor(schema, component, options = {}, logger) {
         const wasmOptions = buildWasmOptions(options.wasm);
         // instantiate AIR module
-        this.air = air_assembly_1.instantiate(schema, { extensionFactor: options.extensionFactor, wasmOptions });
+        this.air = air_assembly_1.instantiate(schema, component, { extensionFactor: options.extensionFactor, wasmOptions });
         if (wasmOptions && !this.air.field.isOptimized) {
             console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
         }

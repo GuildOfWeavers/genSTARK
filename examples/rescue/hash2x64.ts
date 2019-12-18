@@ -78,7 +78,7 @@ define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
         $k2: repeat [${roundConstants[2].join(', ')}];
         $k3: repeat [${roundConstants[3].join(', ')}];
     }
-}`));
+}`), 'TODO');
 
 // TESTING
 // ================================================================================================

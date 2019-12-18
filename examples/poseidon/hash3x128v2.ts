@@ -98,7 +98,7 @@ const poseidonStark = instantiate(Buffer.from(`
                     (get (load.static 0) 2)))
 		)
 	)
-    (export main (init seed) (steps 64)))`), options);
+    (export main (init seed) (steps 64)))`), 'TODO', options);
 
 // TESTING
 // ================================================================================================

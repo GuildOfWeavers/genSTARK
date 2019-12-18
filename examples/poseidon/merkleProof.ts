@@ -92,7 +92,7 @@ define PoseidonMP over prime field (${modulus}) {
         $k4: repeat ${inline.vector(roundConstants[4])};
         $k5: repeat ${inline.vector(roundConstants[5])};
     }
-}`), options);
+}`), 'TODO', options);
 
 // TESTING
 // ================================================================================================

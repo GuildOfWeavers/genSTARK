@@ -14,7 +14,7 @@ export { createPrimeField } from '@guildofweavers/galois';
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
-export function instantiate(source: AirSchema | Buffer | string, options?: Partial<StarkOptions>, logger?: Logger): Stark {
+export function instantiate(source: AirSchema | Buffer | string, component: string, options?: Partial<StarkOptions>, logger?: Logger): Stark {
     if (logger === null) {
         logger = noopLogger;
     }
@@ -23,10 +23,10 @@ export function instantiate(source: AirSchema | Buffer | string, options?: Parti
     }
 
     if (source instanceof AirSchema) {
-        return new Stark(source, options, logger);
+        return new Stark(source, component, options, logger);
     }
     else {
         const schema = compileAirAssembly(source as any);
-        return new Stark(schema, options, logger);
+        return new Stark(schema, component, options, logger);
     }
 }

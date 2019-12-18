@@ -74,7 +74,7 @@ define Poseidon6x128 over prime field (${modulus}) {
         $k4: repeat ${utils_2.inline.vector(roundConstants[4])};
         $k5: repeat ${utils_2.inline.vector(roundConstants[5])};
     }
-}`), options);
+}`), 'TODO', options);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

@@ -20,6 +20,7 @@ const options = {
     wasm: true
 };
 // create the STARK for MiMC computation
+// TODO: update
 const mimcStark = index_1.instantiate(Buffer.from(`
 (module
     (field prime 340282366920938463463374607393113505793)
@@ -55,7 +56,7 @@ const mimcStark = index_1.instantiate(Buffer.from(`
 				(get (load.static 0) 0))
 		)
 	)
-    (export main (init seed) (steps ${steps})))`), options, new utils_1.Logger(false));
+    (export main (init seed) (steps ${steps})))`), 'mimc', options, new utils_1.Logger(false));
 // TESTING
 // ================================================================================================
 // generate control values

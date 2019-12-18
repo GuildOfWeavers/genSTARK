@@ -22,6 +22,7 @@ const options: StarkOptions = {
 };
 
 // create the STARK for MiMC computation
+// TODO: update
 const mimcStark = instantiate(Buffer.from(`
 (module
     (field prime 340282366920938463463374607393113505793)
@@ -58,7 +59,7 @@ const mimcStark = instantiate(Buffer.from(`
 		)
 	)
     (export main (init seed) (steps ${steps})))`
-), options, new Logger(false));
+), 'mimc', options, new Logger(false));
 
 // TESTING
 // ================================================================================================

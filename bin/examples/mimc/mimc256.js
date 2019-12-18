@@ -23,6 +23,7 @@ const securityOptions = {
     wasm: true
 };
 // create the STARK for MiMC computation
+// TODO: update
 const mimcStark = index_1.instantiate(Buffer.from(`
 define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
 
@@ -44,7 +45,7 @@ define MiMC over prime field (2^256 - 351 * 2^32 + 1) {
     using 1 readonly register {
         $k0: repeat [${roundConstants.join(', ')}];
     }
-}`), securityOptions);
+}`), 'mimc', securityOptions);
 // TESTING
 // ================================================================================================
 // set up inputs and assertions

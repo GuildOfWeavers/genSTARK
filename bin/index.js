@@ -16,7 +16,7 @@ var galois_1 = require("@guildofweavers/galois");
 exports.createPrimeField = galois_1.createPrimeField;
 // PUBLIC FUNCTIONS
 // ================================================================================================
-function instantiate(source, options, logger) {
+function instantiate(source, component, options, logger) {
     if (logger === null) {
         logger = utils_1.noopLogger;
     }
@@ -24,11 +24,11 @@ function instantiate(source, options, logger) {
         logger = new utils_1.Logger();
     }
     if (source instanceof air_assembly_1.AirSchema) {
-        return new Stark_1.Stark(source, options, logger);
+        return new Stark_1.Stark(source, component, options, logger);
     }
     else {
         const schema = air_assembly_1.compile(source);
-        return new Stark_1.Stark(schema, options, logger);
+        return new Stark_1.Stark(schema, component, options, logger);
     }
 }
 exports.instantiate = instantiate;

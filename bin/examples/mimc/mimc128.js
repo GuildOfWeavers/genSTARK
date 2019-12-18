@@ -23,23 +23,26 @@ const options = {
 const mimcStark = index_1.instantiate(Buffer.from(`
 (module
     (field prime 340282366920938463463374607393113505793)
-    (const 
-        (scalar 3))
-    (static
-        (cycle (prng sha256 0x4d694d43 ${constantCount})))
-    (transition
-        (span 1) (result vector 1)
+    (const $alpha scalar 3)
+    (function $mimcRound
+        (result vector 1)
+        (param $state vector 1) (param $roundKey scalar)
         (add 
-            (exp (load.trace 0) (load.const 0))
-            (get (load.static 0) 0)))
-    (evaluation
-        (span 2) (result vector 1)
-        (sub
-            (load.trace 1)
-            (add
-                (exp (load.trace 0) (load.const 0))
-                (get (load.static 0) 0))))
-    (export main (init seed) (steps ${steps})))`), options, new utils_1.Logger(false));
+            (exp (load.param $state) (load.const $alpha))
+            (load.param $roundKey)))
+    (export mimc
+        (registers 1) (constraints 1) (steps ${steps})
+        (static
+            (cycle (prng sha256 0x4d694d43 ${constantCount})))
+        (init
+            (param $seed vector 1)
+            (load.param $seed))
+        (transition
+            (call $mimcRound (load.trace 0) (get (load.static 0) 0)))
+        (evaluation
+            (sub
+                (load.trace 1)
+                (call $mimcRound (load.trace 0) (get (load.static 0) 0))))))`), 'mimc', options, new utils_1.Logger(false));
 // TESTING
 // ================================================================================================
 // generate control values

@@ -32,12 +32,12 @@ export class Stark implements IStark {
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    constructor(schema: AirSchema, options: Partial<StarkOptions> = {}, logger: Logger) {
+    constructor(schema: AirSchema, component: string, options: Partial<StarkOptions> = {}, logger: Logger) {
 
         const wasmOptions = buildWasmOptions(options.wasm);
 
         // instantiate AIR module
-        this.air = instantiate(schema, { extensionFactor: options.extensionFactor, wasmOptions });
+        this.air = instantiate(schema, component, { extensionFactor: options.extensionFactor, wasmOptions });
         if (wasmOptions && !this.air.field.isOptimized) {
             console.warn(`WARNING: WebAssembly optimization is not available for the specified field`);
         }

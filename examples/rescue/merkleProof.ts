@@ -136,7 +136,7 @@ define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
         $k6: repeat [${roundConstants[6].join(', ')}];
         $k7: repeat [${roundConstants[7].join(', ')}];
     }
-}`), options);
+}`), 'TODO', options);
 
 // TESTING
 // ================================================================================================
