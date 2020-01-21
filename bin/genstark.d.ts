@@ -40,6 +40,22 @@ declare module '@guildofweavers/genstark' {
      */
     export function instantiate(path: string, component: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
 
+    /**
+     * TODO
+     * @param source 
+     * @param options 
+     * @param logger 
+     */
+    export function instantiateScript(source: Buffer, options?: Partial<StarkOptions>, logger?: Logger): Stark;
+
+    /**
+     * TODO
+     * @param path 
+     * @param options 
+     * @param logger 
+     */
+    export function instantiateScript(path: string, options?: Partial<StarkOptions>, logger?: Logger): Stark;
+
     // STARK
     // --------------------------------------------------------------------------------------------
     export interface StarkOptions extends SecurityOptions {

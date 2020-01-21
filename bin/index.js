@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const air_assembly_1 = require("@guildofweavers/air-assembly");
+const air_script_1 = require("@guildofweavers/air-script");
 const Stark_1 = require("./lib/Stark");
 const utils_1 = require("./lib/utils");
 // RE-EXPORTS
@@ -32,4 +33,15 @@ function instantiate(source, component, options, logger) {
     }
 }
 exports.instantiate = instantiate;
+function instantiateScript(source, options, logger) {
+    if (logger === null) {
+        logger = utils_1.noopLogger;
+    }
+    else if (logger === undefined) {
+        logger = new utils_1.Logger();
+    }
+    const schema = air_script_1.compile(source);
+    return instantiate(schema, 'default', options, logger);
+}
+exports.instantiateScript = instantiateScript;
 //# sourceMappingURL=index.js.map

@@ -2,6 +2,7 @@
 // ================================================================================================
 import { StarkOptions, Logger } from '@guildofweavers/genstark';
 import { AirSchema, compile as compileAirAssembly } from '@guildofweavers/air-assembly';
+import { compile as compileScript } from '@guildofweavers/air-script';
 import { Stark } from './lib/Stark';
 import { Logger as ConsoleLogger, noopLogger } from './lib/utils';
 
@@ -29,4 +30,16 @@ export function instantiate(source: AirSchema | Buffer | string, component: stri
         const schema = compileAirAssembly(source as any);
         return new Stark(schema, component, options, logger);
     }
+}
+
+export function instantiateScript(source: Buffer | string, options?: Partial<StarkOptions>, logger?: Logger): Stark {
+    if (logger === null) {
+        logger = noopLogger;
+    }
+    else if (logger === undefined) {
+        logger = new ConsoleLogger();
+    }
+
+    const schema = compileScript(source as any);
+    return instantiate(schema, 'default', options, logger);
 }
