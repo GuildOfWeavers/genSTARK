@@ -34,8 +34,8 @@
     "rimraf": "3.0.x"
   },
   "dependencies": {
-    "@guildofweavers/air-assembly": "0.2.x",
-    "@guildofweavers/air-script": "0.5.x",
+    "@guildofweavers/air-assembly": "0.3.x",
+    "@guildofweavers/air-script": "0.6.x",
     "@guildofweavers/galois": "0.4.x",
     "@guildofweavers/merkle": "0.3.x"
   }

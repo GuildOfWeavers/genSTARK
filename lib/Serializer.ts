@@ -1,7 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { StarkProof, FriComponent } from "@guildofweavers/genstark";
-import { FiniteField } from '@guildofweavers/air-script';
+import { StarkProof, FriComponent, FiniteField } from "@guildofweavers/genstark";
 import { MAX_ARRAY_LENGTH } from "./utils/sizeof";
 import * as utils from './utils';
 
