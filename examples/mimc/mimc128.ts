@@ -1,17 +1,23 @@
 // IMPORTS
 // ================================================================================================
 import * as assert from 'assert';
-import { StarkOptions, FiniteField } from '@guildofweavers/genstark';
-import { instantiate } from '../../index';
-import { Logger } from '../../lib/utils';
+import { StarkOptions } from '@guildofweavers/genstark';
+import { createPrimeField } from '@guildofweavers/galois';
 import { prng } from '@guildofweavers/air-assembly';
+import { instantiateScript } from '../../index';
+import { Logger, inline } from '../../lib/utils';
+import { runMimc } from './utils';
+
+// MIMC PARAMETERS
+// ================================================================================================
+const modulus = 2n**128n - 9n * 2n**32n + 1n;
+const field = createPrimeField(modulus);
+const roundConstants = prng.sha256(Buffer.from('4d694d43', 'hex'), 64, field);
+const steps = 2**13;
+const seed = 3n;
 
 // STARK DEFINITION
 // ================================================================================================
-const steps = 2**13;
-const constantCount = 64;
-const seed = 3n;
-
 // define security options for the STARK
 const options: StarkOptions = {
     hashAlgorithm   : 'blake2s256',
@@ -22,35 +28,39 @@ const options: StarkOptions = {
 };
 
 // create the STARK for MiMC computation
-const mimcStark = instantiate(Buffer.from(`
-(module
-    (field prime 340282366920938463463374607393113505793)
-    (const $alpha scalar 3)
-    (function $mimcRound
-        (result vector 1)
-        (param $state vector 1) (param $roundKey scalar)
-        (add 
-            (exp (load.param $state) (load.const $alpha))
-            (load.param $roundKey)))
-    (export mimc
-        (registers 1) (constraints 1) (steps ${steps})
-        (static
-            (cycle (prng sha256 0x4d694d43 ${constantCount})))
-        (init
-            (param $seed vector 1)
-            (load.param $seed))
-        (transition
-            (call $mimcRound (load.trace 0) (get (load.static 0) 0)))
-        (evaluation
-            (sub
-                (load.trace 1)
-                (call $mimcRound (load.trace 0) (get (load.static 0) 0))))))`
-), 'mimc', options, new Logger(false));
+const mimcStark = instantiateScript(Buffer.from(`
+define MiMC over prime field (${modulus}) {
+
+    const alpha: 3;
+    
+    static roundConstant: cycle ${inline.vector(roundConstants)};
+
+    secret input startValue: element[1];
+
+    // transition function definition
+    transition 1 register {
+        for each (startValue) {
+            init { yield startValue; }
+
+            for steps [1..${steps - 1}] {
+                yield $r0^3 + roundConstant;
+            }
+        }
+    }
+
+    // transition constraint definition
+    enforce 1 constraint {
+        for all steps {
+            enforce transition($r) = $n;
+        }
+    }
+
+}`), options, new Logger(false));
 
 // TESTING
 // ================================================================================================
 // generate control values
-const controls = runMimc(mimcStark.air.field, steps, constantCount, seed);
+const controls = runMimc(mimcStark.air.field, steps, roundConstants, seed);
 
 // set up inputs and assertions
 const assertions = [
@@ -59,7 +69,7 @@ const assertions = [
 ];
 
 // prove that the assertions hold if we execute MiMC computation with given inputs
-let proof = mimcStark.prove(assertions, [], [seed]);
+let proof = mimcStark.prove(assertions, [[seed]]);
 console.log('-'.repeat(20));
 
 // serialize the proof
@@ -79,18 +89,3 @@ console.log('-'.repeat(20));
 mimcStark.verify(assertions, proof);
 console.log('-'.repeat(20));
 console.log(`STARK security level: ${mimcStark.securityLevel}`);
-
-// MiMC FUNCTION
-// ================================================================================================
-function runMimc(field: FiniteField, steps: number, constCount: number, seed: bigint): bigint[] {
-    // build round constants
-    const roundConstants = prng.sha256(Buffer.from('4d694d43', 'hex'), constCount, field);
-
-    const result = [seed];
-    for (let i = 0; i < steps - 1; i++) {
-        let value = field.add(field.exp(result[i], 3n), roundConstants[i % roundConstants.length]);
-        result.push(value);
-    }
-
-    return result;
-}
