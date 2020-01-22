@@ -1,11 +1,14 @@
 // IMPORTS
 // ================================================================================================
-import { instantiate, createPrimeField } from '../../index';
+import { instantiateScript, createPrimeField } from '../../index';
+import { StarkOptions } from '@guildofweavers/genstark';
 import { Rescue } from './utils';
+import { Logger, inline } from '../../lib/utils';
 
-// STARK PARAMETERS
+// RESCUE PARAMETERS
 // ================================================================================================
-const field = createPrimeField(2n**64n - 21n * 2n**30n + 1n);
+const modulus = 2n**64n - 21n * 2n**30n + 1n;
+const field = createPrimeField(modulus);
 const steps = 32;
 const alpha = 3n;
 const invAlpha = -6148914683720324437n;
@@ -31,67 +34,80 @@ const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 
 // STARK DEFINITION
 // ================================================================================================
-const rescueStark = instantiate(Buffer.from(`
-define Rescue2x64 over prime field (2^64 - 21 * 2^30 + 1) {
+const options: StarkOptions = {
+    hashAlgorithm   : 'blake2s256',
+    extensionFactor : 16,
+    exeQueryCount   : 68,
+    friQueryCount   : 24,
+    wasm            : true
+};
 
-    alpha: 3;
-    inv_alpha: 6148914683720324437;
+const rescueStark = instantiateScript(Buffer.from(`
+define Rescue2x64 over prime field (${modulus}) {
 
-    MDS: [
+    const alpha: 3;
+    const inv_alpha: 6148914683720324437;
+
+    const mds: [
         [18446744051160973310, 18446744051160973301],
         [                   4,                   13]
     ];
 
-    INV_MDS: [
+    const inv_mds: [
         [ 2049638227906774814,  6148914683720324439],
         [16397105823254198500, 12297829367440648875]
     ];
 
+    static roundConstants: [
+        cycle ${inline.vector(roundConstants[0])},
+        cycle ${inline.vector(roundConstants[1])},
+        cycle ${inline.vector(roundConstants[2])},
+        cycle ${inline.vector(roundConstants[3])}
+    ];
+
+    secret input value1: element[1];
+    secret input value2: element[1];
+
     transition 2 registers {
-        for each ($i0, $i1) {
-            init [$i0, $i1];
+        for each (value1, value2) {
+            init {
+                yield [value1, value2];
+            }
 
             for steps [1..31] {
-                S <- MDS # $r^alpha + $k[0..1];
-                MDS # (/S)^(inv_alpha) + $k[2..3];
+                S <- mds # $r^alpha + roundConstants[0..1];
+                yield mds # (/S)^(inv_alpha) + roundConstants[2..3];
             }
         }
     }
 
     enforce 2 constraints {
-        for each ($i0, $i1) {
+        for each (value1, value2) {
             init {
-                [$i0, $i1] = $n;
+                enforce [value1, value2] = $n;
             }
 
             for steps [1..31] {
-                S <- MDS # $r^alpha + $k[0..1];
-                N <- (INV_MDS # ($n - $k[2..3]))^alpha;
-                S = N;
+                S <- mds # $r^alpha + roundConstants[0..1];
+                N <- (inv_mds # ($n - roundConstants[2..3]))^alpha;
+                enforce S = N;
             }
         }
     }
-
-    using 4 readonly registers {
-        $k0: repeat [${roundConstants[0].join(', ')}];
-        $k1: repeat [${roundConstants[1].join(', ')}];
-        $k2: repeat [${roundConstants[2].join(', ')}];
-        $k3: repeat [${roundConstants[3].join(', ')}];
-    }
-}`), 'TODO');
+}`), options, new Logger(false));
 
 // TESTING
 // ================================================================================================
 // Generate proof that hashing 42 with Rescue results in 14354339131598895532
 
 // set up inputs and assertions
-const initValues = [buildInputs(42n)];
+const inputs = buildInputs(42n);
 const assertions = [
     { step: steps-1, register: 0, value: 14354339131598895532n }
 ];
 
 // generate a proof
-const proof = rescueStark.prove(assertions, initValues);
+const proof = rescueStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 
 // verify that the prover knows the value that hashes to 14354339131598895532
@@ -112,10 +128,10 @@ function buildInputs(value: bigint) {
     let a0 = field.exp(r[0], invAlpha);
     let a1 = field.exp(r[1], invAlpha);
 
-    r[0] = field.add(field.add(field.mul(mds[0][0], a0), field.mul(mds[0][1], a1)), initialConstants[2]);
-    r[1] = field.add(field.add(field.mul(mds[1][0], a0), field.mul(mds[1][1], a1)), initialConstants[3]);
-
-    return r;
+    return [
+        [field.add(field.add(field.mul(mds[0][0], a0), field.mul(mds[0][1], a1)), initialConstants[2])],
+        [field.add(field.add(field.mul(mds[1][0], a0), field.mul(mds[1][1], a1)), initialConstants[3])]
+    ];
 }
 
 /* EXECUTION TRACES
