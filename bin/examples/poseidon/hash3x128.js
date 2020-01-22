@@ -5,7 +5,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const index_1 = require("../../index");
 const utils_1 = require("./utils");
 const utils_2 = require("../../lib/utils");
-// STARK PARAMETERS
+// POSEIDON PARAMETERS
 // ================================================================================================
 const modulus = 2n ** 128n - 9n * 2n ** 32n + 1n;
 const field = index_1.createPrimeField(modulus);
@@ -36,46 +36,49 @@ const options = {
     friQueryCount: 24,
     wasm: true
 };
-const poseidonStark = index_1.instantiate(Buffer.from(`
+const poseidonStark = index_1.instantiateScript(Buffer.from(`
 define Poseidon3x128 over prime field (${modulus}) {
 
-    MDS: ${utils_2.inline.matrix(mds)};
+    const mds: ${utils_2.inline.matrix(mds)};
+
+    static roundConstants: [
+        cycle ${utils_2.inline.vector(roundConstants[0])},
+        cycle ${utils_2.inline.vector(roundConstants[1])},
+        cycle ${utils_2.inline.vector(roundConstants[2])}
+    ];
+
+    secret input value1: element[1];
+    secret input value2: element[1];
 
     transition 3 registers {
-        for each ($i0, $i1) {
+        for each (value1, value2) {
             
             // initialize the execution trace
-            init [$i0, $i1, 0];
+            init { yield [value1, value2, 0]; }
 
             for steps [1..4, 60..63] {
                 // full rounds
-                MDS # ($r + $k)^5;
+                yield mds # ($r + roundConstants)^5;
             }
 
             for steps [5..59] {
                 // partial rounds
-                v2 <- ($r2 + $k2)^5;
-                MDS # [...($r[0..1] + $k[0..1]), v2];
+                v2 <- ($r2 + roundConstants[2])^5;
+                yield mds # [...($r[0..1] + roundConstants[0..1]), v2];
             }
         }
     }
 
     enforce 3 constraints {
         for all steps {
-            transition($r) = $n;
+            enforce transition($r) = $n;
         }
     }
-
-    using 3 readonly registers {
-        $k0: repeat ${utils_2.inline.vector(roundConstants[0])};
-        $k1: repeat ${utils_2.inline.vector(roundConstants[1])};
-        $k2: repeat ${utils_2.inline.vector(roundConstants[2])};
-    }
-}`), 'TODO', options);
+}`), options, new utils_2.Logger(false));
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const inputs = [[42n, 43n]];
+const inputs = [[42n], [43n]];
 const assertions = [
     { step: steps - 1, register: 0, value: result[0] },
     { step: steps - 1, register: 1, value: result[1] },

@@ -1,11 +1,11 @@
 // IMPORTS
 // ================================================================================================
-import { instantiate, createPrimeField } from '../../index';
+import { instantiateScript, createPrimeField } from '../../index';
 import { StarkOptions } from '@guildofweavers/genstark';
 import { getMdsMatrix, transpose, getRoundConstants, createHash } from './utils';
-import { inline } from '../../lib/utils';
+import { Logger, inline } from '../../lib/utils';
 
-// STARK PARAMETERS
+// POSEIDON PARAMETERS
 // ================================================================================================
 const modulus = 2n**128n - 9n * 2n**32n + 1n;
 const field = createPrimeField(modulus);
@@ -40,47 +40,50 @@ const options: StarkOptions = {
     wasm            : true
 };
 
-const poseidonStark = instantiate(Buffer.from(`
+const poseidonStark = instantiateScript(Buffer.from(`
 define Poseidon3x128 over prime field (${modulus}) {
 
-    MDS: ${inline.matrix(mds)};
+    const mds: ${inline.matrix(mds)};
+
+    static roundConstants: [
+        cycle ${inline.vector(roundConstants[0])},
+        cycle ${inline.vector(roundConstants[1])},
+        cycle ${inline.vector(roundConstants[2])}
+    ];
+
+    secret input value1: element[1];
+    secret input value2: element[1];
 
     transition 3 registers {
-        for each ($i0, $i1) {
+        for each (value1, value2) {
             
             // initialize the execution trace
-            init [$i0, $i1, 0];
+            init { yield [value1, value2, 0]; }
 
             for steps [1..4, 60..63] {
                 // full rounds
-                MDS # ($r + $k)^5;
+                yield mds # ($r + roundConstants)^5;
             }
 
             for steps [5..59] {
                 // partial rounds
-                v2 <- ($r2 + $k2)^5;
-                MDS # [...($r[0..1] + $k[0..1]), v2];
+                v2 <- ($r2 + roundConstants[2])^5;
+                yield mds # [...($r[0..1] + roundConstants[0..1]), v2];
             }
         }
     }
 
     enforce 3 constraints {
         for all steps {
-            transition($r) = $n;
+            enforce transition($r) = $n;
         }
     }
-
-    using 3 readonly registers {
-        $k0: repeat ${inline.vector(roundConstants[0])};
-        $k1: repeat ${inline.vector(roundConstants[1])};
-        $k2: repeat ${inline.vector(roundConstants[2])};
-    }
-}`), 'TODO', options);
+}`), options, new Logger(false));
 
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const inputs = [[42n, 43n]];
+const inputs = [[42n], [43n]];
 const assertions = [
     { step: steps-1, register: 0, value: result[0] },
     { step: steps-1, register: 1, value: result[1] },

@@ -1,9 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// IMPORTS
+// ================================================================================================
 const index_1 = require("../../index");
 const utils_1 = require("./utils");
 const utils_2 = require("../../lib/utils");
-// STARK PARAMETERS
+// POSEIDON PARAMETERS
 // ================================================================================================
 const modulus = 2n ** 128n - 9n * 2n ** 32n + 1n;
 const field = index_1.createPrimeField(modulus);
@@ -26,92 +28,103 @@ const options = {
     friQueryCount: 20,
     wasm: true
 };
-const merkleStark = index_1.instantiate(Buffer.from(`
+const merkleStark = index_1.instantiateScript(Buffer.from(`
 define PoseidonMP over prime field (${modulus}) {
 
-    MDS: ${utils_2.inline.matrix(mds)};
-    alpha: ${sBoxExp};
+    const mds: ${utils_2.inline.matrix(mds)};
+    const alpha: ${sBoxExp};
 
+    // define round constants for Poseidon hash function
+    static roundConstants: [
+        cycle ${utils_2.inline.vector(roundConstants[0])},
+        cycle ${utils_2.inline.vector(roundConstants[1])},
+        cycle ${utils_2.inline.vector(roundConstants[2])},
+        cycle ${utils_2.inline.vector(roundConstants[3])},
+        cycle ${utils_2.inline.vector(roundConstants[4])},
+        cycle ${utils_2.inline.vector(roundConstants[5])}
+    ];
+
+    // declare inputs
+    secret input leaf       : element[2];       // leaf of the merkle branch
+    secret input node       : element[2][1];    // nodes in the merkle branch
+    public input indexBit   : boolean[1][1];    // binary representation of leaf position
+
+    // define transition function
     transition 12 registers {
-        for each ($i0, $i1, $i2, $i3) {
+        for each (leaf, node, indexBit) {
 
             // initialize state with first 2 node values
             init {
-                S1 <- [$i0, $i1, $i2, $i3, 0, 0];
-                S2 <- [$i2, $i3, $i0, $i1, 0, 0];
-                [...S1, ...S2];
+                S1 <- [...leaf, ...node, 0, 0];
+                S2 <- [...node, ...leaf, 0, 0];
+                yield [...S1, ...S2];
             }
 
-            for each ($i2, $i3) {
+            for each (node, indexBit) {
 
                 // for each node, figure out which value advances to the next cycle
                 init {
-                    H <- $p0 ? $r[6..7] : $r[0..1];
-                    S1 <- [...H, $i2, $i3, 0, 0];
-                    S2 <- [$i2, $i3, ...H, 0, 0];
-                    [...S1, ...S2];
+                    H <- indexBit ? $r[6..7] : $r[0..1];
+                    S1 <- [...H, ...node, 0, 0];
+                    S2 <- [...node, ...H, 0, 0];
+                    yield [...S1, ...S2];
                 }
 
                 // execute Poseidon hash function computation for 63 steps
                 for steps [1..4, 60..63] {
-                    // full rounds
-                    S1 <- MDS # ($r[0..5] + $k)^alpha;
-                    S2 <- MDS # ($r[6..11] + $k)^alpha;
-                    [...S1, ...S2];
+                    // full round
+                    S1 <- mds # ($r[0..5] + roundConstants)^alpha;
+                    S2 <- mds # ($r[6..11] + roundConstants)^alpha;
+                    yield  [...S1, ...S2];
                 }
     
                 for steps [5..59] {
                     // partial round
-                    S1 <- MDS # [...($r[0..4] + $k[0..4]), ($r5 + $k5)^alpha];	
-                    S2 <- MDS # [...($r[6..10] + $k[0..4]), ($r11 + $k5)^alpha];
-                    [...S1, ...S2];
+                    v1 <- ($r5 + roundConstants[5])^5;
+                    S1 <- mds # [...($r[0..4] + roundConstants[0..4]), v1];
+                    v2 <- ($r11 + roundConstants[5])^5;
+                    S2 <- mds # [...($r[6..10] + roundConstants[0..4]), v2];
+                    yield [...S1, ...S2];
                 }
             }
         }
     }
 
+    // define transition constraints
     enforce 12 constraints {
         for all steps {
-            transition($r) = $n;
+            enforce transition($r) = $n;
         }
     }
-
-    using 7 readonly registers {
-        $p0: spread binary [...];   // binary representation of node index
-
-        // round constants
-        $k0: repeat ${utils_2.inline.vector(roundConstants[0])};
-        $k1: repeat ${utils_2.inline.vector(roundConstants[1])};
-        $k2: repeat ${utils_2.inline.vector(roundConstants[2])};
-        $k3: repeat ${utils_2.inline.vector(roundConstants[3])};
-        $k4: repeat ${utils_2.inline.vector(roundConstants[4])};
-        $k5: repeat ${utils_2.inline.vector(roundConstants[5])};
-    }
-}`), 'TODO', options);
+}`), options, new utils_2.Logger(false));
 // TESTING
 // ================================================================================================
 // generate a random merkle tree
 const hash = utils_1.createHash(field, sBoxExp, fRounds, pRounds, stateWidth);
 const tree = new utils_1.MerkleTree(buildLeaves(2 ** treeDepth), hash);
 // generate a proof for index 42
-const index = 1;
+const index = 42;
 const proof = tree.prove(index);
 //console.log(MerkleTree.verify(tree.root, index, proof, hash));
-// set up inputs and assertions for the STARK
-const binaryIndex = toBinaryArray(index, treeDepth);
-// put first element of the proof into registers $i0 and $i1, and all other nodes into $i2 and $i3
+// set up inputs for the STARK
+// first, convert index to binary form and shift it by one to align it with the end of the first loop
+let indexBits = toBinaryArray(index, treeDepth);
+indexBits.unshift(0n);
+indexBits.pop();
+// put the leaf into registers 0 and 1, nodes into registers 2 and 3, and indexBits into register 4
 const leaf = proof.shift();
 const nodes = utils_1.transpose(proof);
-const inputs = [[leaf[0], leaf[1], nodes[0], nodes[1]]];
+const inputs = [[leaf[0]], [leaf[1]], [nodes[0]], [nodes[1]], [indexBits]];
+// set up assertions for the STARK
 const assertions = [
     { step: roundSteps * treeDepth - 1, register: 0, value: tree.root[0] },
     { step: roundSteps * treeDepth - 1, register: 1, value: tree.root[1] }
 ];
 // generate a proof
-const sProof = merkleStark.prove(assertions, inputs); // TODO
+const sProof = merkleStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 // verify the proof
-merkleStark.verify(assertions, sProof, [binaryIndex]);
+merkleStark.verify(assertions, sProof, [[indexBits]]);
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(merkleStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
 console.log(`Security level: ${merkleStark.securityLevel}`);

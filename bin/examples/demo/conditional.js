@@ -1,13 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// IMPORTS
-// ================================================================================================
 const index_1 = require("../../index");
+const utils_1 = require("../../lib/utils");
 // STARK DEFINITION
 // ================================================================================================
 const steps = 2 ** 6, result = 3964567481n;
-const demoStark = index_1.instantiate(Buffer.from(`
+const demoStark = index_1.instantiateScript(Buffer.from(`
 define Demo over prime field (2^32 - 3 * 2^25 + 1) {
+
+    TODO
 
     transition 1 register {
         for each ($i0) {
@@ -25,7 +26,7 @@ define Demo over prime field (2^32 - 3 * 2^25 + 1) {
 
     enforce 1 constraint {
         for all steps {
-            transition($r) = $n;
+            enforce transition($r) = $n;
         }
     }
 
@@ -35,7 +36,7 @@ define Demo over prime field (2^32 - 3 * 2^25 + 1) {
         $s0: repeat binary [...];
         $s1: spread [...];
     }
-}`), 'TODO');
+}`), undefined, new utils_1.Logger(false));
 // TESTING
 // =================================================================================================
 // set up inputs and assertions

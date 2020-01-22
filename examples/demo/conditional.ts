@@ -1,13 +1,20 @@
 // IMPORTS
 // ================================================================================================
-import { instantiate } from '../../index';
+import * as assert from 'assert';
+import { StarkOptions } from '@guildofweavers/genstark';
+import { createPrimeField } from '@guildofweavers/galois';
+import { prng } from '@guildofweavers/air-assembly';
+import { instantiateScript } from '../../index';
+import { Logger, inline } from '../../lib/utils';
 
 // STARK DEFINITION
 // ================================================================================================
 const steps = 2**6, result = 3964567481n;
 
-const demoStark = instantiate(Buffer.from(`
+const demoStark = instantiateScript(Buffer.from(`
 define Demo over prime field (2^32 - 3 * 2^25 + 1) {
+
+    TODO
 
     transition 1 register {
         for each ($i0) {
@@ -25,7 +32,7 @@ define Demo over prime field (2^32 - 3 * 2^25 + 1) {
 
     enforce 1 constraint {
         for all steps {
-            transition($r) = $n;
+            enforce transition($r) = $n;
         }
     }
 
@@ -35,7 +42,7 @@ define Demo over prime field (2^32 - 3 * 2^25 + 1) {
         $s0: repeat binary [...];
         $s1: spread [...];
     }
-}`), 'TODO');
+}`), undefined, new Logger(false));
 
 // TESTING
 // =================================================================================================

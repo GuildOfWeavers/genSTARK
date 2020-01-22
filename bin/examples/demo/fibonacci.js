@@ -4,30 +4,34 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // ================================================================================================
 const assert = require("assert");
 const index_1 = require("../../index");
+const utils_1 = require("../../lib/utils");
 // STARK DEFINITION
 // ================================================================================================
 //const steps = 2**6, result = 1783540607n;
 const steps = 2 ** 13, result = 203257732n;
 //const steps = 2**17, result = 2391373091n;
-const fibStark = index_1.instantiate(Buffer.from(`
+const fibStark = index_1.instantiateScript(Buffer.from(`
 define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
 
+    secret input startValue: element[1];
+
     transition 2 registers {
-        for each ($i0) {
-            init [$i0, $i0];
+        for each (startValue) {
+            init { yield [startValue, startValue]; }
+
             for steps [1..${steps - 1}] {
                 a0 <- $r0 + $r1;
-                [a0, a0 + $r1];
+                yield [a0, a0 + $r1];
             }
         }
     }
 
     enforce 2 constraints {
         for all steps {
-            transition($r) = $n;
+            enforce transition($r) = $n;
         }
     }
-}`), 'TODO');
+}`), undefined, new utils_1.Logger(false));
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
