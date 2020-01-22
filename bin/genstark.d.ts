@@ -16,7 +16,7 @@ declare module '@guildofweavers/genstark' {
     /**
      * Creates an instance of STARK object based on the provided AirAssembly schema.
      * @param schema AirAssembly schema from which the STARK object is to be built.
-     * @param component TODO
+     * @param component Name of the component from which to instantiate STARK. If omitted 'default` will be used.
      * @param options Security and optimization options for STARK instance.
      * @param logger Optional logger; defaults to console logging; set to null to disable.
      */
@@ -25,7 +25,7 @@ declare module '@guildofweavers/genstark' {
     /**
      * Creates an instance of STARK object from the provided AirAssembly source code.
      * @param source AirAssembly source code from which the STARK object is to be built.
-     * @param component TODO
+     * @param component Name of the component from which to instantiate STARK. If omitted 'default` will be used.
      * @param options Security and optimization options for STARK instance.
      * @param logger Optional logger; defaults to console logging; set to null to disable.
      */
@@ -34,25 +34,25 @@ declare module '@guildofweavers/genstark' {
     /**
      * Creates an instance of STARK object from the specified AirAssembly file.
      * @param path Path to a file containing AirAssembly source code from which the STARK object is to be built.
-     * @param component TODO
+     * @param component Name of the component from which to instantiate STARK. If omitted 'default` will be used.
      * @param options Security and optimization options for STARK instance.
      * @param logger Optional logger; defaults to console logging; set to null to disable.
      */
     export function instantiate(path: string, component: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
 
     /**
-     * TODO
-     * @param source 
-     * @param options 
-     * @param logger 
+     * Creates an instance of STARK object from the provided AirScript source code.
+     * @param source AirScript source code from which the STARK object is to be built.
+     * @param options Security and optimization options for STARK instance.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
      */
     export function instantiateScript(source: Buffer, options?: Partial<StarkOptions>, logger?: Logger): Stark;
 
     /**
-     * TODO
-     * @param path 
-     * @param options 
-     * @param logger 
+     * Creates an instance of STARK object from the specified AirAssembly file.
+     * @param path Path to a file containing AirScript source code from which the STARK object is to be built.
+     * @param component Name of the component from which to instantiate STARK. If omitted 'default` will be used.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
      */
     export function instantiateScript(path: string, options?: Partial<StarkOptions>, logger?: Logger): Stark;
 
@@ -89,7 +89,7 @@ declare module '@guildofweavers/genstark' {
         /**
          * Generate a proof of computation for this STARK.
          * @param assertions Boundary constraints for the computation.
-         * @param inputs Values for initializing declared input registers.
+         * @param inputs Values for initializing all declared input.
          * @param seed Seed values for initializing execution trace.
          */
         prove(assertions: Assertion[], inputs?: any[], seed?: bigint[]): StarkProof;
@@ -97,8 +97,8 @@ declare module '@guildofweavers/genstark' {
         /**
          * Verifies a proof of computation for this STARK.
          * @param assertions Boundary constraints for the computation.
-         * @param proof Proof of the computation
-         * @param publicInputs Values for initializing declared public input registers.
+         * @param proof Proof of the computation.
+         * @param publicInputs Values for initializing declared public inputs.
          */
         verify(assertions: Assertion[], proof: StarkProof, publicInputs?: any[]): boolean;
 

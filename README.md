@@ -16,25 +16,27 @@ $ npm install @guildofweavers/genstark --save
 Here is a trivial example of how to use this library. In this example, the computation is just adding 2 to the current value at each step. That is: x<sub>n+1</sub> = x<sub>n</sub> + 2.
 
 ```TypeScript
-import { Stark } from '@guildofweavers/genstark';
+import { instantiateScript } from '@guildofweavers/genstark';
 
 // define a STARK for this computation
-const fooStark = new Stark(`
+const fooStark = instantiateScript(Buffer.from(`
 define Foo over prime field (2^32 - 3 * 2^25 + 1) {
+
+    secret input startValue: element[1];
 
     // define transition function
     transition 1 register {
-        for each ($i0) {
-            init { $i0 }
-            for steps [1..63] { $r0 + 2 }
+        for each (startValue) {
+            init { yield startValue; }
+            for steps [1..63] { yield $r0 + 2; }
         }
     }
 
     // define transition constraints
     enforce 1 constraint {
-        for all steps { transition($r) = $n }
+        for all steps { enforce transition($r) = $n; }
     }
-}`);
+}`));
 
 // create a proof that if we start computation at 1, we end up at 127 after 64 steps
 const assertions = [
@@ -91,108 +93,99 @@ You can find complete API definitions in [genstark.d.ts](/genstark.d.ts). Here i
 
 ## Defining a STARK
 
-To create a STARK for a computation you need to create a `Stark` object like so:
+The simplest way to create a STARK for a computation is to instantiate it from [AirScript](https://github.com/GuildOfWeavers/AirScript) source like so:
+
 ```TypeScript
-const myStark = new Stark(source, security, optimization, logger);
+const myStark = new instantiateScript(source, options, logger);
 ```
+where:
+* `source` is the AirScript source code. If this parameter is a `Buffer`, it is expected to contain AirScript code in UTF8 format. If the parameter is a string, it is expected to be a path to a file containing AirScript code.
+* `options` is an optional parameter with additional [STARK options](#Stark-options).
+* `logger` is an optional logger. The default logger prints output to the console, but it can be replaced with anything that complies with the Logger interface.
 
-The meaning of the constructor parameters is as follows:
-
-| Parameter          | Description |
-| ------------------ | ----------- |
-| source             | [AirScript](https://github.com/GuildOfWeavers/AirScript) source defining transition function, transition constraints, and other properties of the STARK. |
-| security?          | An optional property specifying [security parameters](#Security-options) for the STARK. |
-| optimization?      | An optional property specifying [WASM optimization parameters](#Optimization-options) for the STARK. You can also set this to `true` to turn on WASM optimization with default parameters. |
-| logger?            | An optional logger. The default logger prints output to the console, but it can be replaced with anything that complies with the Logger interface. |
-
-**Note:** WASM-optimization is available for certain [finite fields](https://github.com/GuildOfWeavers/galois#wasm-optimization) and [hash functions](https://github.com/GuildOfWeavers/merkle#hash). If the field or the hash function you are using does not support WASM-optimization, a warning will be printed and its JavaScript equivalents will be used. In general, WASM optimization can speed up STARK proof time by 2x - 5x.
-
-### Security options
-Security options parameter should have the following form:
+### STARK options
+When provided, STARK options parameter should have the following form:
 
 | Property           | Description |
 | ------------------ | ----------- |
 | extensionFactor?   | Number by which the execution trace is "stretched." Must be a power of 2 at least 2x of the constraint degree, but cannot exceed 32. This property is optional, the default is smallest power of 2 that is greater than 2 * constraint degree. |
-| exeQueryCount? | Number of queries of the execution trace to include into the proof. This property is optional; the default is 80; the max is 128. |
+| exeQueryCount?     | Number of queries of the execution trace to include into the proof. This property is optional; the default is 80; the max is 128. |
 | friQueryCount? | Number of queries of the columns of low degree proof to include into the proof. This property is optional; the default is 40; the max is 64. |
 | hashAlgorithm?     | Hash algorithm to use when building Merkle trees for the proof. Currently, can be one of the following values: `sha256`, `blake2s256`. This property is optional; the default is `sha256`. |
+| wasm               | A flag indicating whether to use WebAssembly optimizations. This proper is optional, the default is `true`. |
 
-### Optimization options
-Optimization options parameter should have the following form:
+**Note:** WASM-optimization is available for certain [finite fields](https://github.com/GuildOfWeavers/galois#wasm-optimization) and [hash functions](https://github.com/GuildOfWeavers/merkle#hash). If the field or the hash function you are using does not support WASM-optimization, a warning will be printed and its JavaScript equivalents will be used. In general, WASM optimization can speed up STARK proof time by 2x - 5x.
 
-| Property           | Description |
-| ------------------ | ----------- |
-| initialMemory?     | Initial number of bytes to allocate for WASM optimization; the default is 32 MB. |
-| maximumMemory?     | Maximum number of bytes to allocate for WASM optimization; the default is 2 GB.  |
+You can also instantiate a STARK from [AirAssembly](https://github.com/GuildOfWeavers/AirAssembly) source, or even from an [AirSchema](https://github.com/GuildOfWeavers/AirAssembly#air-schema) object.
+
+```TypeScript
+const myStark = new instantiate(source, component, options, logger);
+```
+where:
+* `source` is either `Buffer` with AirAssembly source code, a string that is a path to a file with AirAssembly source code, or an `AirSchema` object.
+* `component` is a name of the component within AirAssembly source from which the STARK is to be instantiated. If this parameter is omitted the `default` component will be instantiated.
+* `options` is an optional parameter with additional [STARK options](#Stark-options).
+* `logger` is an optional logger. The default logger prints output to the console, but it can be replaced with anything that complies with the Logger interface.
 
 ## Generating proofs
 Once you have a `Stark` object, you can start generating proofs using `Stark.prove()` method like so:
 ```TypeScript
-const proof = myStark.prove(assertions, initValues, publicInputs?, secretInputs?);
+const proof = myStark.prove(assertions, inputs?, seed?);
 ```
-The meaning of the parameters is as follows:
-
-| Parameter     | Description |
-| ------------- | ----------- |
-| assertions    | An array of [Assertion](#Assertions) objects (also called boundary constraints). These assertions specify register values at specific steps of a valid computation. At least 1 assertion must be provided. |
-| inputs        | An array containing initialization values for all `$i` registers. Must contain at least one set of values. |
-| auxPublicInputs? | An array containing initialization values for all `$p` registers. This parameter is optional and can be skipped if no public auxiliary inputs have been defined. |
-| auxSecretInputs? | An array containing initialization values for all `$s` registers. This parameter is optional and can be skipped if no secret auxiliary inputs have been defined. |
+where:
+* `assertions` is an array of [Assertion](#Assertions) objects (also called boundary constraints). These assertions specify register values at specific steps of a valid computation. At least 1 assertion must be provided.
+* `inputs` is an array of values initializing all declared inputs. This parameter must be provided only if the STARK requires inputs.
+* `seed` is an array of seed values for initializing execution trace. This parameter must be provided only if the STARK requires initialization from seed values.
 
 ### Inputs
-Handling of inputs deserves a bit more explanation. As described above, there are 3 ways to supply inputs to `STARK.prove()` method:
+Handling of inputs deserves a bit more explanation.
 
-* `inputs` parameter is always required. It is used to initialize the execution trace for different instances of the computation. The structure of `inputs` must match the structure of input loops defined in transition function. For more information, see [Input loops](https://github.com/GuildOfWeavers/AirScript#input-loops) section of AirScript documentation.
-* The other two parameters provide values for the input registers defined in the STARK. To learn more about these, refer to [Readonly registers](https://github.com/GuildOfWeavers/AirScript#readonly-registers) section of AirScript documentation. These parameters are required only if STARK's definition includes auxiliary input registers.
+If you've instantiated a STARK from AirScrip source, you don't need to worry about the `seed` parameter as AirScript does not support explicit trace initialization. However, STARKs instantiated from AirScript source always require `inputs` parameter. The shape of this parameter will depend on how you've defined your inputs (see [AirScript](https://github.com/GuildOfWeavers/AirScript#inputs) documentation for more info).
 
-For example, the fragment below specifies that a STARK must have a single `$i` register of depth 0, and 3 auxiliary input registers. Moreover, prefixes `$p` and `$s` specify that 2 of the auxiliary registers are *public* (the values will be known to the prover **and** the verified), and 1 of the registers is *secret* (the values will be known **only** to the prover).
+For example, if your input declaration looks like this:
 ```
-transition 1 register {
-    for each ($i0) {
-        init { $i0 }
-        for steps [1..63] { $r0 + 2 }
-    }
-}
-
-using 3 readonly registers {
-    $p0: repeat [...];
-    $p1: spread [...];
-    $s0: spread [...];
-}
+public input foo: element[1];
 ```
-
-Based on this definition, the parameters for `STARK.prove()` method should be supplied like so:
-
+your `inputs` array will need to contain a single element which will be an array of values for input `foo`. For example:
 ```TypeScript
-// let's say we want to run the computation for 2 sets of inputs
-let inputs = [[1n], [2n]];
-
-// define values for public auxiliary inputs
-let pValues1 = [1n, 2n, 3n, 4n];
-let pValues2 = [1n, 2n, 3n, 4n, 5n, 6n, 7n, 7n];
-
-// define values for secret auxiliary inputs
-let sValues = [10n, 11n, 12n, 13n];
-
-// generate the proof
-let proof = fooStark.prove(assertions, inputs, [pValues1, pValues2], [sValues]);
+[[1n, 2n]]
 ```
-When the proof is generated, the provided values will "appear" in registers `$i0`, `$p0`, `$p1`, and `$s0` to be used in transition function and transition constraints. The rules for how this happens are also described in the [Input loops](https://github.com/GuildOfWeavers/AirScript#input-loops) and  [Readonly registers](https://github.com/GuildOfWeavers/AirScript#readonly-registers) sections of AirScript documentation.
 
+If you've declared more than one input, like so:
+```
+public input foo: element[1];
+public input bar: element[1];
+```
+your `inputs` array will need to contain an array of values for each declared input. For example:
+```TypeScript
+[[1n, 2n], [3n, 4n]]
+```
+Here, the `[1n, 2n]` values are assigned to input `foo` and `[3n, 4n]` values are assigned to input `bar`. 
+
+If you've declared [nested inputs](https://github.com/GuildOfWeavers/AirScript#nested-input-loops) like so:
+```
+public input foo: element[1];
+public input bar: element[1][1];
+```
+your `inputs` object may look like so:
+```TypeScript
+[[1n, 2n], [[3n, 4n], [5n, 6n]]]
+```
+Here, for each value of `foo`, we need to provide a list of value for `bar`.
+
+#### AirAssembly inputs
+If you've instantiated a STARK from AirAssembly source, you may need to provide values for both `inputs` and `seed` parameters based on what is required by AirAssembly declaration. The `inputs` parameter requirements are defined via [input registers](https://github.com/GuildOfWeavers/AirAssembly/tree/master/specs#input-registers), while `seed` parameter requirements are defined via [trace initializer](https://github.com/GuildOfWeavers/AirAssembly/tree/master/specs#trace-initializer).
 
 ## Verifying proofs
 Once you've generated a proof, you can verify it using `Stark.verify()` method like so:
 
 ```TypeScript
-const result = myStark.verify(assertions, proof, auxPublicInputs?);
+const result = myStark.verify(assertions, proof, publicInputs?);
 ```
-The meaning of the parameters is as follows:
-
-| Parameter     | Description |
-| ------------- | ----------- |
-| assertions    | The same array of [Assertion](#Assertions) objects that was passed to the `prove()` method. |
-| proof         | The proof object that was generated by the `prove()` method. |
-| auxPublicInputs? | An array containing initialization values for all `$p` registers. This parameter is optional and can be skipped if no public auxiliary inputs have been defined. |
+where:
+* `assertions` is the same array of [Assertion](#Assertions) objects that was passed to the `prove()` method.
+* `proof` is the proof object that was generated by the `prove()` method.
+* `publicInputs` is an array of values for initializing all declared public inputs.
 
 Verifying a proof basically attests to something like this: 
 
