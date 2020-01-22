@@ -116,7 +116,7 @@ When provided, STARK options parameter should have the following form:
 
 **Note:** WASM-optimization is available for certain [finite fields](https://github.com/GuildOfWeavers/galois#wasm-optimization) and [hash functions](https://github.com/GuildOfWeavers/merkle#hash). If the field or the hash function you are using does not support WASM-optimization, a warning will be printed and its JavaScript equivalents will be used. In general, WASM optimization can speed up STARK proof time by 2x - 5x.
 
-You can also instantiate a STARK from [AirAssembly](https://github.com/GuildOfWeavers/AirAssembly) source, or even from an [AirSchema](https://github.com/GuildOfWeavers/AirAssembly#air-schema) object.
+You can also instantiate a STARK from [AirAssembly](https://github.com/GuildOfWeavers/AirAssembly) source, or even from an [AirSchema](https://github.com/GuildOfWeavers/AirAssembly#air-schema) object:
 
 ```TypeScript
 const myStark = new instantiate(source, component, options, logger);
