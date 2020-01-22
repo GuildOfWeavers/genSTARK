@@ -1,7 +1,6 @@
 // IMPORTS
 // ================================================================================================
-import { StarkProof, FriComponent } from "@guildofweavers/genstark";
-import { FiniteField } from '@guildofweavers/air-script';
+import { StarkProof, FriComponent, FiniteField } from "@guildofweavers/genstark";
 import { MAX_ARRAY_LENGTH } from "./utils/sizeof";
 import * as utils from './utils';
 
@@ -9,9 +8,8 @@ import * as utils from './utils';
 // ================================================================================================
 interface SerializerConfig {
     readonly field              : FiniteField;
-    readonly stateWidth         : number;
-    readonly sRegisterCount     : number;
-    readonly iRegisterCount     : number;
+    readonly traceRegisterCount : number;
+    readonly secretInputCount   : number;
 }
 
 // CLASS DEFINITION
@@ -19,8 +17,7 @@ interface SerializerConfig {
 export class Serializer {
 
     readonly fieldElementSize   : number;
-    readonly stateWidth         : number;
-    readonly iRegisterCount     : number;
+    readonly tRegisterCount     : number;
     readonly sRegisterCount     : number;
     readonly hashDigestSize     : number;
 
@@ -28,9 +25,8 @@ export class Serializer {
     // --------------------------------------------------------------------------------------------
     constructor(config: SerializerConfig, hashDigestSize: number) {
         this.fieldElementSize = config.field.elementSize;
-        this.stateWidth = config.stateWidth;
-        this.iRegisterCount = config.iRegisterCount;
-        this.sRegisterCount = config.sRegisterCount;
+        this.tRegisterCount = config.traceRegisterCount;
+        this.sRegisterCount = config.secretInputCount;
         this.hashDigestSize = hashDigestSize;
     }
 
@@ -69,10 +65,13 @@ export class Serializer {
             offset = utils.writeBigInt(value, buffer, offset, this.fieldElementSize);
         }
 
-        // trace shape
-        offset = buffer.writeUInt8(proof.traceShape.length, offset);
-        for (let level of proof.traceShape) {
-            offset = buffer.writeUInt32LE(level, offset);
+        // input shapes
+        offset = buffer.writeUInt8(proof.iShapes.length, offset);
+        for (let shape of proof.iShapes) {
+            offset = buffer.writeUInt8(shape.length, offset);
+            for (let level of shape) {
+                offset = buffer.writeUInt32LE(level, offset);
+            }
         }
 
         // return the buffer
@@ -118,11 +117,16 @@ export class Serializer {
             friRemainder[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
         }
 
-        // trace shape
-        const traceDepth = buffer.readUInt8(offset); offset += 1;
-        const traceShape = new Array<number>(traceDepth);
-        for (let i = 0; i < traceDepth; i++) {
-            traceShape[i] = buffer.readUInt32LE(offset); offset += 4;
+        // input shapes
+        const inputCount = buffer.readUInt8(offset); offset += 1;
+        const inputShapes = new Array<number[]>(inputCount);
+        for (let i = 0; i < inputCount; i++) {
+            let rank = buffer.readUInt8(offset); offset += 1;
+            inputShapes[i] = new Array<number>();
+
+            for (let j = 0; j < rank; j++) {
+                inputShapes[i][j] = buffer.readUInt32LE(offset); offset += 4;
+            }
         }
 
         // build and return the proof
@@ -135,13 +139,13 @@ export class Serializer {
                 components  : friComponents, 
                 remainder   : friRemainder
             },
-            traceShape      : traceShape
+            iShapes         : inputShapes
         };
     }
 
     // PRIVATE METHODS
     // --------------------------------------------------------------------------------------------
     private getValueCount(): number {
-        return this.stateWidth + this.sRegisterCount + this.iRegisterCount;
+        return this.tRegisterCount + this.sRegisterCount;
     }
 }

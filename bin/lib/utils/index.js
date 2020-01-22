@@ -11,6 +11,7 @@ var sizeof_1 = require("./sizeof");
 exports.sizeOf = sizeof_1.sizeOf;
 var Logger_1 = require("./Logger");
 exports.Logger = Logger_1.Logger;
+exports.noopLogger = Logger_1.noopLogger;
 exports.inline = inliners;
 // MATH
 // ================================================================================================

@@ -2,79 +2,105 @@ declare module '@guildofweavers/genstark' {
 
     // IMPORTS
     // --------------------------------------------------------------------------------------------
-    import { FiniteField } from '@guildofweavers/air-script';
-    import { BatchMerkleProof, HashAlgorithm } from '@guildofweavers/merkle';
+    import { AirSchema, FiniteField } from '@guildofweavers/air-assembly';
+    import { Hash, HashAlgorithm, BatchMerkleProof } from '@guildofweavers/merkle';
 
     // RE-EXPORTS
     // --------------------------------------------------------------------------------------------
     export { FiniteField, createPrimeField, Vector, Matrix } from '@guildofweavers/galois';
     export { MerkleTree, BatchMerkleProof, HashAlgorithm, createHash, Hash } from '@guildofweavers/merkle';
 
+    // PUBLIC FUNCTIONS
+    // --------------------------------------------------------------------------------------------
+
+    /**
+     * Creates an instance of STARK object based on the provided AirAssembly schema.
+     * @param schema AirAssembly schema from which the STARK object is to be built.
+     * @param component Name of the component from which to instantiate STARK. If omitted 'default` will be used.
+     * @param options Security and optimization options for STARK instance.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
+     */
+    export function instantiate(schema: AirSchema, component: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
+
+    /**
+     * Creates an instance of STARK object from the provided AirAssembly source code.
+     * @param source AirAssembly source code from which the STARK object is to be built.
+     * @param component Name of the component from which to instantiate STARK. If omitted 'default` will be used.
+     * @param options Security and optimization options for STARK instance.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
+     */
+    export function instantiate(source: Buffer, component: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
+
+    /**
+     * Creates an instance of STARK object from the specified AirAssembly file.
+     * @param path Path to a file containing AirAssembly source code from which the STARK object is to be built.
+     * @param component Name of the component from which to instantiate STARK. If omitted 'default` will be used.
+     * @param options Security and optimization options for STARK instance.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
+     */
+    export function instantiate(path: string, component: string, options?: Partial<StarkOptions>, logger?: Logger | null): Stark;
+
+    /**
+     * Creates an instance of STARK object from the provided AirScript source code.
+     * @param source AirScript source code from which the STARK object is to be built.
+     * @param options Security and optimization options for STARK instance.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
+     */
+    export function instantiateScript(source: Buffer, options?: Partial<StarkOptions>, logger?: Logger): Stark;
+
+    /**
+     * Creates an instance of STARK object from the specified AirAssembly file.
+     * @param path Path to a file containing AirScript source code from which the STARK object is to be built.
+     * @param component Name of the component from which to instantiate STARK. If omitted 'default` will be used.
+     * @param logger Optional logger; defaults to console logging; set to null to disable.
+     */
+    export function instantiateScript(path: string, options?: Partial<StarkOptions>, logger?: Logger): Stark;
+
     // STARK
     // --------------------------------------------------------------------------------------------
-    export interface SecurityOptions {
+    export interface StarkOptions extends SecurityOptions {
 
-        /** Execution trace extension factor; defaults to the smallest power of 2 greater than 2x of max constraint degree */
-        extensionFactor: number;
+        /** A flag indicating whether to use WebAssembly optimizations; defaults to true */
+        readonly wasm: boolean;
+    }
+
+    export interface SecurityOptions {
+        /**
+         * Execution trace extension factor; defaults to the smallest power of 2 greater than 2x
+         * of the highest constraint degree
+         */
+        readonly extensionFactor: number;
 
         /** Number of queries for the execution trace; defaults to 80 */
-        exeQueryCount: number;
+        readonly exeQueryCount: number;
 
         /** Number of queries for low degree proof; defaults to 40 */
-        friQueryCount: number;
+        readonly friQueryCount: number;
 
         /** Hash algorithm for Merkle trees; defaults to sha256 */
-        hashAlgorithm: HashAlgorithm;
+        readonly hashAlgorithm: HashAlgorithm;
     }
 
-    export interface OptimizationOptions {
-
-        /** Initial number of bytes to allocate for WASM optimization */
-        initialMemory: number;
-
-        /** Maximum number of bytes to allocate for WASM optimization */
-        maximumMemory: number;
-    }
-
-    export class Stark {
+    export interface Stark {
 
         /** Estimated security level of the STARK (experimental) */
         readonly securityLevel: number;
 
         /**
-         * Creates a STARK instance based on the provided parameters
-         * @param source AirScript source for the STARK
-         * @param security Security options for the STARK instance
-         * @param optimization A flag indicating whether WebAssembly-based optimization should be enabled
-         * @param logger Optional logger; defaults to console logging; set to null to disable
+         * Generate a proof of computation for this STARK.
+         * @param assertions Boundary constraints for the computation.
+         * @param inputs Values for initializing all declared input.
+         * @param seed Seed values for initializing execution trace.
          */
-        constructor(source: string, security?: Partial<SecurityOptions>, optimization?: boolean, logger?: Logger);
+        prove(assertions: Assertion[], inputs?: any[], seed?: bigint[]): StarkProof;
 
         /**
-         * Creates a STARK instance based on the provided parameters
-         * @param source AirScript source for the STARK
-         * @param security Security options for the STARK instance
-         * @param optimization WebAssembly optimization options
-         * @param logger Optional logger; defaults to console logging; set to null to disable
+         * Verifies a proof of computation for this STARK.
+         * @param assertions Boundary constraints for the computation.
+         * @param proof Proof of the computation.
+         * @param publicInputs Values for initializing declared public inputs.
          */
-        constructor(source: string, security?: Partial<SecurityOptions>, optimization?: Partial<OptimizationOptions>, logger?: Logger);
-
-        /**
-         * Generate a proof of computation for this STARK
-         * @param assertions Boundary constraints for the computation
-         * @param inputs TODO
-         * @param auxPublicInputs TODO
-         * @param auxSecretInputs TODO
-         */
-        prove(assertions: Assertion[], inputs: any[], auxPublicInputs?: bigint[][], auxSecretInputs?: bigint[][]): StarkProof;
-
-        /**
-         * Verifies a proof of computation for this STARK
-         * @param assertions Boundary constraints for the computation
-         * @param proof Proof of the computation
-         * @param auxPublicInputs TODO
-         */
-        verify(assertions: Assertion[], proof: StarkProof, auxPublicInputs?: bigint[][]): boolean;
+        verify(assertions: Assertion[], proof: StarkProof, publicInputs?: any[]): boolean;
 
         /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;
@@ -87,10 +113,10 @@ declare module '@guildofweavers/genstark' {
     }
 
     export interface StarkProof {
-        evRoot      : Buffer;
-        evProof     : BatchMerkleProof;
-        ldProof     : LowDegreeProof;
-        traceShape  : number[];
+        evRoot  : Buffer;
+        evProof : BatchMerkleProof;
+        ldProof : LowDegreeProof;
+        iShapes : number[][];
     }
 
     // CONSTRAINTS

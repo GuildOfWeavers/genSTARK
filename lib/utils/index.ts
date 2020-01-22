@@ -7,7 +7,7 @@ import * as inliners from './inliners';
 // ================================================================================================
 export * from './serialization';
 export { sizeOf } from './sizeof';
-export { Logger } from './Logger';
+export { Logger, noopLogger } from './Logger';
 export const inline = inliners;
 
 // MATH

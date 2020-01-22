@@ -11,8 +11,8 @@
         },
         {
             "label": "build",
-            "type": "gulp",
-            "task": "build",
+            "type": "npm",
+            "script": "build",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -20,20 +20,16 @@
             "presentation": {
                 "reveal": "silent"
             },
-            "problemMatcher": [
-                "$tsc"
-            ]
+            "problemMatcher": [ "$tsc" ]
         },
         {
             "label": "publish",
-            "type": "gulp",
-            "task": "publish",
+            "type": "npm",
+            "script": "publish",
             "presentation": {
                 "reveal": "always"
             },
-            "problemMatcher": [
-                "$tsc"
-            ]
+            "problemMatcher": [ "$tsc" ]
         }
     ]
 }

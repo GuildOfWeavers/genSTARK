@@ -1,7 +1,8 @@
 // IMPORTS
 // ================================================================================================
 import * as assert from 'assert';
-import { Stark } from '../../index';
+import { instantiateScript } from '../../index';
+import { Logger } from '../../lib/utils';
 
 // STARK DEFINITION
 // ================================================================================================
@@ -9,25 +10,28 @@ import { Stark } from '../../index';
 const steps = 2**13, result = 203257732n;
 //const steps = 2**17, result = 2391373091n;
 
-const fibStark = new Stark(`
+const fibStark = instantiateScript(Buffer.from(`
 define Fibonacci over prime field (2^32 - 3 * 2^25 + 1) {
 
+    secret input startValue: element[1];
+
     transition 2 registers {
-        for each ($i0) {
-            init [$i0, $i0];
+        for each (startValue) {
+            init { yield [startValue, startValue]; }
+
             for steps [1..${steps - 1}] {
                 a0 <- $r0 + $r1;
-                [a0, a0 + $r1];
+                yield [a0, a0 + $r1];
             }
         }
     }
 
     enforce 2 constraints {
         for all steps {
-            transition($r) = $n;
+            enforce transition($r) = $n;
         }
     }
-}`);
+}`), undefined, new Logger(false));
 
 // TESTING
 // ================================================================================================

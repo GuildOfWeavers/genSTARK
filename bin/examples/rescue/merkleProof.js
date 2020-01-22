@@ -1,10 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// IMPORTS
+// ================================================================================================
 const index_1 = require("../../index");
 const utils_1 = require("./utils");
-// STARK PARAMETERS
+const utils_2 = require("../../lib/utils");
+// RESCUE PARAMETERS
 // ================================================================================================
-const field = index_1.createPrimeField(2n ** 128n - 9n * 2n ** 32n + 1n);
+const modulus = 2n ** 128n - 9n * 2n ** 32n + 1n;
+const field = index_1.createPrimeField(modulus);
 const treeDepth = 8;
 const roundSteps = 32;
 const alpha = 3n;
@@ -32,103 +36,109 @@ const { roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
 // define security options for the STARK
-const securityOptions = {
+const options = {
     hashAlgorithm: 'blake2s256',
     extensionFactor: 16,
     exeQueryCount: 60,
-    friQueryCount: 24
+    friQueryCount: 24,
+    wasm: true
 };
-const merkleStark = new index_1.Stark(`
-define RescueMP over prime field (2^128 - 9 * 2^32 + 1) {
+const merkleStark = index_1.instantiateScript(Buffer.from(`
+define RescueMP over prime field (${modulus}) {
 
-    alpha: 3;
-    inv_alpha: 113427455640312821154458202464371168597;
+    const alpha: 3;
+    const inv_alpha: 113427455640312821154458202464371168597;
 
-    MDS: [
+    const mds: [
         [340282366920938463463374607393113505064, 340282366920938463463374607393113476633, 340282366920938463463374607393112623703, 340282366920938463463374607393088807273],
         [                                   1080,                                   42471,                                 1277640,                                35708310],
         [340282366920938463463374607393113505403, 340282366920938463463374607393113491273, 340282366920938463463374607393113076364, 340282366920938463463374607393101570233],
         [                                     40,                                    1210,                                   33880,                                  925771]
     ];
 
-    INV_MDS: [
+    const inv_mds: [
         [236997924285633886309140921207528337986, 247254910923297358352547052529406562002, 311342028444809266296393502237594936029, 126030506267014245727175780515967965110],
         [ 33069997328254894416993606273702832836,  59740111947936946229464514160137230831,  88480676416265968399408181712033476738, 124630167308491865219096049621346098829],
         [336618017400133662891528246258390023400, 144341202744775798260123226512082052891, 154884404066691444097361840554534567820,   4667796528407935026932436315406220930],
         [ 73878794827854483309086441046605817365, 229228508225866824084614421584601165863, 125857624914110248133585690282064031000,  84953896817024417490170340940393220925]
     ];
 
+    // define round constants for Rescue hash function
+    static roundConstants: [
+        cycle ${utils_2.inline.vector(roundConstants[0])},
+        cycle ${utils_2.inline.vector(roundConstants[1])},
+        cycle ${utils_2.inline.vector(roundConstants[2])},
+        cycle ${utils_2.inline.vector(roundConstants[3])},
+        cycle ${utils_2.inline.vector(roundConstants[4])},
+        cycle ${utils_2.inline.vector(roundConstants[5])},
+        cycle ${utils_2.inline.vector(roundConstants[6])},
+        cycle ${utils_2.inline.vector(roundConstants[7])}
+    ];
+
+    // declare inputs
+    secret input leaf       : element[1];       // leaf of the merkle branch
+    secret input node       : element[1][1];    // nodes in the merkle branch
+    public input indexBit   : boolean[1][1];    // binary representation of leaf position
+
     transition 8 registers {
-        for each ($i0, $i1) {
+        for each (leaf, node, indexBit) {
 
             // initialize state with first 2 node values
-            init [$i0, $i1, 0, 0, $i1, $i0, 0, 0];
+            init {
+                yield [leaf, node, 0, 0, node, leaf, 0, 0];
+            }
 
-            for each ($i1) {
+            for each (node, indexBit) {
 
                 // for each node, figure out which value advances to the next cycle
                 init {
-                    h <- $p0 ? $r4 : $r0;
-                    [h, $i1, 0, 0, $i1, h, 0, 0];
+                    h <- indexBit ? $r4 : $r0;
+                    yield [h, node, 0, 0, node, h, 0, 0];
                 }
 
                 // execute Rescue hash function computation for 31 steps
                 for steps [1..31] {
                     // compute hash(p, v)
-                    S1 <- MDS # $r[0..3]^alpha + $k[0..3];
-                    S1 <- MDS # (/S1)^(inv_alpha) + $k[4..7];
+                    S1 <- mds # $r[0..3]^alpha + roundConstants[0..3];
+                    S1 <- mds # (/S1)^(inv_alpha) + roundConstants[4..7];
     
                     // compute hash(v, p)
-                    S2 <- MDS # $r[4..7]^alpha + $k[0..3];
-                    S2 <- MDS # (/S2)^(inv_alpha) + $k[4..7];
+                    S2 <- mds # $r[4..7]^alpha + roundConstants[0..3];
+                    S2 <- mds # (/S2)^(inv_alpha) + roundConstants[4..7];
     
-                    [...S1, ...S2];
+                    yield [...S1, ...S2];
                 }
             }
         }
     }
 
     enforce 8 constraints {
-        for each ($i0, $i1) {
+        for each (leaf, node, indexBit) {
             init {
-                [$i0, $i1, 0, 0, $i1, $i0, 0, 0] = $n;
+                enforce [leaf, node, 0, 0, node, leaf, 0, 0] = $n;
             }
 
-            for each ($i1) {
+            for each (node, indexBit) {
                 init {
-                    h <- $p0 ? $r4 : $r0;
-                    [h, $i1, 0, 0, $i1, h, 0, 0] = $n;
+                    h <- indexBit ? $r4 : $r0;
+                    enforce [h, node, 0, 0, node, h, 0, 0] = $n;
                 }
 
                 for steps [1..31] {
                     // compute hash(p, v)
-                    S1 <- MDS # $r[0..3]^alpha + $k[0..3];
-                    N1 <- (INV_MDS # ($n[0..3] - $k[4..7]))^alpha;
+                    S1 <- mds # $r[0..3]^alpha + roundConstants[0..3];
+                    N1 <- (inv_mds # ($n[0..3] - roundConstants[4..7]))^alpha;
     
                     // compute hash(v, p)
-                    S2 <- MDS # $r[4..7]^alpha + $k[0..3];
-                    N2 <- (INV_MDS # ($n[4..7] - $k[4..7]))^alpha;
+                    S2 <- mds # $r[4..7]^alpha + roundConstants[0..3];
+                    N2 <- (inv_mds # ($n[4..7] - roundConstants[4..7]))^alpha;
     
-                    [...(S1 - N1), ...(S2 - N2)];
+                    enforce [...S1, ...S2] = [...N1, ...N2];
                 }
             }
         }
     }
-
-    using 9 readonly registers {
-        $p0: spread binary [...];   // binary representation of node index
-
-        // constants for Rescue hash function
-        $k0: repeat [${roundConstants[0].join(', ')}];
-        $k1: repeat [${roundConstants[1].join(', ')}];
-        $k2: repeat [${roundConstants[2].join(', ')}];
-        $k3: repeat [${roundConstants[3].join(', ')}];
-        $k4: repeat [${roundConstants[4].join(', ')}];
-        $k5: repeat [${roundConstants[5].join(', ')}];
-        $k6: repeat [${roundConstants[6].join(', ')}];
-        $k7: repeat [${roundConstants[7].join(', ')}];
-    }
-}`, securityOptions, true);
+}`), options, new utils_2.Logger(false));
 // TESTING
 // ================================================================================================
 // generate a random merkle tree
@@ -141,16 +151,18 @@ const proof = tree.prove(index);
 //console.log(MerkleTree.verify(tree.root, index, proof, hash));
 // set up inputs and assertions for the STARK
 const leaf = proof.shift();
-const binaryIndex = toBinaryArray(index, treeDepth);
-const initValues = [[leaf, proof]];
+const indexBits = toBinaryArray(index, treeDepth);
+indexBits.unshift(0n);
+indexBits.pop();
+const inputs = [[leaf], [proof], [indexBits]];
 const assertions = [
     { step: roundSteps * treeDepth - 1, register: 0, value: tree.root }
 ];
 // generate a proof
-const sProof = merkleStark.prove(assertions, initValues, [binaryIndex]);
+const sProof = merkleStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 // verify the proof
-merkleStark.verify(assertions, sProof, [binaryIndex]);
+merkleStark.verify(assertions, sProof, [[indexBits]]);
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(merkleStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
 console.log(`Security level: ${merkleStark.securityLevel}`);

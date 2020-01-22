@@ -5,7 +5,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const index_1 = require("../../index");
 const utils_1 = require("./utils");
 const utils_2 = require("../../lib/utils");
-// STARK PARAMETERS
+// POSEIDON PARAMETERS
 // ================================================================================================
 const modulus = 2n ** 128n - 9n * 2n ** 32n + 1n;
 const field = index_1.createPrimeField(modulus);
@@ -29,55 +29,61 @@ for (let i = 0; i < fRounds + pRounds; i++) {
 roundControls.push(0n);
 // STARK DEFINITION
 // ================================================================================================
-const securityOptions = {
+const options = {
     hashAlgorithm: 'blake2s256',
     extensionFactor: 16,
     exeQueryCount: 68,
-    friQueryCount: 24
+    friQueryCount: 24,
+    wasm: true
 };
-const poseidonStark = new index_1.Stark(`
+const poseidonStark = index_1.instantiateScript(Buffer.from(`
 define Poseidon6x128 over prime field (${modulus}) {
 
-    MDS: ${utils_2.inline.matrix(mds)};
+    const mds: ${utils_2.inline.matrix(mds)};
+
+    static roundConstants: [
+        cycle ${utils_2.inline.vector(roundConstants[0])},
+        cycle ${utils_2.inline.vector(roundConstants[1])},
+        cycle ${utils_2.inline.vector(roundConstants[2])},
+        cycle ${utils_2.inline.vector(roundConstants[3])},
+        cycle ${utils_2.inline.vector(roundConstants[4])},
+        cycle ${utils_2.inline.vector(roundConstants[5])}
+    ];
+
+    secret input value1: element[2];
+    secret input value2: element[2];
 
     transition 6 registers {
-        for each ($i0, $i1, $i2, $i3) {
+        for each (value1, value2) {
             
             // initialize the execution trace
-            init [$i0, $i1, $i2, $i3, 0, 0];
+            init {
+                yield [...value1, ...value2, 0, 0];
+            }
 
             for steps [1..4, 60..63] {
                 // full rounds
-                MDS # ($r + $k)^5;
+                yield mds # ($r + roundConstants)^5;
             }
 
             for steps [5..59] {
                 // partial rounds
-                v5 <- ($r5 + $k5)^5;
-                MDS # [...($r[0..4] + $k[0..4]), v5];
+                v5 <- ($r5 + roundConstants[5])^5;
+                yield mds # [...($r[0..4] + roundConstants[0..4]), v5];
             }
         }
     }
 
     enforce 6 constraints {
         for all steps {
-            transition($r) = $n;
+            enforce transition($r) = $n;
         }
     }
-
-    using 6 readonly registers {
-        $k0: repeat ${utils_2.inline.vector(roundConstants[0])};
-        $k1: repeat ${utils_2.inline.vector(roundConstants[1])};
-        $k2: repeat ${utils_2.inline.vector(roundConstants[2])};
-        $k3: repeat ${utils_2.inline.vector(roundConstants[3])};
-        $k4: repeat ${utils_2.inline.vector(roundConstants[4])};
-        $k5: repeat ${utils_2.inline.vector(roundConstants[5])};
-    }
-}`, securityOptions, true);
+}`), options, new utils_2.Logger(false));
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const inputs = [[1n, 2n, 3n, 4n]];
+const inputs = [[1n], [2n], [3n], [4n]];
 const assertions = [
     { step: steps - 1, register: 0, value: result[0] },
     { step: steps - 1, register: 1, value: result[1] },

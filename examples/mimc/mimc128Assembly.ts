@@ -2,18 +2,15 @@
 // ================================================================================================
 import * as assert from 'assert';
 import { StarkOptions } from '@guildofweavers/genstark';
-import { createPrimeField } from '@guildofweavers/galois';
+import { instantiate } from '../../index';
+import { Logger } from '../../lib/utils';
 import { prng } from '@guildofweavers/air-assembly';
-import { instantiateScript } from '../../index';
-import { Logger, inline } from '../../lib/utils';
 import { runMimc } from './utils';
 
 // MIMC PARAMETERS
 // ================================================================================================
-const modulus = 2n**256n - 351n * 2n**32n + 1n;
-const field = createPrimeField(modulus);
-const roundConstants = prng.sha256(Buffer.from('4d694d43', 'hex'), 64, field);
 const steps = 2**13;
+const constantCount = 64;
 const seed = 3n;
 
 // STARK DEFINITION
@@ -22,44 +19,41 @@ const seed = 3n;
 const options: StarkOptions = {
     hashAlgorithm   : 'blake2s256',
     extensionFactor : 16,
-    exeQueryCount   : 40,
+    exeQueryCount   : 48,
     friQueryCount   : 24,
     wasm            : true
 };
 
 // create the STARK for MiMC computation
-const mimcStark = instantiateScript(Buffer.from(`
-define MiMC over prime field (${modulus}) {
-
-    const alpha: 3;
-    
-    static roundConstant: cycle ${inline.vector(roundConstants)};
-
-    secret input startValue: element[1];
-
-    // transition function definition
-    transition 1 register {
-        for each (startValue) {
-            init { yield startValue; }
-
-            for steps [1..${steps - 1}] {
-                yield $r0^3 + roundConstant;
-            }
-        }
-    }
-
-    // transition constraint definition
-    enforce 1 constraint {
-        for all steps {
-            enforce transition($r) = $n;
-        }
-    }
-
-}`), options, new Logger(false));
+const mimcStark = instantiate(Buffer.from(`
+(module
+    (field prime 340282366920938463463374607393113505793)
+    (const $alpha scalar 3)
+    (function $mimcRound
+        (result vector 1)
+        (param $state vector 1) (param $roundKey scalar)
+        (add 
+            (exp (load.param $state) (load.const $alpha))
+            (load.param $roundKey)))
+    (export mimc
+        (registers 1) (constraints 1) (steps ${steps})
+        (static
+            (cycle (prng sha256 0x4d694d43 ${constantCount})))
+        (init
+            (param $seed vector 1)
+            (load.param $seed))
+        (transition
+            (call $mimcRound (load.trace 0) (get (load.static 0) 0)))
+        (evaluation
+            (sub
+                (load.trace 1)
+                (call $mimcRound (load.trace 0) (get (load.static 0) 0))))))`
+), 'mimc', options, new Logger(false));
 
 // TESTING
 // ================================================================================================
 // generate control values
+const roundConstants = prng.sha256(Buffer.from('4d694d43', 'hex'), 64, mimcStark.air.field);
 const controls = runMimc(mimcStark.air.field, steps, roundConstants, seed);
 
 // set up inputs and assertions
@@ -69,7 +63,7 @@ const assertions = [
 ];
 
 // prove that the assertions hold if we execute MiMC computation with given inputs
-let proof = mimcStark.prove(assertions, [[seed]]);
+let proof = mimcStark.prove(assertions, [], [seed]);
 console.log('-'.repeat(20));
 
 // serialize the proof

@@ -3,59 +3,68 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // IMPORTS
 // ================================================================================================
 const assert = require("assert");
+const galois_1 = require("@guildofweavers/galois");
+const air_assembly_1 = require("@guildofweavers/air-assembly");
 const index_1 = require("../../index");
 const utils_1 = require("../../lib/utils");
+const utils_2 = require("./utils");
+// MIMC PARAMETERS
+// ================================================================================================
+const modulus = 2n ** 128n - 9n * 2n ** 32n + 1n;
+const field = galois_1.createPrimeField(modulus);
+const roundConstants = air_assembly_1.prng.sha256(Buffer.from('4d694d43', 'hex'), 64, field);
+const steps = 2 ** 13;
+const seed = 3n;
 // STARK DEFINITION
 // ================================================================================================
-//const steps = 2**6, result = 285985527232340595584273426051826821023n;
-const steps = 2 ** 13, result = 147825736855841423522558179849475373187n;
-//const steps = 2**17, result = 258147208663839268890169448829281413476n;
-//const steps = 2**20, result = 329756792803476935518229231243182527856n;
-// define round constants
-const roundConstants = new Array(64);
-for (let i = 0; i < 64; i++) {
-    roundConstants[i] = (BigInt(i) ** 7n) ^ 42n;
-}
 // define security options for the STARK
-const securityOptions = {
+const options = {
     hashAlgorithm: 'blake2s256',
     extensionFactor: 16,
     exeQueryCount: 48,
-    friQueryCount: 24
+    friQueryCount: 24,
+    wasm: true
 };
 // create the STARK for MiMC computation
-const mimcStark = new index_1.Stark(`
-define MiMC over prime field (2^128 - 9 * 2^32 + 1) {
+const mimcStark = index_1.instantiateScript(Buffer.from(`
+define MiMC over prime field (${modulus}) {
 
+    const alpha: 3;
+    
+    static roundConstant: cycle ${utils_1.inline.vector(roundConstants)};
+
+    secret input startValue: element[1];
+
+    // transition function definition
     transition 1 register {
-        for each ($i0) {
-            init $i0;
+        for each (startValue) {
+            init { yield startValue; }
+
             for steps [1..${steps - 1}] {
-                $r0^3 + $k0;
+                yield $r0^3 + roundConstant;
             }
         }
     }
 
+    // transition constraint definition
     enforce 1 constraint {
         for all steps {
-            transition($r) = $n;
+            enforce transition($r) = $n;
         }
     }
 
-    using 1 readonly register {
-        $k0: repeat [${roundConstants.join(', ')}];
-    }
-}`, securityOptions, { initialMemory: 512 * 2 ** 20 }, new utils_1.Logger(false));
+}`), options, new utils_1.Logger(false));
 // TESTING
 // ================================================================================================
+// generate control values
+const controls = utils_2.runMimc(mimcStark.air.field, steps, roundConstants, seed);
 // set up inputs and assertions
-const inputs = [[3n]]; // we need to provide starting value for 1 register
 const assertions = [
-    { step: 0, register: 0, value: inputs[0][0] },
-    { step: steps - 1, register: 0, value: result } // value at last step is equal to result
+    { step: 0, register: 0, value: controls[0] },
+    { step: steps - 1, register: 0, value: controls[steps - 1] } // value at last step is equal to result
 ];
 // prove that the assertions hold if we execute MiMC computation with given inputs
-let proof = mimcStark.prove(assertions, inputs);
+let proof = mimcStark.prove(assertions, [[seed]]);
 console.log('-'.repeat(20));
 // serialize the proof
 let start = Date.now();

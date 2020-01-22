@@ -41,12 +41,15 @@ export function sizeOf(proof: StarkProof, fieldElementSize: number, hashDigestSi
     ldProof += ldRemainder;
     size += ldProof;
 
-    // trace shape
-    let traceShape = 1; // trace depth
-    traceShape += proof.traceShape.length * 4;
-    size += traceShape;
+    // input shapes
+    let inputShapes = 1; // input count
+    for (let i = 0; i < proof.iShapes.length; i++) {
+        inputShapes += 1; // rank
+        inputShapes += proof.iShapes[i].length * 4;
+    }
+    size += inputShapes;
 
-    return { evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, traceShape, total: size };
+    return { evProof, ldProof: { lcProof, levels: ldLevels, total: ldProof }, inputShapes, total: size };
 }
 
 export function sizeOfMerkleProof(proof: BatchMerkleProof) {

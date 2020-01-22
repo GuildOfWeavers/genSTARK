@@ -4,9 +4,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // ================================================================================================
 const index_1 = require("../../index");
 const utils_1 = require("./utils");
+const utils_2 = require("../../lib/utils");
 // STARK PARAMETERS
 // ================================================================================================
-const field = index_1.createPrimeField(2n ** 128n - 9n * 2n ** 32n + 1n);
+const modulus = 2n ** 128n - 9n * 2n ** 32n + 1n;
+const field = index_1.createPrimeField(modulus);
 const steps = 32;
 const alpha = 3n;
 const invAlpha = -113427455640312821154458202464371168597n;
@@ -32,66 +34,78 @@ const keyStates = rescue.unrollConstants();
 const { initialConstants, roundConstants } = rescue.groupConstants(keyStates);
 // STARK DEFINITION
 // ================================================================================================
-const rescueStark = new index_1.Stark(`
-define Rescue4x128 over prime field (2^128 - 9 * 2^32 + 1) {
+const options = {
+    hashAlgorithm: 'blake2s256',
+    extensionFactor: 16,
+    exeQueryCount: 68,
+    friQueryCount: 24,
+    wasm: true
+};
+const rescueStark = index_1.instantiateScript(Buffer.from(`
+define Rescue4x128 over prime field (${modulus}) {
 
-    alpha: 3;
-    inv_alpha: 113427455640312821154458202464371168597;
+    const alpha: 3;
+    const inv_alpha: 113427455640312821154458202464371168597;
 
-    MDS: [
+    const mds: [
         [340282366920938463463374607393113505064, 340282366920938463463374607393113476633, 340282366920938463463374607393112623703, 340282366920938463463374607393088807273],
         [                                   1080,                                   42471,                                 1277640,                                35708310],
         [340282366920938463463374607393113505403, 340282366920938463463374607393113491273, 340282366920938463463374607393113076364, 340282366920938463463374607393101570233],
         [                                     40,                                    1210,                                   33880,                                  925771]
     ];
 
-    INV_MDS: [
+    const inv_mds: [
         [236997924285633886309140921207528337986, 247254910923297358352547052529406562002, 311342028444809266296393502237594936029, 126030506267014245727175780515967965110],
         [ 33069997328254894416993606273702832836,  59740111947936946229464514160137230831,  88480676416265968399408181712033476738, 124630167308491865219096049621346098829],
         [336618017400133662891528246258390023400, 144341202744775798260123226512082052891, 154884404066691444097361840554534567820,   4667796528407935026932436315406220930],
         [ 73878794827854483309086441046605817365, 229228508225866824084614421584601165863, 125857624914110248133585690282064031000,  84953896817024417490170340940393220925]
     ];
 
+    static roundConstants: [
+        cycle ${utils_2.inline.vector(roundConstants[0])},
+        cycle ${utils_2.inline.vector(roundConstants[1])},
+        cycle ${utils_2.inline.vector(roundConstants[2])},
+        cycle ${utils_2.inline.vector(roundConstants[3])},
+        cycle ${utils_2.inline.vector(roundConstants[4])},
+        cycle ${utils_2.inline.vector(roundConstants[5])},
+        cycle ${utils_2.inline.vector(roundConstants[6])},
+        cycle ${utils_2.inline.vector(roundConstants[7])}
+    ];
+
+    secret input value1: element[2];
+    secret input value2: element[2];
+
     transition 4 registers {
-        for each ($i0, $i1, $i2, $i3) {
-            init [$i0, $i1, $i2, $i3];
+        for each (value1, value2) {
+            init {
+                yield [...value1, ...value2];
+            }
 
             for steps [1..31] {
-                S <- MDS # $r^alpha + $k[0..3];
-                MDS # (/S)^(inv_alpha) + $k[4..7];
+                S <- mds # $r^alpha + roundConstants[0..3];
+                yield mds # (/S)^(inv_alpha) + roundConstants[4..7];
             }
         }
     }
 
     enforce 4 constraints {
-        for each ($i0, $i1, $i2, $i3) {
+        for each (value1, value2) {
             init {
-                [$i0, $i1, $i2, $i3] = $n;
+                enforce [...value1, ...value2] = $n;
             }
 
             for steps [1..31] {
-                S <- MDS # $r^alpha + $k[0..3];
-                N <- (INV_MDS # ($n - $k[4..7]))^alpha;
-                S = N;
+                S <- mds # $r^alpha + roundConstants[0..3];
+                N <- (inv_mds # ($n - roundConstants[4..7]))^alpha;
+                enforce S = N;
             }
         }
     }
-
-    using 8 readonly registers {
-        $k0: repeat [${roundConstants[0].join(', ')}];
-        $k1: repeat [${roundConstants[1].join(', ')}];
-        $k2: repeat [${roundConstants[2].join(', ')}];
-        $k3: repeat [${roundConstants[3].join(', ')}];
-        $k4: repeat [${roundConstants[4].join(', ')}];
-        $k5: repeat [${roundConstants[5].join(', ')}];
-        $k6: repeat [${roundConstants[6].join(', ')}];
-        $k7: repeat [${roundConstants[7].join(', ')}];
-    }
-}`);
+}`), options, new utils_2.Logger(false));
 // TESTING
 // ================================================================================================
 // set up inputs and assertions
-const initValues = [buildInputs([42n, 43n])];
+const initValues = buildInputs([42n, 43n]);
 const assertions = [
     { step: steps - 1, register: 0, value: 302524937772545017647250309501879538110n },
     { step: steps - 1, register: 1, value: 205025454306577433144586673939030012640n },
@@ -126,10 +140,11 @@ function buildInputs(values) {
         }
         r[i] = sum;
     }
-    r[0] = field.add(r[0], initialConstants[4]);
-    r[1] = field.add(r[1], initialConstants[5]);
-    r[2] = field.add(r[2], initialConstants[6]);
-    r[3] = field.add(r[3], initialConstants[7]);
-    return r;
+    return [
+        [field.add(r[0], initialConstants[4])],
+        [field.add(r[1], initialConstants[5])],
+        [field.add(r[2], initialConstants[6])],
+        [field.add(r[3], initialConstants[7])]
+    ];
 }
 //# sourceMappingURL=hash4x128.js.map

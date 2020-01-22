@@ -9,9 +9,8 @@ class Serializer {
     // --------------------------------------------------------------------------------------------
     constructor(config, hashDigestSize) {
         this.fieldElementSize = config.field.elementSize;
-        this.stateWidth = config.stateWidth;
-        this.iRegisterCount = config.iRegisterCount;
-        this.sRegisterCount = config.sRegisterCount;
+        this.tRegisterCount = config.traceRegisterCount;
+        this.sRegisterCount = config.secretInputCount;
         this.hashDigestSize = hashDigestSize;
     }
     // PROOF SERIALIZER
@@ -42,10 +41,13 @@ class Serializer {
         for (let value of proof.ldProof.remainder) {
             offset = utils.writeBigInt(value, buffer, offset, this.fieldElementSize);
         }
-        // trace shape
-        offset = buffer.writeUInt8(proof.traceShape.length, offset);
-        for (let level of proof.traceShape) {
-            offset = buffer.writeUInt32LE(level, offset);
+        // input shapes
+        offset = buffer.writeUInt8(proof.iShapes.length, offset);
+        for (let shape of proof.iShapes) {
+            offset = buffer.writeUInt8(shape.length, offset);
+            for (let level of shape) {
+                offset = buffer.writeUInt32LE(level, offset);
+            }
         }
         // return the buffer
         return buffer;
@@ -85,13 +87,18 @@ class Serializer {
         for (let i = 0; i < friRemainderLength; i++, offset += this.fieldElementSize) {
             friRemainder[i] = utils.readBigInt(buffer, offset, this.fieldElementSize);
         }
-        // trace shape
-        const traceDepth = buffer.readUInt8(offset);
+        // input shapes
+        const inputCount = buffer.readUInt8(offset);
         offset += 1;
-        const traceShape = new Array(traceDepth);
-        for (let i = 0; i < traceDepth; i++) {
-            traceShape[i] = buffer.readUInt32LE(offset);
-            offset += 4;
+        const inputShapes = new Array(inputCount);
+        for (let i = 0; i < inputCount; i++) {
+            let rank = buffer.readUInt8(offset);
+            offset += 1;
+            inputShapes[i] = new Array();
+            for (let j = 0; j < rank; j++) {
+                inputShapes[i][j] = buffer.readUInt32LE(offset);
+                offset += 4;
+            }
         }
         // build and return the proof
         return {
@@ -103,13 +110,13 @@ class Serializer {
                 components: friComponents,
                 remainder: friRemainder
             },
-            traceShape: traceShape
+            iShapes: inputShapes
         };
     }
     // PRIVATE METHODS
     // --------------------------------------------------------------------------------------------
     getValueCount() {
-        return this.stateWidth + this.sRegisterCount + this.iRegisterCount;
+        return this.tRegisterCount + this.sRegisterCount;
     }
 }
 exports.Serializer = Serializer;
