@@ -5,7 +5,7 @@
       "name": "Launch",
       "type": "node",
       "request": "launch",
-      "program": "${workspaceRoot}/bin/examples/rescue/merkleProof.js",
+      "program": "${workspaceRoot}/bin/examples/mimc/mimc128.js",
       "cwd": "${workspaceRoot}/bin",
       "preLaunchTask": "build",
       "env": {
