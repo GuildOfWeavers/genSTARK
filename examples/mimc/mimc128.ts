@@ -5,7 +5,7 @@ import { StarkOptions } from '@guildofweavers/genstark';
 import { createPrimeField } from '@guildofweavers/galois';
 import { prng } from '@guildofweavers/air-assembly';
 import { instantiateScript } from '../../index';
-import { Logger, inline } from '../../lib/utils';
+import { Logger } from '../../lib/utils';
 import { runMimc } from './utils';
 
 // MIMC PARAMETERS
@@ -33,7 +33,7 @@ define MiMC over prime field (${modulus}) {
 
     const alpha: 3;
     
-    static roundConstant: cycle ${inline.vector(roundConstants)};
+    static roundConstant: cycle prng(sha256, 0x4d694d43, 64);
 
     secret input startValue: element[1];
 

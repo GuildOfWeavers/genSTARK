@@ -31,7 +31,7 @@ define MiMC over prime field (${modulus}) {
 
     const alpha: 3;
     
-    static roundConstant: cycle ${utils_1.inline.vector(roundConstants)};
+    static roundConstant: cycle prng(sha256, 0x4d694d43, 64);
 
     secret input startValue: element[1];
 
