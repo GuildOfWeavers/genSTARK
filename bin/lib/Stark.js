@@ -197,6 +197,12 @@ class Stark {
     }
     // UTILITIES
     // --------------------------------------------------------------------------------------------
+    generateExecutionTrace(inputs, seed) {
+        const context = this.air.initProvingContext(inputs, seed);
+        const dTrace = context.generateExecutionTrace();
+        const sTrace = context.generateStaticTrace();
+        return { dTrace, sTrace };
+    }
     sizeOf(proof) {
         const size = utils_1.sizeOf(proof, this.air.field.elementSize, this.hash.digestSize);
         return size.total;

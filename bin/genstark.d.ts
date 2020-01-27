@@ -2,6 +2,7 @@ declare module '@guildofweavers/genstark' {
 
     // IMPORTS
     // --------------------------------------------------------------------------------------------
+    import { Matrix } from '@guildofweavers/galois';
     import { AirSchema, FiniteField } from '@guildofweavers/air-assembly';
     import { Hash, HashAlgorithm, BatchMerkleProof } from '@guildofweavers/merkle';
 
@@ -101,6 +102,13 @@ declare module '@guildofweavers/genstark' {
          * @param publicInputs Values for initializing declared public inputs.
          */
         verify(assertions: Assertion[], proof: StarkProof, publicInputs?: any[]): boolean;
+
+        /**
+         * Generates execution trace tables for the computation.
+         * @param inputs Values for initializing all declared input.
+         * @param seed Seed values for initializing execution trace.
+         */
+        generateExecutionTrace(inputs?: any[], seed?: bigint[]): { dTrace: Matrix; sTrace: Matrix; };
 
         /** Returns the size in bytes for the provided proof */
         sizeOf(proof: StarkProof): number;

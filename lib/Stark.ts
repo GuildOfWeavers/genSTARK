@@ -248,6 +248,13 @@ export class Stark implements IStark {
 
     // UTILITIES
     // --------------------------------------------------------------------------------------------
+    generateExecutionTrace(inputs?: any[], seed?: bigint[]): { dTrace: Matrix, sTrace: Matrix } {
+        const context = this.air.initProvingContext(inputs, seed);
+        const dTrace = context.generateExecutionTrace();
+        const sTrace = context.generateStaticTrace();
+        return { dTrace, sTrace };
+    }
+
     sizeOf(proof: StarkProof): number {
         const size = sizeOf(proof, this.air.field.elementSize, this.hash.digestSize);
         return size.total;
