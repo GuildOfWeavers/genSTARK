@@ -3,7 +3,7 @@ declare module '@guildofweavers/genstark' {
     // IMPORTS
     // --------------------------------------------------------------------------------------------
     import { Matrix } from '@guildofweavers/galois';
-    import { AirSchema, FiniteField } from '@guildofweavers/air-assembly';
+    import { AirSchema, FiniteField, AirModule } from '@guildofweavers/air-assembly';
     import { Hash, HashAlgorithm, BatchMerkleProof } from '@guildofweavers/merkle';
 
     // RE-EXPORTS
@@ -83,6 +83,9 @@ declare module '@guildofweavers/genstark' {
     }
 
     export interface Stark {
+
+        /** AIR from which this STARK was built */
+        readonly air: AirModule;
 
         /** Estimated security level of the STARK (experimental) */
         readonly securityLevel: number;

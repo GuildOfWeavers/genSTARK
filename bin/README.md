@@ -245,4 +245,4 @@ Other STARK libraries:
 * [OpenZKP](https://github.com/0xProject/OpenZKP) from 0xProject.
 
 # License
-[MIT](/LICENSE) © 2019 Guild of Weavers
+[MIT](/LICENSE) © 2020 Guild of Weavers
