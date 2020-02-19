@@ -46,6 +46,36 @@ export function createHash(field: FiniteField, exp: bigint, rf: number, rp: numb
     }
 }
 
+export function createHash2(field: FiniteField, exp: bigint, rf: number, rp: number, stateWidth: number, rc: bigint[][]): HashFunction {
+    const m = stateWidth;
+    const mds = field.newMatrixFrom(getMdsMatrix(field, m));
+    const ark = rc.map(v => field.newVectorFrom(v));
+
+    return function(inputs: bigint[]) {
+        let stateValues: bigint[] = [];
+        assert(inputs.length < m);
+        assert(inputs.length > 0);
+        for (let i = 0; i < inputs.length; i++) stateValues[i] = inputs[i];
+        for (let i = inputs.length; i < m; i++) stateValues[i] = field.zero;
+    
+        let state = field.newVectorFrom(stateValues);
+        for (let i = 0; i < rf + rp; i++) {
+            state = field.addVectorElements(state, ark[i]);
+            
+            if ((i < rf / 2) || (i >= rf / 2 + rp)) {
+                state = field.expVectorElements(state, exp);
+            } else {
+                stateValues = state.toValues();
+                stateValues[m - 1] = field.exp(stateValues[m - 1], exp);
+                state = field.newVectorFrom(stateValues);
+            }
+    
+            state = field.mulMatrixByVector(mds, state);
+        }
+        return state.toValues().slice(0, 2);
+    }
+}
+
 export function getRoundConstants(field: FiniteField, width: number, rounds: number): bigint[][] {
     const result = new Array<bigint[]>(rounds);
     for (let i = 0, c = 0; i < rounds; i++) {
@@ -161,5 +191,48 @@ export class MerkleTree {
         }
 
         return root[0] === v[0] && root[1] === v[1];
+    }
+}
+
+export class MerkleTree2 {
+
+    readonly nodes: bigint[];
+
+    constructor(values: bigint[], hash: HashFunction) {
+        this.nodes = [...new Array(values.length), ...values];
+        for (let i = values.length - 1; i > 0; i--) {
+            this.nodes[i] = hash([this.nodes[i * 2], this.nodes[i * 2 + 1]])[0];
+        }
+    }
+
+    get root(): bigint {
+        return this.nodes[1];
+    }
+
+    prove(index: number): bigint[] {
+        index += Math.floor(this.nodes.length / 2);
+        const proof = [this.nodes[index]];
+        while (index > 1) {
+            proof.push(this.nodes[index ^ 1]);
+            index = index >> 1;
+        }
+        return proof;
+    }
+
+    static verify(root: bigint, index: number, proof: bigint[], hash: HashFunction): boolean {
+        index += 2**proof.length;
+
+        let v = proof[0];
+        for (let i = 1; i < proof.length; i++) {
+            if (index & 1) {
+                v = hash([proof[i], v])[0];
+            }
+            else {
+                v = hash([v, proof[i]])[0];
+            }
+            index = index >> 1;
+        }
+
+        return root === v;
     }
 }

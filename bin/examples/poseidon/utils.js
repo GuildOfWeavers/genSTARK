@@ -38,6 +38,35 @@ function createHash(field, exp, rf, rp, stateWidth) {
     };
 }
 exports.createHash = createHash;
+function createHash2(field, exp, rf, rp, stateWidth, rc) {
+    const m = stateWidth;
+    const mds = field.newMatrixFrom(getMdsMatrix(field, m));
+    const ark = rc.map(v => field.newVectorFrom(v));
+    return function (inputs) {
+        let stateValues = [];
+        assert(inputs.length < m);
+        assert(inputs.length > 0);
+        for (let i = 0; i < inputs.length; i++)
+            stateValues[i] = inputs[i];
+        for (let i = inputs.length; i < m; i++)
+            stateValues[i] = field.zero;
+        let state = field.newVectorFrom(stateValues);
+        for (let i = 0; i < rf + rp; i++) {
+            state = field.addVectorElements(state, ark[i]);
+            if ((i < rf / 2) || (i >= rf / 2 + rp)) {
+                state = field.expVectorElements(state, exp);
+            }
+            else {
+                stateValues = state.toValues();
+                stateValues[m - 1] = field.exp(stateValues[m - 1], exp);
+                state = field.newVectorFrom(stateValues);
+            }
+            state = field.mulMatrixByVector(mds, state);
+        }
+        return state.toValues().slice(0, 2);
+    };
+}
+exports.createHash2 = createHash2;
 function getRoundConstants(field, width, rounds) {
     const result = new Array(rounds);
     for (let i = 0, c = 0; i < rounds; i++) {
@@ -144,4 +173,39 @@ class MerkleTree {
     }
 }
 exports.MerkleTree = MerkleTree;
+class MerkleTree2 {
+    constructor(values, hash) {
+        this.nodes = [...new Array(values.length), ...values];
+        for (let i = values.length - 1; i > 0; i--) {
+            this.nodes[i] = hash([this.nodes[i * 2], this.nodes[i * 2 + 1]])[0];
+        }
+    }
+    get root() {
+        return this.nodes[1];
+    }
+    prove(index) {
+        index += Math.floor(this.nodes.length / 2);
+        const proof = [this.nodes[index]];
+        while (index > 1) {
+            proof.push(this.nodes[index ^ 1]);
+            index = index >> 1;
+        }
+        return proof;
+    }
+    static verify(root, index, proof, hash) {
+        index += 2 ** proof.length;
+        let v = proof[0];
+        for (let i = 1; i < proof.length; i++) {
+            if (index & 1) {
+                v = hash([proof[i], v])[0];
+            }
+            else {
+                v = hash([v, proof[i]])[0];
+            }
+            index = index >> 1;
+        }
+        return root === v;
+    }
+}
+exports.MerkleTree2 = MerkleTree2;
 //# sourceMappingURL=utils.js.map
