@@ -29,7 +29,8 @@ class Stark {
         // build security options
         const sOptions = buildSecurityOptions(options, this.air.extensionFactor);
         // instantiate Hash object
-        this.hash = merkle_1.createHash(sOptions.hashAlgorithm, this.air.field.isOptimized);
+        const useWasm = (wasmOptions !== undefined) || this.air.field.isOptimized;
+        this.hash = merkle_1.createHash(sOptions.hashAlgorithm, useWasm);
         if (!this.hash.isOptimized) {
             console.warn(`WARNING: WebAssembly optimization is not available for ${sOptions.hashAlgorithm} hash algorithm`);
         }

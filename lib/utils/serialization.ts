@@ -5,7 +5,7 @@ import { MAX_ARRAY_LENGTH } from './sizeof';
 
 // MODULE VARIABLES
 // ================================================================================================
-const MASK_64B = 0xFFFFFFFFFFFFFFFFn;
+const MASK_32B = 0xFFFFFFFFn;
 
 // INTERFACES
 // ================================================================================================
@@ -129,21 +129,19 @@ export function readMatrix(buffer: Buffer, offset: number, leafSize: number, nod
 // BIG INTEGERS
 // ================================================================================================
 export function readBigInt(buffer: Buffer, offset: number, elementSize: number): bigint {
-    const limbCount = elementSize >> 3;
+    const limbCount = elementSize >> 2;
     let value = 0n;
-    for (let i = 0n; i < limbCount; i++) {
-        value = (buffer.readBigUInt64LE(offset) << (64n * i)) | value;
-        offset += 8;
+    for (let i = 0n; i < limbCount; i++, offset += 4) {
+        value = (BigInt(buffer.readUInt32LE(offset)) << (32n * i)) | value;
     }
     return value;
 }
 
 export function writeBigInt(value: bigint, buffer: Buffer, offset: number, elementSize: number): number {
-    const limbCount = elementSize >> 3;
-    for (let i = 0; i < limbCount; i++) {
-        buffer.writeBigUInt64LE(value & MASK_64B, offset);
-        value = value >> 64n;
-        offset += 8;
+    const limbCount = elementSize >> 2;
+    for (let i = 0; i < limbCount; i++, offset += 4) {
+        buffer.writeUInt32LE(Number(value & MASK_32B), offset);
+        value = value >> 32n;
     }
     return offset;
 }

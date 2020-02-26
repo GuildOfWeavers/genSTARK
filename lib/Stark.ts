@@ -46,7 +46,8 @@ export class Stark implements IStark {
         const sOptions = buildSecurityOptions(options, this.air.extensionFactor);
 
         // instantiate Hash object
-        this.hash = createHash(sOptions.hashAlgorithm, this.air.field.isOptimized);
+        const useWasm = (wasmOptions !== undefined) || this.air.field.isOptimized;
+        this.hash = createHash(sOptions.hashAlgorithm, useWasm);
         if (!this.hash.isOptimized) {
             console.warn(`WARNING: WebAssembly optimization is not available for ${sOptions.hashAlgorithm} hash algorithm`);
         };

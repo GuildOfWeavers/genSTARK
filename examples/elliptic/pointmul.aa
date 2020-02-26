@@ -1,0 +1,158 @@
+(module
+    (field prime 26959946667150639794667015087019630673557916260026308143510066298881)
+    (const $a scalar 26959946667150639794667015087019630673557916260026308143510066298878)
+
+	(function $addPoints    # x = m^2 - xp - xq, y = m * (xp - x) - yp
+        (result vector 2)
+        (param $p vector 2) (param $q vector 2) (param $m scalar)
+        (local $x scalar) (local $y scalar)
+        (store.local $x
+            (sub
+                (exp (load.param $m) (scalar 2))
+                (add (get (load.param $p) 0) (get (load.param $q) 0))))
+        (store.local $y
+            (sub 
+                (mul
+                    (load.param $m)
+                    (sub (get (load.param $p) 0) (load.local $x)))
+                (get (load.param $p) 1)))
+        (vector (load.local $x) (load.local $y)))
+
+    (function $computeM1  # m1 = (3 * px^2) / (2 * py)
+        (result scalar)
+        (param $p vector 2)
+        (div
+            (add
+                (mul
+                    (scalar 3)
+                    (exp (get (load.param $p) 0) (scalar 2)))
+                (load.const $a))
+            (mul (scalar 2) (get (load.param $p) 1))))
+
+    (function $computeQ
+        (result vector 2)
+        (param $p vector 2) (param $q vector 2) (param $m scalar) (param $k vector 2)
+        (add
+            (mul        # copy previous value
+                (load.param $q)
+                (sub (scalar 1) (get (load.param $k) 0)))
+            (add
+                (mul    # copy p value
+                    (load.param $p)
+                    (mul (get (load.param $k) 0) (get (load.param $k) 1)))
+                    
+                (mul    # compute p + q
+                    (call $addPoints (load.param $p) (load.param $q) (load.param $m))
+                    (mul (get (load.param $k) 0) (sub (scalar 1) (get (load.param $k) 1)))))))
+
+    (function $initTrace
+        (result vector 8)
+        (param $p vector 2)
+        (vector
+            (load.param $p)
+            (scalar 0) (scalar 0)
+            (call $computeM1 (load.param $p))
+            (scalar 0) (scalar 1) (scalar 0)))
+
+	(export default
+		(registers 8) (constraints 8) (steps 1)
+		(static
+            (input secret (shift -1))
+            (input secret (peerof 0) (shift -1))
+            (input secret (childof 0) (steps 1))
+            (mask (input 0))
+            (cycle (power 2 256)))
+        (init
+			(call $initTrace (slice (load.static 0) 0 1)))
+        (transition
+            (local $p vector 2) (local $q vector 2) (local $m1 scalar) (local $m2 scalar) (local $is_q_null scalar)
+            (store.local $p
+                (call $addPoints
+                    (slice (load.trace 0) 0 1)
+                    (slice (load.trace 0) 0 1)
+                    (get (load.trace 0) 4)))
+            (store.local $q
+                (call $computeQ
+                    (slice (load.trace 0) 0 1)
+                    (slice (load.trace 0) 2 3)
+                    (get (load.trace 0) 5)
+                    (vector (get (load.static 0) 2) (get (load.trace 0) 6))))
+            (store.local $is_q_null
+                (mul
+                    (sub (scalar 1) (get (load.static 0) 2))
+                    (get (load.trace 0) 6)))
+            (store.local $m1
+                (call $computeM1 (load.local $p)))
+            (store.local $m2
+                (mul
+                    (div
+                        (sub (get (load.local $p) 1) (get (load.local $q) 1))
+                        (sub (get (load.local $p) 0) (get (load.local $q) 0)))
+                    (sub (scalar 1) (load.local $is_q_null))))
+            (add
+                (mul
+                    (call $initTrace (slice (load.static 0) 0 1))
+                    (get (load.static 0) 3))
+                (mul
+					(vector
+                        (load.local $p) (load.local $q) (load.local $m1) (load.local $m2) (load.local $is_q_null)
+                        (add
+                            (get (load.trace 0) 7)
+                            (mul (get (load.static 0) 2) (get (load.static 0) 4))))
+					(sub (scalar 1) (get (load.static 0) 3)))))
+        (evaluation
+            (local $p vector 2) (local $q vector 2) (local $m1_check scalar) (local $m2_check scalar) (local $is_q_null scalar)
+            (store.local $p
+                (call $addPoints
+                    (slice (load.trace 0) 0 1)
+                    (slice (load.trace 0) 0 1)
+                    (get (load.trace 0) 4)))
+            (store.local $q
+                (call $computeQ
+                    (slice (load.trace 0) 0 1)
+                    (slice (load.trace 0) 2 3)
+                    (get (load.trace 0) 5)
+                    (vector (get (load.static 0) 2) (get (load.trace 0) 6))))
+            (store.local $is_q_null
+                (mul
+                    (sub (scalar 1) (get (load.static 0) 2))
+                    (get (load.trace 0) 6)))
+            (store.local $m1_check
+                (sub    # (3 * px^2 + a) - 2 * py * m1
+                    (add
+                        (mul
+                            (scalar 3)
+                            (exp (get (load.trace 0) 0) (scalar 2)))
+                        (load.const $a))
+                    (mul
+                        (mul (scalar 2) (get (load.trace 0) 1))
+                        (get (load.trace 0) 4))))
+            (store.local $m2_check
+                (mul 
+                    (sub    # (py - qy) - (px - qx) * m2
+                        (sub (get (load.trace 0) 1) (get (load.trace 0) 3))
+                        (mul
+                            (sub (get (load.trace 0) 0) (get (load.trace 0) 2))
+                            (get (load.trace 0) 5)))
+                    (sub (scalar 1) (get (load.trace 0) 6))))
+            (sub
+                (vector 
+                    (slice (load.trace 1) 0 3) (scalar 0) (scalar 0) (slice (load.trace 1) 6 7))
+                (add
+                    (mul    # new inputs
+                        (vector
+                            (slice (load.static 0) 0 1) (scalar 0) (scalar 0) (load.local $m1_check) (load.local $m2_check) (scalar 1) (scalar 0))
+                        (get (load.static 0) 3))
+                    (mul    # regular transition
+                        (vector
+                            (load.local $p) (load.local $q) (load.local $m1_check) (load.local $m2_check) (load.local $is_q_null)
+                            (add
+                                (get (load.trace 0) 7)
+                                (mul (get (load.static 0) 2) (get (load.static 0) 4))))
+                        (sub (scalar 1) (get (load.static 0) 3))
+                    )
+                )
+            )
+        )   
+    )
+)
