@@ -22,18 +22,18 @@ const ecStark = index_1.instantiate('./examples/elliptic/pointmul.aa', 'default'
 const inputs = [
     [19277929113566293071110308034699488026831934219452440156649784352033n],
     [19926808758034470970197974370888749184205991990603949537637343198772n],
-    [toBits(21628546220445634706341881427918508772248629391536891476641575405363n)]
+    [toBits(21628546220445634706341881427918508772248629391536891476641575405363n)] // value to multiply by
 ];
 const controls = [
     5326626235735428056996404471396244610891648579045949976641038973984n,
-    6753729428472267765045584530315486521937702623726344079323769311058n
+    6753729428472267765045584530315486521937702623726344079323769311058n // expected y coordinate
 ];
 // set up inputs and assertions
 const assertions = [
     { step: 255, register: 2, value: controls[0] },
     { step: 255, register: 3, value: controls[1] }
 ];
-// prove that the assertions hold if we execute MiMC computation with given inputs
+// prove that the assertions hold if we execute multiplication with given inputs
 let proof = ecStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 // serialize the proof
@@ -44,7 +44,7 @@ assert(buf.byteLength === ecStark.sizeOf(proof));
 console.log('-'.repeat(20));
 // deserialize the proof to make sure everything serialized correctly
 start = Date.now();
-//proof = ecStark.parse(buf);
+proof = ecStark.parse(buf);
 console.log(`Proof parsed in ${Date.now() - start} ms`);
 console.log('-'.repeat(20));
 // verify the proof
