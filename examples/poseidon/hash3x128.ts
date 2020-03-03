@@ -97,4 +97,4 @@ console.log('-'.repeat(20));
 poseidonStark.verify(assertions, proof);
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(poseidonStark.sizeOf(proof) / 1024 * 100) / 100} KB`);
-console.log(`Security level: ${poseidonStark.securityLevel}`)
+console.log(`Security level: ${poseidonStark.securityLevel}`);
