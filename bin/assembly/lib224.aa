@@ -1,0 +1,404 @@
+(module
+    # modulus = 2^224 - 2^96 + 1
+    (field prime 26959946667150639794667015087019630673557916260026308143510066298881)
+
+    # elliptic curve constant
+    (const $a scalar 26959946667150639794667015087019630673557916260026308143510066298878)
+
+    # MDS matrix for Poseidon hash function
+    (const $mds matrix
+        (10008242661848396561239390234674179205368613625200051069729988268390 9185485104865875859138105757221792016506107743032910484553683820527 13022115361163578305030570201821707355852025945355679498341734719229)
+        (16713671886491979986124218739510375851266164236167090939379707559363 6297058756837203650911510387243124482364311079232836613813757262194  9703880437758597963751121827371255747687161183939416984217938944391)
+        ( 9528240692195379674131243771445039054419001347578518495333298828602 5855344777004640210384918417896799913056422502669197740330508636122 10933989424836635492481388167692471478355813503558543008871486397534))
+
+    # add two points on elliptic curve as x = m^2 - xp - xq, y = m * (xp - x) - yp
+	(function $addPoints
+        (result vector 2)
+        (param $p vector 2) (param $q vector 2) (param $m scalar)
+        (local $x scalar) (local $y scalar)
+        (store.local $x
+            (sub
+                (exp (load.param $m) (scalar 2))
+                (add (get (load.param $p) 0) (get (load.param $q) 0))))
+        (store.local $y
+            (sub 
+                (mul
+                    (load.param $m)
+                    (sub (get (load.param $p) 0) (load.local $x)))
+                (get (load.param $p) 1)))
+        (vector (load.local $x) (load.local $y)))
+
+    # compute slope for point doubling as m1 = (3 * px^2) / (2 * py)
+    (function $computeM1
+        (result scalar)
+        (param $p vector 2)
+        (div
+            (add
+                (mul
+                    (scalar 3)
+                    (exp (get (load.param $p) 0) (scalar 2)))
+                (load.const $a))
+            (mul (scalar 2) (get (load.param $p) 1))))
+
+    (function $computeQ
+        (result vector 2)
+        (param $p vector 2) (param $q vector 2) (param $m scalar) (param $k vector 2)
+        (add
+            (mul        # copy previous value
+                (load.param $q)
+                (sub (scalar 1) (get (load.param $k) 0)))
+            (add
+                (mul    # copy p value
+                    (load.param $p)
+                    (mul (get (load.param $k) 0) (get (load.param $k) 1)))
+                    
+                (mul    # compute p + q
+                    (call $addPoints (load.param $p) (load.param $q) (load.param $m))
+                    (mul (get (load.param $k) 0) (sub (scalar 1) (get (load.param $k) 1)))))))
+
+    (function $initSchnorrTrace
+        (result vector 14)
+        (param $g vector 2) (param $p vector 2) (param $r vector 2)
+        (vector
+            (load.param $g)
+            (scalar 0) (scalar 0)
+            (call $computeM1 (load.param $g))
+            (scalar 0) (scalar 1)
+            #####
+            (load.param $p)
+            (load.param $r)
+            (call $computeM1 (load.param $p))
+            (div
+                (sub (get (load.param $p) 1) (get (load.param $r) 1))
+                (sub (get (load.param $p) 0) (get (load.param $r) 0))) 
+            (scalar 0)))
+
+    # execute one round of Poseidon hash function
+    (function $poseidonRound
+        (result vector 3)
+        (param $state vector 3) (param $roundKeys vector 3) (param $isFullRound scalar)
+        (local $fullRound vector 3) (local $partRound vector 3)
+        (store.local $fullRound
+            (prod
+                (load.const $mds)
+                (exp
+                    (add (load.param $state) (load.param $roundKeys))
+                    (scalar 5))))
+        (store.local $partRound
+            (prod
+                (load.const $mds)
+                (vector
+                    (add 
+                        (slice (load.param $state) 0 1)
+                        (slice (load.param $roundKeys) 0 1))
+                    (exp
+                        (add (get (load.param $state) 2) (get (load.param $roundKeys) 2))
+                        (scalar 5)))))
+        (add
+            (mul (load.local $fullRound) (load.param $isFullRound))
+            (mul (load.local $partRound) (sub (scalar 1)  (load.param $isFullRound)))))
+
+    # initializer for Merkle root computation
+    (function $initMerkleHash
+        (result vector 6)
+        (param $p scalar) (param $v scalar)
+        (vector
+            (load.param $p) (load.param $v) (scalar 0)
+            (load.param $v) (load.param $p) (scalar 0)))
+
+    # Schnorr signature verification
+	(export schnorr
+		(registers 14) (constraints 18) (steps 256)
+		(static
+            (input secret (shift -1))               # 0: Gx
+            (input secret (peerof 0) (shift -1))    # 1: Gy
+            (input secret (childof 0) (steps 1))    # 2: s bits
+            (input secret (peerof 0) (shift -1))    # 3: Px
+            (input secret (peerof 0) (shift -1))    # 4: Py
+            (input secret (childof 0) (steps 1))    # 5: h bits
+            (input secret (peerof 0) (shift -1))    # 6: Rx
+            (input secret (peerof 0) (shift -1))    # 7: Ry
+            (mask (input 0))
+            (cycle (power 2 256)))
+        (init
+			(call $initSchnorrTrace 
+                (slice (load.static 0) 0 1)         # G
+                (slice (load.static 0) 3 4)         # P
+                (slice (load.static 0) 6 7)))       # R
+
+        (transition
+            (local $p1 vector 2) (local $q1 vector 2) (local $mp1 scalar) (local $mq1 scalar) (local $is_q1_null scalar)
+            (local $p2 vector 2) (local $q2 vector 2) (local $mp2 scalar) (local $mq2 scalar)
+
+            (store.local $p1
+                (call $addPoints
+                    (slice (load.trace 0) 0 1)
+                    (slice (load.trace 0) 0 1)
+                    (get (load.trace 0) 4)))
+            (store.local $p2
+                (call $addPoints
+                    (slice (load.trace 0) 7 8)
+                    (slice (load.trace 0) 7 8)
+                    (get (load.trace 0) 11)))
+
+            (store.local $q1
+                (call $computeQ
+                    (slice (load.trace 0) 0 1)
+                    (slice (load.trace 0) 2 3)
+                    (get (load.trace 0) 5)
+                    (vector (get (load.static 0) 2) (get (load.trace 0) 6))))
+            (store.local $q2
+                (call $computeQ
+                    (slice (load.trace 0) 7 8)
+                    (slice (load.trace 0) 9 10)
+                    (get (load.trace 0) 12)
+                    (vector (get (load.static 0) 5) (scalar 0))))
+
+            (store.local $is_q1_null
+                (mul
+                    (sub (scalar 1) (get (load.static 0) 2))
+                    (get (load.trace 0) 6)))
+
+            (store.local $mp1
+                (call $computeM1 (load.local $p1)))
+            (store.local $mp2
+                (call $computeM1 (load.local $p2)))
+
+            (store.local $mq1
+                (mul
+                    (div
+                        (sub (get (load.local $p1) 1) (get (load.local $q1) 1))
+                        (sub (get (load.local $p1) 0) (get (load.local $q1) 0)))
+                    (sub (scalar 1) (load.local $is_q1_null))))
+            (store.local $mq2
+                (div
+                    (sub (get (load.local $p2) 1) (get (load.local $q2) 1))
+                    (sub (get (load.local $p2) 0) (get (load.local $q2) 0))))
+
+            (add
+                (mul
+                    (call $initSchnorrTrace 
+                        (slice (load.static 0) 0 1)     # G
+                        (slice (load.static 0) 3 4)     # P
+                        (slice (load.static 0) 6 7))    # R
+                    (get (load.static 0) 8))
+                (mul
+					(vector
+                        (load.local $p1) (load.local $q1) (load.local $mp1) (load.local $mq1) (load.local $is_q1_null)
+                        (load.local $p2) (load.local $q2) (load.local $mp2) (load.local $mq2)
+                        (add
+                            (get (load.trace 0) 13)
+                            (mul (get (load.static 0) 5) (get (load.static 0) 9))))
+					(sub (scalar 1) (get (load.static 0) 8)))))
+
+        (evaluation
+            (local $p1 vector 2) (local $q1 vector 2) (local $mp1_check scalar) (local $mq1_check scalar) (local $is_q1_null scalar)
+            (local $p2 vector 2) (local $q2 vector 2) (local $mp2_check scalar) (local $mq2_check scalar)
+
+            (store.local $p1
+                (call $addPoints
+                    (slice (load.trace 0) 0 1)
+                    (slice (load.trace 0) 0 1)
+                    (get (load.trace 0) 4)))
+            (store.local $p2
+                (call $addPoints
+                    (slice (load.trace 0) 7 8)
+                    (slice (load.trace 0) 7 8)
+                    (get (load.trace 0) 11)))
+
+            (store.local $q1
+                (call $computeQ
+                    (slice (load.trace 0) 0 1)
+                    (slice (load.trace 0) 2 3)
+                    (get (load.trace 0) 5)
+                    (vector (get (load.static 0) 2) (get (load.trace 0) 6))))
+            (store.local $q2
+                (call $computeQ
+                    (slice (load.trace 0) 7 8)
+                    (slice (load.trace 0) 9 10)
+                    (get (load.trace 0) 12)
+                    (vector (get (load.static 0) 5) (scalar 0))))
+
+            (store.local $is_q1_null
+                (mul
+                    (sub (scalar 1) (get (load.static 0) 2))
+                    (get (load.trace 0) 6)))
+
+            (store.local $mp1_check
+                (sub    # (3 * p1x^2 + a) - 2 * p1y * mp1
+                    (add
+                        (mul
+                            (scalar 3)
+                            (exp (get (load.trace 0) 0) (scalar 2)))
+                        (load.const $a))
+                    (mul
+                        (mul (scalar 2) (get (load.trace 0) 1))
+                        (get (load.trace 0) 4))))
+
+            (store.local $mp2_check
+                (sub    # (3 * p2x^2 + a) - 2 * p2y * mp2
+                    (add
+                        (mul
+                            (scalar 3)
+                            (exp (get (load.trace 0) 7) (scalar 2)))
+                        (load.const $a))
+                    (mul
+                        (mul (scalar 2) (get (load.trace 0) 8))
+                        (get (load.trace 0) 11))))
+
+            (store.local $mq1_check
+                (mul 
+                    (sub    # (p1y - q1y) - (p1x - q1x) * mq1
+                        (sub (get (load.trace 0) 1) (get (load.trace 0) 3))
+                        (mul
+                            (sub (get (load.trace 0) 0) (get (load.trace 0) 2))
+                            (get (load.trace 0) 5)))
+                    (sub (scalar 1) (get (load.trace 0) 6))))
+
+            (store.local $mq2_check
+                (sub    # (p2y - q2y) - (p2x - q2x) * mq2
+                    (sub (get (load.trace 0) 8) (get (load.trace 0) 10))
+                    (mul
+                        (sub (get (load.trace 0) 7) (get (load.trace 0) 9))
+                        (get (load.trace 0) 12))))
+
+            (sub
+                (vector 
+                    (slice (load.trace 1) 0 3) (scalar 0) (scalar 0) (get (load.trace 1) 6)
+                    (slice (load.trace 1) 7 10) (scalar 0) (scalar 0) (get (load.trace 1) 13)
+                    (sub (exp (get (load.static 0) 2) (scalar 2)) (get (load.static 0) 2))   # s bits are binary
+                    (sub (exp (get (load.static 0) 5) (scalar 2)) (get (load.static 0) 5))   # h bits are binary
+                    (scalar 0) (scalar 0))
+                (add
+                    (mul    # new inputs
+                        (vector
+                            (slice (load.static 0) 0 1) (scalar 0) (scalar 0) (load.local $mp1_check) (load.local $mq1_check) (scalar 1)
+                            (slice (load.static 0) 3 4) (slice (load.static 0) 6 7) (load.local $mp2_check) (load.local $mq2_check) (scalar 0)
+                            (scalar 0) (scalar 0)
+                            (sub (slice (load.trace 0) 2 3) (slice (load.trace 0) 9 10)))
+                        (get (load.static 0) 8))
+                    (mul    # regular transition
+                        (vector
+                            (load.local $p1) (load.local $q1) (load.local $mp1_check) (load.local $mq1_check) (load.local $is_q1_null)
+                            (load.local $p2) (load.local $q2) (load.local $mp2_check) (load.local $mq2_check)
+                            (add
+                                (get (load.trace 0) 13)
+                                (mul (get (load.static 0) 5) (get (load.static 0) 9)))
+                            (scalar 0) (scalar 0) (scalar 0) (scalar 0))
+                        (sub (scalar 1) (get (load.static 0) 8))
+                    )
+                )
+            )
+        )   
+    )
+
+    # Poseidon hash function
+    (export ComputePoseidonHash
+        (registers 3) (constraints 3) (steps 64)
+        (static
+            (input secret (steps 64) (shift -1))
+            (input secret (steps 64) (shift -1))
+            (mask (input 0))
+            (cycle 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0)
+            (cycle (prng sha256 0x486164657331 64))
+            (cycle (prng sha256 0x486164657332 64))
+            (cycle (prng sha256 0x486164657333 64)))
+        (init
+            (vector (slice (load.static 0) 0 1) (scalar 0)))
+        (transition
+            (local vector 3)
+            (store.local 0
+                (call $poseidonRound (load.trace 0) (slice (load.static 0) 4 6) (get (load.static 0) 3)))
+            (add
+                (vector (slice (load.static 0) 0 1) (scalar 0))
+                (mul
+                    (load.local 0)
+                    (sub (scalar 1) (get (load.static 0) 2)) )))
+        (evaluation
+            (local vector 3)
+            (store.local 0
+                (call $poseidonRound (load.trace 0) (slice (load.static 0) 4 6) (get (load.static 0) 3)))
+            (sub
+                (load.trace 1)
+                (add
+                    (vector (slice (load.static 0) 0 1) (scalar 0))
+                    (mul
+                        (load.local 0)
+                        (sub (scalar 1) (get (load.static 0) 2))))))
+    )
+
+    # Merkle proof verification
+    (export BuildMerkleRoot
+        (registers 6) (constraints 6) (steps 64)
+        (static
+            (input secret (shift -1))               # 0: leaf
+            (input secret (childof 0) (steps 64))   # 1: nodes
+            (input public (childof 0) (steps 64))   # 2: index bits
+            (mask (input 0))
+            (mask (input 1))
+            (cycle 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0)
+            (cycle (prng sha256 0x486164657331 64))
+            (cycle (prng sha256 0x486164657332 64))
+            (cycle (prng sha256 0x486164657333 64))
+        )
+        (init
+            (call $initMerkleHash (get (load.static 0) 0) (get (load.static 0) 1)))
+        (transition
+            (local $h scalar) (local $h1 vector 3) (local $h2 vector 3)
+            (store.local $h
+                (add
+                    (mul (get (load.static 0) 2) (get (load.trace 0) 3))
+                    (mul 
+                        (sub (scalar 1) (get (load.static 0) 2))
+                        (get (load.static 0) 0))))
+            (store.local $h1
+                (call $poseidonRound
+                    (slice (load.trace 0) 0 2) (slice (load.static 0) 6 8) (get (load.static 0) 5)))
+            (store.local $h2
+                (call $poseidonRound
+                    (slice (load.trace 0) 3 5) (slice (load.static 0) 6 8) (get (load.static 0) 5)))
+            (add
+                (call $initMerkleHash (get (load.static 0) 0) (get (load.static 0) 1))
+                (add
+                    (mul
+                        (call $initMerkleHash (load.local $h) (get (load.static 0) 1))
+                        (mul (sub (scalar 1) (get (load.static 0) 3)) (get (load.static 0) 4)))
+                    (mul
+                        (vector (load.local $h1) (load.local $h2))
+                        (mul
+                            (sub (scalar 1) (get (load.static 0) 3))
+                            (sub (scalar 1) (get (load.static 0) 4))))))
+        )
+        (evaluation
+            (local $h scalar) (local $h1 vector 3) (local $h2 vector 3)
+            (store.local $h
+                (add
+                    (mul (get (load.static 0) 2) (get (load.trace 0) 3))
+                    (mul 
+                        (sub (scalar 1) (get (load.static 0) 2))
+                        (get (load.static 0) 0))))
+            (store.local $h1
+                (call $poseidonRound
+                    (slice (load.trace 0) 0 2) (slice (load.static 0) 6 8) (get (load.static 0) 5)))
+            (store.local $h2
+                (call $poseidonRound
+                    (slice (load.trace 0) 3 5) (slice (load.static 0) 6 8) (get (load.static 0) 5)))
+            (sub
+                (load.trace 1)
+                (add
+                    (call $initMerkleHash (get (load.static 0) 0) (get (load.static 0) 1))
+                    (add
+                        (mul
+                            (call $initMerkleHash (load.local $h) (get (load.static 0) 1))
+                            (mul (sub (scalar 1) (get (load.static 0) 3)) (get (load.static 0) 4)))
+                        (mul
+                            (vector (load.local $h1) (load.local $h2))
+                            (mul
+                                (sub (scalar 1) (get (load.static 0) 3))
+                                (sub (scalar 1) (get (load.static 0) 4)))))))
+        )
+    )
+
+    # TODO: Merkle tree update verification
+
+)
