@@ -135,7 +135,7 @@ function testMerkleUpdate() {
     // put old leaf into register 0, new leaf into register 1, nodes into registers 2, and indexBits into register 3
     const oldLeaf = proof1.shift()!;
     const newLeaf = proof2.shift()!
-    const inputs = [ [oldLeaf], [newLeaf], [proof1], [indexBits]];
+    const inputs = [ [oldLeaf], [newLeaf], [proof1], [indexBits] ];
 
     // set up assertions for the STARK
     const assertions: Assertion[] = [
@@ -148,7 +148,7 @@ function testMerkleUpdate() {
     console.log('-'.repeat(20));
 
     // verify the proof
-    transStark.verify(assertions, sProof, [[indexBits]]);
+    transStark.verify(assertions, sProof);
     console.log('-'.repeat(20));
     console.log(`Proof size: ${Math.round(transStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
     console.log(`Security level: ${transStark.securityLevel}`);

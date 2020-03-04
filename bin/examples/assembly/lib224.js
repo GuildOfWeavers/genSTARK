@@ -116,7 +116,7 @@ function testMerkleUpdate() {
     const sProof = transStark.prove(assertions, inputs);
     console.log('-'.repeat(20));
     // verify the proof
-    transStark.verify(assertions, sProof, [[indexBits]]);
+    transStark.verify(assertions, sProof);
     console.log('-'.repeat(20));
     console.log(`Proof size: ${Math.round(transStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
     console.log(`Security level: ${transStark.securityLevel}`);
