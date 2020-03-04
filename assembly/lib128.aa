@@ -150,7 +150,7 @@
         (registers 24) (constraints 25) (steps 64)
         (static
             (input secret (shift -1))                           # 0: oldLeaf _1
-            (input secret (peerof 0) (shift -1))                           # 1: oldLeaf _2
+            (input secret (peerof 0) (shift -1))                # 1: oldLeaf _2
             (input secret (peerof 0) (shift -1))                # 2: newLeaf _1
             (input secret (peerof 0) (shift -1))                # 3: newLeaf _2
             (input secret (childof 0) (steps 64) (shift -1))    # 4: nodes   _1

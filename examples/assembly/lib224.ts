@@ -37,8 +37,9 @@ const options: StarkOptions = {
 const hashStark = instantiate('./assembly/lib224.aa', 'ComputePoseidonHash', options, new Logger(false));
 const merkleStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleRoot', options, new Logger(false));
 const updateStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleUpdate', options, new Logger(false));
+const sigStark = instantiate('./assembly/lib224.aa', 'VerifySchnorrSignature', options, new Logger(false));
 
-testMerkleUpdate();
+testSchnorrSignature();
 
 // TEST FUNCTIONS
 // ================================================================================================
@@ -154,6 +155,56 @@ function testMerkleUpdate() {
     console.log(`Security level: ${updateStark.securityLevel}`);
 }
 
+function testSchnorrSignature() {
+
+    const g = [19277929113566293071110308034699488026831934219452440156649784352033n, 19926808758034470970197974370888749184205991990603949537637343198772n];
+    const p = [24313447595084304058594233432514534662288062665585856194673052057742n, 11283561012092599727291782123823281550391964133479792543258386661577n];
+    const r = [24205906543396144211665254343088405371302546890229844964400088231402n, 14288195710129182954662708611241591530837581261860973703071318732478n];
+    const s = 4985319172797574202062022188522117996928464993099991051165884930508n;
+    const h = 22415580945459993343509530426358128444740520478775315096153588998695n;
+
+    const inputs = [
+        [g[0]], [g[1]],
+        [toBits(s)],
+        [p[0]], [p[1]],
+        [toBits(h)],
+        [r[0]], [r[1]]
+    ];
+
+    const assertions = [
+        { step: 0,   register: 0,  value: g[0] },
+        { step: 0,   register: 1,  value: g[1] },
+        { step: 0,   register: 2,  value: 0n   },
+        { step: 0,   register: 3,  value: 0n   },
+        { step: 0,   register: 7,  value: p[0] },
+        { step: 0,   register: 8,  value: p[1] },
+        { step: 0,   register: 9,  value: r[0] },
+        { step: 0,   register: 10, value: r[1] },
+        { step: 255, register: 13, value: h    }
+    ];
+
+    // prove that the assertions hold if we execute signature verifications with given inputs
+    let proof = sigStark.prove(assertions, inputs);
+    console.log('-'.repeat(20));
+
+    // serialize the proof
+    let start = Date.now();
+    const buf = sigStark.serialize(proof);
+    console.log(`Proof serialized in ${Date.now() - start} ms; size: ${Math.round(buf.byteLength / 1024 * 100) / 100} KB`);
+    console.log('-'.repeat(20));
+
+    // deserialize the proof to make sure everything serialized correctly
+    start = Date.now();
+    proof = sigStark.parse(buf);
+    console.log(`Proof parsed in ${Date.now() - start} ms`);
+    console.log('-'.repeat(20));
+
+    // verify the proof
+    sigStark.verify(assertions, proof);
+    console.log('-'.repeat(20));
+    console.log(`STARK security level: ${sigStark.securityLevel}`);
+}
+
 // HELPER FUNCTIONS
 // ================================================================================================
 function toBinaryArray(value: number, length: number) {
@@ -173,4 +224,9 @@ function buildLeaves(count: number): bigint[] {
     }
 
     return result;
+}
+
+function toBits(value: bigint) {
+    const bits = value.toString(2).padStart(256, '0').split('');
+    return bits.reverse().map(b => BigInt(b));
 }

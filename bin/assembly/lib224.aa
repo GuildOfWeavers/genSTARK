@@ -140,7 +140,7 @@
                         (sub (scalar 1) (get (load.param $k) 4)))))))
 
     # Schnorr signature verification
-	(export schnorr
+	(export VerifySchnorrSignature
 		(registers 14) (constraints 18) (steps 256)
 		(static
             (input secret (shift -1))               # 0: Gx
