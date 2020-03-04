@@ -3,17 +3,17 @@
 import { StarkOptions, Assertion } from '@guildofweavers/genstark';
 import { createPrimeField, instantiate } from '../../index';
 import { prng } from '@guildofweavers/air-assembly';
-import { transpose, createHash, MerkleTree2 as MerkleTree } from '../poseidon/utils';
+import { transpose, createHash, MerkleTree } from '../poseidon/utils';
 import { Logger } from '../../lib/utils';
 
 // MODULE VARIABLES
 // ================================================================================================
-const modulus =  2n**224n - 2n**96n + 1n;
+const modulus = 2n**128n - 9n * 2n**32n + 1n;
 const field = createPrimeField(modulus);
 
 // Poseidon constants
 const sBoxExp = 5n;
-const stateWidth = 3;
+const stateWidth = 6;
 const fRounds = 8;
 const pRounds = 55;
 
@@ -21,7 +21,10 @@ const pRounds = 55;
 const roundConstants = transpose([
     prng.sha256(Buffer.from('486164657331', 'hex'), 64, field),
     prng.sha256(Buffer.from('486164657332', 'hex'), 64, field),
-    prng.sha256(Buffer.from('486164657333', 'hex'), 64, field)
+    prng.sha256(Buffer.from('486164657333', 'hex'), 64, field),
+    prng.sha256(Buffer.from('486164657334', 'hex'), 64, field),
+    prng.sha256(Buffer.from('486164657335', 'hex'), 64, field),
+    prng.sha256(Buffer.from('486164657336', 'hex'), 64, field)
 ]);
 
 // STARK DEFINITIONS
@@ -31,12 +34,12 @@ const options: StarkOptions = {
     extensionFactor : 32,
     exeQueryCount   : 44,
     friQueryCount   : 20,
-    wasm            : false
+    wasm            : true
 };
 
-const hashStark = instantiate('./assembly/lib224.aa', 'ComputePoseidonHash', options, new Logger(false));
-const merkleStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleRoot', options, new Logger(false));
-const updateStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleUpdate', options, new Logger(false));
+const hashStark = instantiate('./assembly/lib128.aa', 'ComputePoseidonHash', options, new Logger(false));
+const merkleStark = instantiate('./assembly/lib128.aa', 'ComputeMerkleRoot', options, new Logger(false));
+const updateStark = instantiate('./assembly/lib128.aa', 'ComputeMerkleUpdate', options, new Logger(false));
 
 testMerkleUpdate();
 
@@ -48,13 +51,13 @@ function testHash() {
 
     // create control values
     const hash = createHash(field, sBoxExp, fRounds, pRounds, stateWidth, roundConstants);
-    const controls = hash([42n, 43n]);
+    const controls = hash([42n, 43n, 44n, 45n]);
 
     // set up inputs and assertions
-    const inputs = [[42n], [43n]];
+    const inputs = [[42n], [43n], [44n], [45n]];
     const assertions: Assertion[] = [
-        { step: steps-1, register: 0, value: controls[0] },
-        { step: steps-1, register: 1, value: controls[1] },
+        { step: steps - 1, register: 0, value: controls[0] },
+        { step: steps - 1, register: 1, value: controls[1] }
     ];
 
     // generate a proof
@@ -90,11 +93,13 @@ function testMerkleProof() {
 
     // put the leaf into register 0, nodes into register 1, and indexBits into register 2
     const leaf = proof.shift()!;
-    const inputs = [ [leaf], [proof], [indexBits]];
+    const nodes = transpose(proof);
+    const inputs = [ [leaf[0]], [leaf[1]], [nodes[0]], [nodes[1]], [indexBits]];
 
     // set up assertions for the STARK
     const assertions: Assertion[] = [
-        { step: roundSteps * treeDepth - 1, register: 0, value: tree.root }
+        { step: roundSteps * treeDepth - 1, register: 0, value: tree.root[0] },
+        { step: roundSteps * treeDepth - 1, register: 1, value: tree.root[1] }
     ];
 
     // generate a proof
@@ -114,7 +119,7 @@ function testMerkleUpdate() {
     const treeDepth = 8;
     const roundSteps = fRounds + pRounds + 1;
 
-    const index = 42, oldValue = 9n, newValue = 11n;
+    const index = 42, oldValue: [bigint, bigint] = [9n, 10n], newValue: [bigint, bigint] = [11n, 12n];
 
     // build pre- and post-update Merkle trees
     const leaves1 = buildLeaves(2**treeDepth);
@@ -135,12 +140,15 @@ function testMerkleUpdate() {
     // put old leaf into register 0, new leaf into register 1, nodes into registers 2, and indexBits into register 3
     const oldLeaf = proof1.shift()!;
     const newLeaf = proof2.shift()!
-    const inputs = [ [oldLeaf], [newLeaf], [proof1], [indexBits] ];
+    const nodes = transpose(proof1);
+    const inputs = [ [oldLeaf[0]], [oldLeaf[1]], [newLeaf[0]], [newLeaf[1]], [nodes[0]], [nodes[1]], [indexBits] ];
 
     // set up assertions for the STARK
     const assertions: Assertion[] = [
-        { step: roundSteps * treeDepth - 1, register: 0, value: tree1.root },
-        { step: roundSteps * treeDepth - 1, register: 6, value: tree2.root }
+        { step: roundSteps * treeDepth - 1, register: 0,  value: tree1.root[0] },
+        { step: roundSteps * treeDepth - 1, register: 1,  value: tree1.root[1] },
+        { step: roundSteps * treeDepth - 1, register: 12, value: tree2.root[0] },
+        { step: roundSteps * treeDepth - 1, register: 13, value: tree2.root[1] }
     ];
 
     // generate a proof
@@ -165,11 +173,13 @@ function toBinaryArray(value: number, length: number) {
     return result;
 }
 
-function buildLeaves(count: number): bigint[] {
-    const values = field.prng(42n, count);
-    const result = new Array(count);
+function buildLeaves(count: number) {
+    const values1 = field.prng(42n, count);
+    const values2 = field.prng(43n, count);
+
+    const result = new Array<[bigint, bigint]>();
     for (let i = 0; i < count; i++) {
-        result[i] = values.getValue(i);
+        result[i] = [values1.getValue(i), values2.getValue(i)];
     }
 
     return result;

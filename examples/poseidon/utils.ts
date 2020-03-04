@@ -16,40 +16,12 @@ export interface HashFunction {
 
 // PUBLIC FUNCTIONS
 // ================================================================================================
-export function createHash(field: FiniteField, exp: bigint, rf: number, rp: number, stateWidth: number): HashFunction {
+export function createHash(field: FiniteField, exp: bigint, rf: number, rp: number, stateWidth: number, rc?: bigint[][]): HashFunction {
     const m = stateWidth;
     const mds = field.newMatrixFrom(getMdsMatrix(field, m));
-    const ark = getRoundConstants(field, m, rf + rp).map(v => field.newVectorFrom(v));
-
-    return function(inputs: bigint[]) {
-        let stateValues: bigint[] = [];
-        assert(inputs.length < m);
-        assert(inputs.length > 0);
-        for (let i = 0; i < inputs.length; i++) stateValues[i] = inputs[i];
-        for (let i = inputs.length; i < m; i++) stateValues[i] = field.zero;
-    
-        let state = field.newVectorFrom(stateValues);
-        for (let i = 0; i < rf + rp; i++) {
-            state = field.addVectorElements(state, ark[i]);
-            
-            if ((i < rf / 2) || (i >= rf / 2 + rp)) {
-                state = field.expVectorElements(state, exp);
-            } else {
-                stateValues = state.toValues();
-                stateValues[m - 1] = field.exp(stateValues[m - 1], exp);
-                state = field.newVectorFrom(stateValues);
-            }
-    
-            state = field.mulMatrixByVector(mds, state);
-        }
-        return state.toValues().slice(0, 2);
-    }
-}
-
-export function createHash2(field: FiniteField, exp: bigint, rf: number, rp: number, stateWidth: number, rc: bigint[][]): HashFunction {
-    const m = stateWidth;
-    const mds = field.newMatrixFrom(getMdsMatrix(field, m));
-    const ark = rc.map(v => field.newVectorFrom(v));
+    const ark = rc 
+        ?  rc.map(v => field.newVectorFrom(v))
+        : getRoundConstants(field, m, rf + rp).map(v => field.newVectorFrom(v));
 
     return function(inputs: bigint[]) {
         let stateValues: bigint[] = [];

@@ -74,7 +74,7 @@ define MerkleBranch over prime field (2^128 - 9 * 2^32 + 1) {
 // TESTING
 // ================================================================================================
 // generate a random merkle tree
-const hash = utils_1.createHash2(field, sBoxExp, fRounds, pRounds, stateWidth, roundConstants);
+const hash = utils_1.createHash(field, sBoxExp, fRounds, pRounds, stateWidth, roundConstants);
 const tree = new utils_1.MerkleTree2(buildLeaves(2 ** treeDepth), hash);
 // generate a proof for index 42
 const index = 42;

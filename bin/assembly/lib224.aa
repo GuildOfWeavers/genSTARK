@@ -106,6 +106,7 @@
             (load.param $p) (load.param $v) (scalar 0)
             (load.param $v) (load.param $p) (scalar 0)))
 
+    # transition function for Merkle root computation
     (function $merkleTransition
         (result vector 6)
         (param $r vector 6) (param $k vector 9)

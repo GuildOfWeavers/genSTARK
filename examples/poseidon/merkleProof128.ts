@@ -2,7 +2,7 @@
 // ================================================================================================
 import { instantiateScript, createPrimeField } from '../../index';
 import { StarkOptions, Assertion } from '@guildofweavers/genstark';
-import { transpose, createHash2 as createHash, MerkleTree2 as MerkleTree } from './utils';
+import { transpose, createHash, MerkleTree2 as MerkleTree } from './utils';
 import { Logger } from '../../lib/utils';
 import { prng } from '@guildofweavers/air-assembly';
 
