@@ -35,9 +35,10 @@ const options: StarkOptions = {
 };
 
 const hashStark = instantiate('./assembly/lib224.aa', 'ComputePoseidonHash', options, new Logger(false));
-const merkleStark = instantiate('./assembly/lib224.aa', 'BuildMerkleRoot', options, new Logger(false));
+const merkleStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleRoot', options, new Logger(false));
+const transStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleUpdate', options, new Logger(false));
 
-testMerkleProof();
+testMerkleUpdate();
 
 // TEST FUNCTIONS
 // ================================================================================================
@@ -74,7 +75,8 @@ function testMerkleProof() {
 
     // generate a random merkle tree
     const hash = createHash(field, sBoxExp, fRounds, pRounds, stateWidth, roundConstants);
-    const tree = new MerkleTree(buildLeaves(2**treeDepth), hash);
+    const leaves = buildLeaves(2**treeDepth);
+    const tree = new MerkleTree(leaves, hash);
 
     // generate a proof for index 42
     const index = 42;
@@ -86,7 +88,7 @@ function testMerkleProof() {
     indexBits.unshift(0n);
     indexBits.pop();
 
-    // put the leaf into registers 0 and 1, nodes into registers 2 and 3, and indexBits into register 4
+    // put the leaf into register 0, nodes into register 1, and indexBits into register 2
     const leaf = proof.shift()!;
     const inputs = [ [leaf], [proof], [indexBits]];
 
@@ -104,6 +106,52 @@ function testMerkleProof() {
     console.log('-'.repeat(20));
     console.log(`Proof size: ${Math.round(merkleStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
     console.log(`Security level: ${merkleStark.securityLevel}`);
+}
+
+function testMerkleUpdate() {
+    
+    const hash = createHash(field, sBoxExp, fRounds, pRounds, stateWidth, roundConstants);
+    const treeDepth = 8;
+    const roundSteps = fRounds + pRounds + 1;
+
+    const index = 42, oldValue = 9n, newValue = 11n;
+
+    // build pre- and post-update Merkle trees
+    const leaves1 = buildLeaves(2**treeDepth);
+    leaves1[index] = oldValue;
+    const tree1 = new MerkleTree(leaves1, hash);
+    const proof1 = tree1.prove(index);
+
+    const leaves2 = leaves1.slice();
+    leaves2[index] = newValue;
+    const tree2 = new MerkleTree(leaves2, hash);
+    const proof2 = tree2.prove(index);
+
+    // convert index to binary form and shift it by one to align it with the end of the first loop
+    let indexBits = toBinaryArray(index, treeDepth);
+    indexBits.unshift(0n);
+    indexBits.pop();
+
+    // put old leaf into register 0, new leaf into register 1, nodes into registers 2, and indexBits into register 3
+    const oldLeaf = proof1.shift()!;
+    const newLeaf = proof2.shift()!
+    const inputs = [ [oldLeaf], [newLeaf], [proof1], [indexBits]];
+
+    // set up assertions for the STARK
+    const assertions: Assertion[] = [
+        { step: roundSteps * treeDepth - 1, register: 0, value: tree1.root },
+        { step: roundSteps * treeDepth - 1, register: 6, value: tree2.root }
+    ];
+
+    // generate a proof
+    const sProof = transStark.prove(assertions, inputs);
+    console.log('-'.repeat(20));
+
+    // verify the proof
+    transStark.verify(assertions, sProof, [[indexBits]]);
+    console.log('-'.repeat(20));
+    console.log(`Proof size: ${Math.round(transStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
+    console.log(`Security level: ${transStark.securityLevel}`);
 }
 
 // HELPER FUNCTIONS
