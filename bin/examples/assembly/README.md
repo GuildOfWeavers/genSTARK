@@ -7,4 +7,4 @@ The examples are:
 * [merkleProof](./merkleProof.ts) - demonstrates how Poseidon hash function from `lib224` can be used to create a STARK for Merkle proof verification.
 * [merkleUpdate](./merkleUpdate.ts) - demonstrates how AIR for Merkle tree update from `lib224` can be used in an AirScript module.
 
-For more info about functionality available in AirAssembly libraries, see [here](https://github.com/GuildOfWeavers/genSTARK/tree/master/examples/assembly).
+For more info about functionality available in AirAssembly libraries, see [here](https://github.com/GuildOfWeavers/genSTARK/tree/master/assembly).
