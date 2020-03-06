@@ -3,11 +3,11 @@ This directory contains [AirAssembly](https://github.com/GuildOfWeavers/AirAssem
 
 Currently, two libraries are available:
 
-1. [lib128](/lib128.aa) - this library operates over a 128-bit field with modulus `2^128 - 9 * 2^32 + 1` and contains AIR for the following computations:
+1. [lib128](./lib128.aa) - this library operates over a 128-bit field with modulus `2^128 - 9 * 2^32 + 1` and contains AIR for the following computations:
     1. Poseidon hash function
     2. Merkle path authentication
     3. Merkle tree update
-2. [lib224](/lib224.aa) - this library operates over a 224-bit field with modulus `2^224 - 2^96 + 1` and contains AIR for the following computations:
+2. [lib224](./lib224.aa) - this library operates over a 224-bit field with modulus `2^224 - 2^96 + 1` and contains AIR for the following computations:
     1. Poseidon hash function
     2. Merkle path authentication
     3. Merkle tree update
