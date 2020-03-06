@@ -39,7 +39,7 @@ const merkleStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleRoot', opt
 const updateStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleUpdate', options, new Logger(false));
 const sigStark = instantiate('./assembly/lib224.aa', 'VerifySchnorrSignature', options, new Logger(false));
 
-testSchnorrSignature();
+testHash();
 
 // TEST FUNCTIONS
 // ================================================================================================

@@ -36,7 +36,7 @@ const options: StarkOptions = {
 };
 
 const merkleStark = instantiateScript(Buffer.from(`
-import { Poseidon as Hash } from './examples/assembly/poseidon128.aa';
+import { Poseidon as Hash } from './assembly/poseidon128.aa';
 
 define MerkleBranch over prime field (2^128 - 9 * 2^32 + 1) {
 
