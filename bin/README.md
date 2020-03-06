@@ -53,8 +53,9 @@ console.log(result); // true
 There are a few more sophisticated examples in this repository:
 * [Demo STARKs](/examples/demo) - demonstration of how to use various features of this library.
 * [MiMC STARK](/examples/mimc) - basically the same as Vitalik Buterin's [MiMC tutorial](https://vitalik.ca/general/2018/07/21/starks_part_3.html).
-* [Rescue STARKs](/examples/rescue) - various STARKs based on [Rescue](https://eprint.iacr.org/2019/426.pdf) hash function (e.g. proof of hash preimage, Merkle proof).
-* [Poseidon STARKs](/examples/poseidon) - various STARKs based on [Poseidon](https://eprint.iacr.org/2019/458.pdf) hash function (e.g. proof of hash preimage, Merkle proof).
+* [Rescue STARKs](/examples/rescue) - various STARKs based on [Rescue](https://eprint.iacr.org/2019/426) hash function (e.g. proof of hash preimage, Merkle proof).
+* [Poseidon STARKs](/examples/poseidon) - various STARKs based on [Poseidon](https://eprint.iacr.org/2019/458) hash function (e.g. proof of hash preimage, Merkle proof).
+* [Library examples](/examples/assembly) - demonstration of how to use [AirAssembly](https://github.com/GuildOfWeavers/AirAssembly) libraries from within AirScript.
 
 When you run the examples, you should get a nice log documenting each step. Here is an example output of running 128-bit MiMC STARK for 2<sup>13</sup> steps:
 ```

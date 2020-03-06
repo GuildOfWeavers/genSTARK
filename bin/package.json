@@ -24,7 +24,7 @@
   "scripts": {
     "clean": "rimraf bin",
     "compile": "tsc -p .",
-    "copyfiles": "copyfiles ./package*.json ./*.d.ts ./*.md ./.npmignore \"**/*.air\" \"**/*.aa\" bin",
+    "copyfiles": "copyfiles ./package*.json ./*.d.ts \"**/*.md\" ./.npmignore \"**/*.air\" \"**/*.aa\" bin",
     "build": "npm run clean && npm run copyfiles && npm run compile",
     "publish": "npm publish bin --access=public"
   },
