@@ -41,7 +41,10 @@ const hashStark = instantiate('./assembly/lib128.aa', 'ComputePoseidonHash', opt
 const merkleStark = instantiate('./assembly/lib128.aa', 'ComputeMerkleRoot', options, new Logger(false));
 const updateStark = instantiate('./assembly/lib128.aa', 'ComputeMerkleUpdate', options, new Logger(false));
 
+//testHash();
+//testMerkleProof();
 testMerkleUpdate();
+//testSchnorrSignature();
 
 // TEST FUNCTIONS
 // ================================================================================================

@@ -2,20 +2,18 @@
 // ================================================================================================
 import { instantiateScript, createPrimeField } from '../../index';
 import { StarkOptions, Assertion } from '@guildofweavers/genstark';
-import { transpose, createHash, MerkleTree2 as MerkleTree } from './utils';
+import { transpose, createHash, MerkleTree2 as MerkleTree } from '../poseidon/utils';
 import { Logger } from '../../lib/utils';
 import { prng } from '@guildofweavers/air-assembly';
 
 // POSEIDON PARAMETERS
 // ================================================================================================
-const modulus = 2n**128n - 9n * 2n**32n + 1n;
+const modulus = 2n**224n - 2n**96n + 1n;
 const field = createPrimeField(modulus);
 const sBoxExp = 5n;
 const stateWidth = 3;
 const fRounds = 8;
 const pRounds = 55;
-const roundSteps = fRounds + pRounds + 1;
-const treeDepth = 8;
 
 // build round constants for the hash function
 const roundConstants = transpose([
@@ -32,74 +30,65 @@ const options: StarkOptions = {
     extensionFactor : 32,
     exeQueryCount   : 44,
     friQueryCount   : 20,
-    wasm            : true
+    wasm            : false
 };
 
 const merkleStark = instantiateScript(Buffer.from(`
-import { Poseidon as Hash } from './assembly/poseidon128.aa';
+import { ComputeMerkleUpdate } from '../assembly/lib224.aa';
 
-define MerkleBranch over prime field (2^128 - 9 * 2^32 + 1) {
+define MerkleBranch over prime field (2^224 - 2^96 + 1) {
 
-    secret input leaf       : element[1];      // leaf of the merkle branch
-    secret input node       : element[1][1];   // nodes in the merkle branch
-    public input indexBit   : boolean[1][1];   // binary representation of leaf position
+    secret input oldLeaf    : element[1];       // old leaf of the merkle branch
+    secret input newLeaf    : element[1];       // new leaf of the merkle branch
+    secret input authPath   : element[1][1];    // merkle authentication path
+    secret input indexBits  : boolean[1][1];    // binary representation of leaf position
 
-    transition 6 registers {
-        for each (leaf, node, indexBit) {
-
-            // initialize the execution trace to hash(leaf, node) in registers [0..2]
-            // and hash(node, leaf) in registers [3..5]
-            init {
-                s1 <- [leaf, node, 0];
-                s2 <- [node, leaf, 0];
-                yield [...s1, ...s2];
-            }
-
-            for each (node, indexBit) {
-
-                // based on node's index, figure out whether hash(p, v) or hash(v, p)
-                // should advance to the next iteration of the loop
-                h <- indexBit ? $r3 : $r0;
-
-                // compute hash(p, v) and hash(v, p) in parallel
-                with $r[0..2] yield Hash(h, node);
-                with $r[3..5] yield Hash(node, h);
-            }
+    transition 12 registers {
+        for each (oldLeaf, newLeaf, authPath, indexBits) {
+            yield ComputeMerkleUpdate(oldLeaf, newLeaf, authPath, indexBits);
         }
     }
 
-    enforce 6 constraints {
-        for all steps {
-            enforce transition($r) = $n;
+    enforce 13 constraints {
+        for each (oldLeaf, newLeaf, authPath, indexBits) {
+            enforce ComputeMerkleUpdate(oldLeaf, newLeaf, authPath, indexBits);
         }
     }
 }`), options, new Logger(false));
 
 // TESTING
 // ================================================================================================
-// generate a random merkle tree
 const hash = createHash(field, sBoxExp, fRounds, pRounds, stateWidth, roundConstants);
-const tree = new MerkleTree(buildLeaves(2**treeDepth), hash);
+const treeDepth = 8;
+const roundSteps = fRounds + pRounds + 1;
 
-// generate a proof for index 42
-const index = 42;
-const proof = tree.prove(index);
-console.log(MerkleTree.verify(tree.root, index, proof, hash));
+const index = 42, oldValue = 9n, newValue = 11n;
 
-// set up inputs for the STARK
+// build pre- and post-update Merkle trees
+const leaves1 = buildLeaves(2**treeDepth);
+leaves1[index] = oldValue;
+const tree1 = new MerkleTree(leaves1, hash);
+const proof1 = tree1.prove(index);
 
-// first, convert index to binary form and shift it by one to align it with the end of the first loop
+const leaves2 = leaves1.slice();
+leaves2[index] = newValue;
+const tree2 = new MerkleTree(leaves2, hash);
+const proof2 = tree2.prove(index);
+
+// convert index to binary form and shift it by one to align it with the end of the first loop
 let indexBits = toBinaryArray(index, treeDepth);
 indexBits.unshift(0n);
 indexBits.pop();
 
-// put the leaf into registers 0 and 1, nodes into registers 2 and 3, and indexBits into register 4
-const leaf = proof.shift()!;
-const inputs = [ [leaf], [proof], [indexBits]];
+// put old leaf into register 0, new leaf into register 1, nodes into registers 2, and indexBits into register 3
+const oldLeaf = proof1.shift()!;
+const newLeaf = proof2.shift()!
+const inputs = [ [oldLeaf], [newLeaf], [proof1], [indexBits] ];
 
 // set up assertions for the STARK
 const assertions: Assertion[] = [
-    { step: roundSteps * treeDepth - 1, register: 0, value: tree.root }
+    { step: roundSteps * treeDepth - 1, register: 0, value: tree1.root },
+    { step: roundSteps * treeDepth - 1, register: 6, value: tree2.root }
 ];
 
 // generate a proof
@@ -107,7 +96,7 @@ const sProof = merkleStark.prove(assertions, inputs);
 console.log('-'.repeat(20));
 
 // verify the proof
-merkleStark.verify(assertions, sProof, [[indexBits]]);
+merkleStark.verify(assertions, sProof);
 console.log('-'.repeat(20));
 console.log(`Proof size: ${Math.round(merkleStark.sizeOf(sProof) / 1024 * 100) / 100} KB`);
 console.log(`Security level: ${merkleStark.securityLevel}`);

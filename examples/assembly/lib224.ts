@@ -8,7 +8,7 @@ import { Logger } from '../../lib/utils';
 
 // MODULE VARIABLES
 // ================================================================================================
-const modulus =  2n**224n - 2n**96n + 1n;
+const modulus = 2n**224n - 2n**96n + 1n;
 const field = createPrimeField(modulus);
 
 // Poseidon constants
@@ -39,7 +39,10 @@ const merkleStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleRoot', opt
 const updateStark = instantiate('./assembly/lib224.aa', 'ComputeMerkleUpdate', options, new Logger(false));
 const sigStark = instantiate('./assembly/lib224.aa', 'VerifySchnorrSignature', options, new Logger(false));
 
-testHash();
+//testHash();
+//testMerkleProof();
+testMerkleUpdate();
+//testSchnorrSignature();
 
 // TEST FUNCTIONS
 // ================================================================================================

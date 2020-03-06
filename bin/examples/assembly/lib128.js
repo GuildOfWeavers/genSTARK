@@ -34,7 +34,10 @@ const options = {
 const hashStark = index_1.instantiate('./assembly/lib128.aa', 'ComputePoseidonHash', options, new utils_2.Logger(false));
 const merkleStark = index_1.instantiate('./assembly/lib128.aa', 'ComputeMerkleRoot', options, new utils_2.Logger(false));
 const updateStark = index_1.instantiate('./assembly/lib128.aa', 'ComputeMerkleUpdate', options, new utils_2.Logger(false));
+//testHash();
+//testMerkleProof();
 testMerkleUpdate();
+//testSchnorrSignature();
 // TEST FUNCTIONS
 // ================================================================================================
 function testHash() {
