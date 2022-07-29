@@ -76,7 +76,7 @@ export class CompositionPolynomial {
             qEvaluations = context.evaluateTransitionConstraints(pPolys);
         }
         catch (error) {
-            throw new StarkError('Failed to evaluate transition constraints', error);
+            throw new StarkError('Failed to evaluate transition constraints', error as Error);
         }
         this.log('Computed transition constraint polynomials Q(x)');
 

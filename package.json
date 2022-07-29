@@ -37,6 +37,7 @@
     "@guildofweavers/air-assembly": "0.3.x",
     "@guildofweavers/air-script": "0.7.x",
     "@guildofweavers/galois": "0.4.x",
+    "@guildofweavers/genstark": "^0.7.6",
     "@guildofweavers/merkle": "0.3.x"
   }
 }

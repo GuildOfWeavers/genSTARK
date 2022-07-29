@@ -98,7 +98,7 @@ export class Stark implements IStark {
             validateAssertions(executionTrace, assertions);
         }
         catch (error) {
-            throw new StarkError(`Failed to generate the execution trace`, error);
+            throw new StarkError(`Failed to generate the execution trace`, error as Error);
         }
         log('Generated execution trace');
         
@@ -140,7 +140,7 @@ export class Stark implements IStark {
             log('Computed low-degree proof');
         }
         catch (error) {
-            throw new StarkError('Low degree proof failed', error);
+            throw new StarkError('Low degree proof failed', error as Error);
         }
 
         // 8 ----- query evaluation tree at pseudo-random positions
@@ -209,7 +209,7 @@ export class Stark implements IStark {
         }
         catch (error) {
             if (error instanceof StarkError === false) {
-                error = new StarkError(`Verification of evaluation Merkle proof failed`, error);
+                error = new StarkError(`Verification of evaluation Merkle proof failed`, error as Error);
             }
             throw error;
         }
@@ -239,7 +239,7 @@ export class Stark implements IStark {
             ldProver.verify(proof.ldProof, lcValues, positions, cPoly.compositionDegree);
         }
         catch (error) {
-            throw new StarkError('Verification of low degree failed', error);
+            throw new StarkError('Verification of low degree failed', error as Error);
         }
         log(`Verified low-degree proof`);
 
